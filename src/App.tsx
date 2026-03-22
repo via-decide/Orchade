@@ -46,7 +46,9 @@ import {
   addDoc, 
   serverTimestamp,
   increment,
-  writeBatch
+  writeBatch,
+  orderBy,
+  limit
 } from 'firebase/firestore';
 import { onAuthStateChanged } from 'firebase/auth';
 import firebaseConfig from '../firebase-applet-config.json';
@@ -259,7 +261,7 @@ const App: React.FC = () => {
     if (state.activeTab !== 'rankings') return;
 
     const usersRef = collection(db, 'users');
-    const q = query(usersRef, where('credits', '>', 0)); // Simple filter to get active users
+    const q = query(usersRef, orderBy('credits', 'desc'), limit(10));
     
     const unsubRankings = onSnapshot(q, (snapshot) => {
       const topUsers = snapshot.docs
@@ -293,7 +295,7 @@ const App: React.FC = () => {
 
     const checkDailyReward = async () => {
       const userRef = doc(db, 'users', state.user!.uid);
-      const userDoc = await getDocs(query(collection(db, 'users'), where('uid', '==', state.user!.uid)));
+      const userDoc = await getDocs(query(collection(db, 'users'), where('uid', '==', state.user!.uid), limit(1)));
       
       if (!userDoc.empty) {
         const userData = userDoc.docs[0].data();
@@ -354,7 +356,7 @@ const App: React.FC = () => {
     try {
       // Find target user
       const usersRef = collection(db, 'users');
-      const q = query(usersRef, where('uid', '==', transferTarget));
+      const q = query(usersRef, where('uid', '==', transferTarget), limit(1));
       const querySnapshot = await getDocs(q);
 
       if (querySnapshot.empty) {

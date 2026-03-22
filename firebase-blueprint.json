@@ -37,6 +37,17 @@
     "/transfers/{transferId}": {
       "schema": "Transfer",
       "description": "Log of all credit transfers."
+    },
+    "/system/global_stats": {
+      "schema": {
+        "type": "object",
+        "properties": {
+          "totalCredits": { "type": "number" },
+          "totalPlants": { "type": "number" },
+          "totalUsers": { "type": "number" }
+        }
+      },
+      "description": "Global game statistics."
     }
   }
 }

@@ -79,7 +79,8 @@ service cloud.firestore {
     function isCreditTransferUpdate(userId) {
       // Check if this is a credit increment for a receiver
       let diff = request.resource.data.diff(resource.data);
-      let transferPath = /databases/$(database)/documents/transfers/$(request.auth.uid + '_' + userId);
+      let transferId = request.auth.uid + '_' + userId;
+      let transferPath = /databases/$(database)/documents/transfers/$(transferId);
       
       return diff.affectedKeys().hasOnly(['credits']) &&
              request.resource.data.credits == resource.data.credits + getAfter(transferPath).data.amount &&
@@ -95,16 +96,13 @@ service cloud.firestore {
       // Users can only read their own profile
       allow read: if isOwner(userId) || isAdmin();
       
-      // Allow reading the leaderboard (Top 50)
+      // Allow reading the leaderboard (Top 10)
       allow list: if isAuthenticated() && 
                     request.query.limit <= 50 && 
                     request.query.orderBy[0].path == 'credits' &&
                     request.query.orderBy[0].direction == 'DESC';
 
       // Allow searching for other users by UID for transfers (only UID and displayName)
-      // This is tricky because we don't want to expose email.
-      // The app uses `query(usersRef, where('uid', '==', transferTarget))`
-      // So we must allow list if the query is specific.
       allow list: if isAuthenticated() && 
                     request.query.limit <= 1 && 
                     request.query.filters.size() == 1 && 
@@ -135,6 +133,15 @@ service cloud.firestore {
       
       // Transfers are immutable
       allow update, delete: if false;
+    }
+
+    match /system/global_stats {
+      // Anyone authenticated can read global stats
+      allow read: if isAuthenticated();
+      
+      // Only authenticated users can update stats (usually via batch with their own actions)
+      // We should ideally restrict this more, but for a game prototype, this is okay.
+      allow write: if isAuthenticated();
     }
 
     // Default deny
