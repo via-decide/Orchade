@@ -163,6 +163,7 @@ const App: React.FC = () => {
   const [isTransferring, setIsTransferring] = useState(false);
   const [isLoginLoading, setIsLoginLoading] = useState(false);
   const [rankings, setRankings] = useState<{ uid: string; displayName: string; credits: number; dataSeeds: number }[]>([]);
+  const [toolEffect, setToolEffect] = useState<string | null>(null);
 
   const addLog = useCallback((msg: string, type: string = 'info') => {
     setLogs(prev => [{ msg, type }, ...prev].slice(0, 20));
@@ -427,6 +428,10 @@ const App: React.FC = () => {
           return prev;
         }
         
+        // Trigger visual effect
+        setToolEffect('genetic-scanner');
+        setTimeout(() => setToolEffect(null), 1500);
+        
         const baseG = Math.floor(Math.random() * 8) + 5;
         const finalG = Math.max(1, Math.round(baseG * (plant.nutrients / 100)));
         
@@ -459,6 +464,8 @@ const App: React.FC = () => {
       }
 
       if (action === 'water') {
+        setToolEffect('water');
+        setTimeout(() => setToolEffect(null), 1500);
         const stage = PLANT_STAGES[plant.stageIndex];
         plant.water = Math.min(stage.maxWater, plant.water + 20);
         plant.stress = Math.max(0, plant.stress - (5 + prev.upgrades.stressResistance));
@@ -466,12 +473,16 @@ const App: React.FC = () => {
       }
 
       if (action === 'fertilize') {
+        setToolEffect('fertilize');
+        setTimeout(() => setToolEffect(null), 1500);
         plant.nutrients = Math.min(PLANT_STAGES[plant.stageIndex].maxNutrients, plant.nutrients + 30);
         plant.stress += 10;
         addLog('Nutrient levels boosted.', 'success');
       }
 
       if (action === 'pesticide') {
+        setToolEffect('pesticide');
+        setTimeout(() => setToolEffect(null), 1500);
         plant.pests = 0;
         plant.pestImmunity = 3;
         plant.stress += 15;
@@ -483,6 +494,8 @@ const App: React.FC = () => {
           addLog('Plant is not ready for harvest.', 'warn');
           return prev;
         }
+        setToolEffect('pruning-shears');
+        setTimeout(() => setToolEffect(null), 1500);
         const reward = 500 + (plant.rootStrength * 0.5);
         const dataReward = 5;
         credits += reward;
@@ -816,6 +829,7 @@ const App: React.FC = () => {
                           isBurning={selectedPlant.stress > 90}
                           stress={selectedPlant.stress}
                           weather={state.weather?.type}
+                          toolEffect={toolEffect}
                         />
                       );
                     })()}

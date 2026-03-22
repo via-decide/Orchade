@@ -860,15 +860,15 @@ const PlantVisualizer: React.FC<PlantVisualizerProps> = ({
     };
   }, []);
 
-  // Update model when stage, progress, type or color changes
+  // Update model when stage, type or color changes
   useEffect(() => {
     if (sceneRef.current && plantGroupRef.current) {
       sceneRef.current.remove(plantGroupRef.current);
-      const newPlant = createPlantModel(stageIndex, progress, type, color);
+      const newPlant = createPlantModel(stageIndex, progressRef.current, type, color);
       sceneRef.current.add(newPlant);
       plantGroupRef.current = newPlant;
     }
-  }, [stageIndex, progress, type, color]);
+  }, [stageIndex, type, color]);
 
   return (
     <div 
