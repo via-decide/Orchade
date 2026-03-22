@@ -1,0 +1,145 @@
+// ===============================================================
+// Assumed Data Model
+// ===============================================================
+//
+// Collection: users
+// Document ID: {userId} (Firebase Auth UID)
+// Fields:
+//   - uid: string (required) - Firebase Auth UID
+//   - displayName: string (optional) - User's public name
+//   - email: string (optional) - User's email
+//   - credits: number (required) - Current liquid capital
+//   - dataSeeds: number (required) - Current genetic data
+//   - day: number (required) - Current game day
+//   - upgrades: map (required) - Global upgrades state
+//   - orchards: list (required) - List of orchards and their plants
+//   - createdAt: timestamp (optional) - When the user was created
+//
+// Collection: transfers
+// Document ID: {transferId} (Auto-generated)
+// Fields:
+//   - from: string (required) - Sender UID
+//   - to: string (required) - Receiver UID
+//   - amount: number (required) - Amount of credits transferred
+//   - timestamp: timestamp (required) - When the transfer occurred
+//
+// ===============================================================
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() &&
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
+          (request.auth.token.email == "daxini2404@gmail.com" && request.auth.token.email_verified == true));
+    }
+
+    function hasRequiredFields(fields) {
+      return request.resource.data.keys().hasAll(fields);
+    }
+
+    function hasOnlyAllowedFields(fields) {
+      return request.resource.data.keys().hasOnly(fields);
+    }
+
+    // ===============================================================
+    // Domain Validators
+    // ===============================================================
+
+    function isValidUser(data) {
+      return data.uid is string &&
+             data.credits is number && data.credits >= 0 &&
+             data.dataSeeds is number && data.dataSeeds >= 0 &&
+             data.day is number && data.day >= 1 &&
+             data.orchards is list &&
+             data.upgrades is map;
+    }
+
+    function isValidTransfer(data) {
+      return data.from == request.auth.uid &&
+             data.to is string && data.to != request.auth.uid &&
+             data.amount is number && data.amount > 0 &&
+             data.timestamp == request.time;
+    }
+
+    function isCreditTransferUpdate(userId) {
+      // Check if this is a credit increment for a receiver
+      let diff = request.resource.data.diff(resource.data);
+      let transferPath = /databases/$(database)/documents/transfers/$(request.auth.uid + '_' + userId);
+      
+      return diff.affectedKeys().hasOnly(['credits']) &&
+             request.resource.data.credits == resource.data.credits + getAfter(transferPath).data.amount &&
+             getAfter(transferPath).data.from == request.auth.uid &&
+             getAfter(transferPath).data.to == userId;
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /users/{userId} {
+      // Users can only read their own profile
+      allow read: if isOwner(userId) || isAdmin();
+      
+      // Allow reading the leaderboard (Top 50)
+      allow list: if isAuthenticated() && 
+                    request.query.limit <= 50 && 
+                    request.query.orderBy[0].path == 'credits' &&
+                    request.query.orderBy[0].direction == 'DESC';
+
+      // Allow searching for other users by UID for transfers (only UID and displayName)
+      // This is tricky because we don't want to expose email.
+      // The app uses `query(usersRef, where('uid', '==', transferTarget))`
+      // So we must allow list if the query is specific.
+      allow list: if isAuthenticated() && 
+                    request.query.limit <= 1 && 
+                    request.query.filters.size() == 1 && 
+                    request.query.filters[0].op == '==' && 
+                    request.query.filters[0].path == 'uid';
+
+      allow create: if isOwner(userId) && 
+                      isValidUser(request.resource.data) &&
+                      (!('role' in request.resource.data) || request.resource.data.role == 'player');
+
+      allow update: if (isOwner(userId) && 
+                       isValidUser(request.resource.data) &&
+                       request.resource.data.role == resource.data.role) || 
+                      isCreditTransferUpdate(userId) ||
+                      isAdmin();
+    }
+
+    match /transfers/{transferId} {
+      // Only admins or involved parties can read transfers
+      allow read: if isAuthenticated() && (
+        request.auth.uid == resource.data.from || 
+        request.auth.uid == resource.data.to || 
+        isAdmin()
+      );
+
+      // Only authenticated users can create transfers, and they must be the sender
+      allow create: if isAuthenticated() && isValidTransfer(request.resource.data);
+      
+      // Transfers are immutable
+      allow update, delete: if false;
+    }
+
+    // Default deny
+    match /{path=**} {
+      allow read, write: if false;
+    }
+  }
+}
