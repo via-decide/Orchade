@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 
 interface PlantVisualizerProps {
@@ -7,6 +7,8 @@ interface PlantVisualizerProps {
   isBurning?: boolean;
   hasPests?: boolean;
   weather?: 'sun' | 'rain';
+  showSoil?: boolean;
+  isSmall?: boolean;
 }
 
 const PlantVisualizer: React.FC<PlantVisualizerProps> = ({ 
@@ -14,7 +16,9 @@ const PlantVisualizer: React.FC<PlantVisualizerProps> = ({
   progress,
   isBurning = false, 
   hasPests = false,
-  weather = 'sun'
+  weather = 'sun',
+  showSoil = true,
+  isSmall = false
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
@@ -22,6 +26,7 @@ const PlantVisualizer: React.FC<PlantVisualizerProps> = ({
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
   const plantGroupRef = useRef<THREE.Group | null>(null);
   const dirLightRef = useRef<THREE.DirectionalLight | null>(null);
+  const [webglError, setWebglError] = useState<string | null>(null);
 
   // Use refs for props to avoid stale closures in the animation loop
   const isBurningRef = useRef(isBurning);
@@ -31,22 +36,18 @@ const PlantVisualizer: React.FC<PlantVisualizerProps> = ({
 
   useEffect(() => {
     isBurningRef.current = isBurning;
-    if (isBurning) console.log('PlantVisualizer: Critical stress detected!');
   }, [isBurning]);
 
   useEffect(() => {
     hasPestsRef.current = hasPests;
-    if (hasPests) console.log('PlantVisualizer: Pest infestation detected!');
   }, [hasPests]);
 
   useEffect(() => {
     weatherRef.current = weather;
-    console.log(`PlantVisualizer: Weather changed to ${weather}`);
   }, [weather]);
 
   useEffect(() => {
     progressRef.current = progress;
-    console.log(`PlantVisualizer: Progress updated to ${progress.toFixed(4)}`);
     if (plantGroupRef.current) {
       const scale = 1 + progress * 0.3; // Scale up to 30% within a stage
       plantGroupRef.current.scale.set(scale, scale, scale);
@@ -145,31 +146,51 @@ const PlantVisualizer: React.FC<PlantVisualizerProps> = ({
   useEffect(() => {
     if (!containerRef.current) return;
 
+    // Check for WebGL support
+    try {
+      const canvas = document.createElement('canvas');
+      const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+      if (!gl) {
+        setWebglError('WebGL not supported on this device');
+        return;
+      }
+    } catch (e) {
+      setWebglError('Error checking WebGL support');
+      return;
+    }
+
     // Scene setup
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x0a0a0a); // Dark gray background to ensure visibility
+    scene.background = new THREE.Color(0x0a0a0a); // Solid background for visibility
     sceneRef.current = scene;
 
     const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 100);
-    camera.position.set(0, 2.5, 8); 
-    camera.lookAt(0, 1.2, 0); 
+    if (isSmall) {
+      camera.position.set(0, 1.5, 5); 
+      camera.lookAt(0, 0.8, 0); 
+    } else {
+      camera.position.set(0, 2.5, 8); 
+      camera.lookAt(0, 1.2, 0); 
+    }
     cameraRef.current = camera;
 
-    const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
+    const renderer = new THREE.WebGLRenderer({ 
+      alpha: false, // Disable alpha for more robust rendering
+      antialias: true,
+      powerPreference: 'high-performance'
+    });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    renderer.setClearColor(0x000000, 0); // Transparent background for the renderer
     renderer.domElement.style.display = 'block';
     renderer.domElement.style.width = '100%';
     renderer.domElement.style.height = '100%';
     containerRef.current.appendChild(renderer.domElement);
     rendererRef.current = renderer;
 
-    // Handle resize with ResizeObserver
+    // Handle resize
     const handleResize = () => {
       if (!rendererRef.current || !cameraRef.current || !containerRef.current) return;
       const width = containerRef.current.clientWidth;
       const height = containerRef.current.clientHeight;
-      console.log(`PlantVisualizer: Resizing to ${width}x${height}`);
       if (width === 0 || height === 0) return;
       rendererRef.current.setSize(width, height, false);
       cameraRef.current.aspect = width / height;
@@ -178,26 +199,29 @@ const PlantVisualizer: React.FC<PlantVisualizerProps> = ({
 
     const resizeObserver = new ResizeObserver(handleResize);
     resizeObserver.observe(containerRef.current);
-    handleResize(); // Initial call
+    handleResize();
 
     // Lighting
-    scene.add(new THREE.AmbientLight(0xffffff, 0.7));
-    const dirLight = new THREE.DirectionalLight(0xffffff, 1.0);
+    scene.add(new THREE.AmbientLight(0xffffff, 1.0));
+    const dirLight = new THREE.DirectionalLight(0xffffff, 1.5);
     dirLight.position.set(5, 10, 7.5);
     scene.add(dirLight);
     dirLightRef.current = dirLight;
 
-    const pointLight = new THREE.PointLight(0xffffff, 0.5);
+    const pointLight = new THREE.PointLight(0xffffff, 0.8);
     pointLight.position.set(-5, 5, 5);
     scene.add(pointLight);
 
     // Ground
-    const soilMesh = new THREE.Mesh(
-      new THREE.CylinderGeometry(1.8, 1.5, 0.2, 24),
-      new THREE.MeshStandardMaterial({ color: 0x3E2723, roughness: 0.8 })
-    );
-    soilMesh.position.y = -0.1;
-    scene.add(soilMesh);
+    let soilMesh: THREE.Mesh | null = null;
+    if (showSoil) {
+      soilMesh = new THREE.Mesh(
+        new THREE.CylinderGeometry(1.8, 1.5, 0.2, 24),
+        new THREE.MeshStandardMaterial({ color: 0x3E2723, roughness: 0.8 })
+      );
+      soilMesh.position.y = -0.1;
+      scene.add(soilMesh);
+    }
 
     // Initial Plant
     const plantGroup = createPlantModel(stageIndex);
@@ -206,23 +230,22 @@ const PlantVisualizer: React.FC<PlantVisualizerProps> = ({
 
     // Animation loop
     let time = 0;
-    renderer.setAnimationLoop(() => {
-      time += 0.016; // Approx 60fps
+    const animate = () => {
+      if (!rendererRef.current || !sceneRef.current || !cameraRef.current) return;
+      
+      time += 0.016;
       
       if (plantGroupRef.current) {
-        // Constant rotation
         plantGroupRef.current.rotation.y += 0.015;
-        
-        // Breathing/Swaying animation
         const breath = Math.sin(time * 1.5) * 0.015;
         const baseScale = 1 + progressRef.current * 0.3;
         const currentScale = baseScale + breath;
         plantGroupRef.current.scale.set(currentScale, currentScale, currentScale);
 
-        // Subtle soil pulse
-        soilMesh.scale.set(1 + breath * 0.2, 1, 1 + breath * 0.2);
+        if (soilMesh) {
+          soilMesh.scale.set(1 + breath * 0.2, 1, 1 + breath * 0.2);
+        }
 
-        // Visual effects based on state
         if (isBurningRef.current) {
           plantGroupRef.current.position.x = (Math.random() - 0.5) * 0.03;
           dirLightRef.current?.color.setHex(0xFF5252);
@@ -235,16 +258,15 @@ const PlantVisualizer: React.FC<PlantVisualizerProps> = ({
         }
       }
       
-      if (rendererRef.current && sceneRef.current && cameraRef.current) {
-        rendererRef.current.render(sceneRef.current, cameraRef.current);
-      }
-    });
+      rendererRef.current.render(sceneRef.current, cameraRef.current);
+      requestAnimationFrame(animate);
+    };
 
-    console.log('PlantVisualizer: Animation loop started');
+    const animationId = requestAnimationFrame(animate);
 
     return () => {
       resizeObserver.disconnect();
-      renderer.setAnimationLoop(null);
+      cancelAnimationFrame(animationId);
       renderer.dispose();
       if (containerRef.current && renderer.domElement.parentNode === containerRef.current) {
         containerRef.current.removeChild(renderer.domElement);
@@ -252,9 +274,7 @@ const PlantVisualizer: React.FC<PlantVisualizerProps> = ({
     };
   }, []);
 
-  // Update model when stage changes
   useEffect(() => {
-    console.log(`PlantVisualizer: Stage changed to ${stageIndex}`);
     if (sceneRef.current && plantGroupRef.current) {
       sceneRef.current.remove(plantGroupRef.current);
       const newPlant = createPlantModel(stageIndex);
@@ -262,6 +282,17 @@ const PlantVisualizer: React.FC<PlantVisualizerProps> = ({
       plantGroupRef.current = newPlant;
     }
   }, [stageIndex]);
+
+  if (webglError) {
+    return (
+      <div className="w-full h-full flex items-center justify-center bg-[#0a0a0a] text-text-secondary text-xs p-4 text-center">
+        <div className="space-y-2">
+          <p>{webglError}</p>
+          <p className="text-[10px]">Try enabling hardware acceleration in your browser settings.</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div 

@@ -760,7 +760,7 @@ const App: React.FC = () => {
                 </div>
 
                 <div className="flex flex-col gap-8">
-                  <div className="h-[400px] md:h-[500px] bg-black/30 rounded-3xl dashed-border relative overflow-hidden group">
+                  <div className="h-[400px] md:h-[500px] bg-[#0a0a0a] rounded-3xl dashed-border relative overflow-hidden group">
                     {(() => {
                       const currentThreshold = PLANT_STAGES[selectedPlant.stageIndex].threshold;
                       const nextThreshold = PLANT_STAGES[selectedPlant.stageIndex + 1]?.threshold || (currentThreshold * 2);
@@ -944,35 +944,6 @@ const App: React.FC = () => {
                           onClick={() => plant ? setState(p => ({ ...p, selectedPlantIndex: i })) : buyPlot(i)}
                         />
                       ))}
-                    </div>
-
-                    {/* Quick Tools Section */}
-                    <div className="hardware-panel p-4 space-y-4 border-mineral-gold/30">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2 text-mineral-gold">
-                          <Hammer size={16} />
-                          <h4 className="text-xs font-bold uppercase tracking-widest">Field Tools</h4>
-                        </div>
-                        <span className="text-[10px] text-text-secondary uppercase tracking-widest">Quick Access</span>
-                      </div>
-                      <div className="grid grid-cols-2 gap-3">
-                        {SHOP_ITEMS.map(item => (
-                          <button 
-                            key={item.id}
-                            onClick={() => buyItem(item)}
-                            disabled={!selectedPlant || state.credits < item.cost}
-                            className="flex items-center gap-3 p-3 bg-black/40 border border-bark-brown rounded-xl hover:border-mineral-gold transition-all disabled:opacity-50 group"
-                          >
-                            <div className="w-8 h-8 rounded-lg bg-mineral-gold/10 flex items-center justify-center text-mineral-gold group-hover:scale-110 transition-transform">
-                              {item.type === 'fertilizer' ? <ArrowUpCircle size={16} /> : <Bug size={16} />}
-                            </div>
-                            <div className="flex-1 text-left">
-                              <p className="text-[10px] font-bold leading-none mb-1">{item.name}</p>
-                              <p className="text-[9px] text-text-secondary">{item.cost}🪙</p>
-                            </div>
-                          </button>
-                        ))}
-                      </div>
                     </div>
 
                     {/* Quick Tools Section */}
