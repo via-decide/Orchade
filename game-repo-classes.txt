@@ -1,0 +1,296 @@
+93:        <div className="min-h-screen bg-soil-dark flex items-center justify-center p-6">
+94:          <div className="hardware-panel max-w-lg w-full p-8 space-y-6 border-burn-red/50">
+95:            <div className="flex items-center gap-3 text-burn-red">
+97:              <h2 className="text-xl font-bold uppercase tracking-tight">System Critical Error</h2>
+99:            <div className="bg-black/40 p-4 rounded-lg font-mono text-xs space-y-2 overflow-auto max-h-64">
+100:              <p className="text-burn-red font-bold">Error: {errorData.error || 'Unknown'}</p>
+104:                <div className="pt-2 border-t border-bark-brown/30">
+105:                  <p className="text-text-secondary">Auth Context:</p>
+113:              className="w-full bg-bark-brown/20 hover:bg-bark-brown/40 text-text-primary font-bold py-3 rounded-xl border border-bark-brown transition-all"
+940:    <div className="min-h-screen p-6 flex flex-col items-center gap-6 max-w-6xl mx-auto">
+942:      <div className="w-full flex flex-col md:flex-row justify-between items-center hardware-panel p-4 px-6 md:px-8 gap-4">
+943:        <div className="flex flex-wrap justify-center md:justify-start gap-4 md:gap-8">
+944:          <div className="flex flex-col">
+945:            <span className="text-[10px] font-bold text-text-secondary uppercase tracking-widest">Temporal Cycle</span>
+946:            <span className="text-lg md:text-xl font-mono font-bold text-leaf-green">DAY {state.day}</span>
+948:          <div className="flex flex-col">
+949:            <span className="text-[10px] font-bold text-text-secondary uppercase tracking-widest">Liquid Capital</span>
+950:            <span className="text-lg md:text-xl font-mono font-bold text-mineral-gold">{state.credits} 🪙</span>
+952:          <div className="flex flex-col">
+953:            <span className="text-[10px] font-bold text-text-secondary uppercase tracking-widest">Genetic Data</span>
+954:            <span className="text-lg md:text-xl font-mono font-bold text-water-blue">{state.dataSeeds} 🧬</span>
+958:          <div className="flex items-center gap-3 px-4 py-1 bg-black/20 rounded-xl border border-bark-brown/30 overflow-hidden">
+966:                className="flex items-center gap-3"
+968:                <div className={`p-2 rounded-lg ${
+981:                <div className="flex flex-col">
+982:                  <span className="text-[10px] font-bold text-text-secondary uppercase tracking-widest">Atmosphere</span>
+983:                  <span className="text-xs font-bold uppercase">{state.weather.name}</span>
+989:        <div className="flex items-center gap-3 w-full md:w-auto">
+993:              className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-burn-red/10 hover:bg-burn-red/20 px-4 py-2 rounded-lg border border-burn-red/30 transition-all text-[10px] font-bold text-burn-red uppercase tracking-widest"
+1001:            className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-bark-brown/20 hover:bg-bark-brown/40 px-6 py-2 rounded-lg border border-bark-brown transition-all text-sm font-bold"
+1009:      <div className="w-full grid grid-cols-1 lg:grid-cols-12 gap-6">
+1011:        <div className="lg:col-span-1 flex flex-row lg:flex-col gap-3 md:gap-4 overflow-x-auto pb-2 lg:pb-0">
+1014:            className={`flex-1 lg:flex-none p-4 rounded-xl flex items-center justify-center transition-all ${state.activeTab === 'orchard' ? 'bg-leaf-green text-soil-dark' : 'bg-card-bg text-text-secondary hover:text-white'}`}
+1020:            className={`flex-1 lg:flex-none p-4 rounded-xl flex items-center justify-center transition-all ${state.activeTab === 'lab' ? 'bg-water-blue text-soil-dark' : 'bg-card-bg text-text-secondary hover:text-white'}`}
+1026:            className={`flex-1 lg:flex-none p-4 rounded-xl flex items-center justify-center transition-all ${state.activeTab === 'market' ? 'bg-mineral-gold text-soil-dark' : 'bg-card-bg text-text-secondary hover:text-white'}`}
+1032:            className={`flex-1 lg:flex-none p-4 rounded-xl flex items-center justify-center transition-all ${state.activeTab === 'tools' ? 'bg-burn-red text-soil-dark' : 'bg-card-bg text-text-secondary hover:text-white'}`}
+1038:            className={`flex-1 lg:flex-none p-4 rounded-xl flex items-center justify-center transition-all ${state.activeTab === 'leaderboard' ? 'bg-mineral-gold text-soil-dark' : 'bg-card-bg text-text-secondary hover:text-white'}`}
+1044:            className={`flex-1 lg:flex-none p-4 rounded-xl flex items-center justify-center transition-all ${state.activeTab === 'discovery' ? 'bg-leaf-green text-soil-dark' : 'bg-card-bg text-text-secondary hover:text-white'}`}
+1050:            className={`flex-1 lg:flex-none p-4 rounded-xl flex items-center justify-center transition-all ${state.activeTab === 'archives' ? 'bg-indigo-500 text-white' : 'bg-card-bg text-text-secondary hover:text-white'}`}
+1057:              className={`flex-1 lg:flex-none p-4 rounded-xl flex items-center justify-center transition-all ${state.activeTab === 'admin' ? 'bg-burn-red text-soil-dark' : 'bg-card-bg text-text-secondary hover:text-white'}`}
+1065:        <div className="lg:col-span-11 space-y-6">
+1074:                className="hardware-panel p-6 md:p-8 space-y-8"
+1076:                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-bark-brown pb-6">
+1078:                    <div className="flex items-center gap-2 mb-1">
+1079:                      <span className="text-xs font-bold uppercase tracking-widest px-2 py-0.5 rounded bg-white/10 text-text-primary">
+1082:                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded bg-black/40 
+1091:                    <h3 className="text-2xl md:text-3xl font-bold font-serif italic">{PLANT_STAGES[selectedPlant.stageIndex].name}</h3>
+1092:                    <p className="text-xs text-text-secondary font-mono tracking-wider">TELEMETRY ID: {selectedPlant.id}</p>
+1093:                    <p className="text-xs text-text-secondary mt-2 italic max-w-md">
+1097:                  <div className="flex items-center gap-4">
+1098:                    <div className="px-4 py-1.5 rounded-full bg-leaf-green/10 border border-leaf-green/30 text-leaf-green text-[10px] font-bold uppercase tracking-widest">
+1103:                      className="text-text-secondary hover:text-white transition-colors"
+1110:                <div className="flex flex-col gap-8">
+1111:                  <div className="h-[400px] md:h-[500px] bg-black/30 rounded-3xl dashed-border relative overflow-hidden group">
+1131:                    <div className="absolute inset-0 pointer-events-none bg-gradient-to-t from-black/40 to-transparent" />
+1134:                    <div className="absolute top-4 right-4 flex flex-col gap-2">
+1140:                          className={`p-3 rounded-xl border backdrop-blur-md transition-all group relative
+1148:                          <div className="absolute right-full mr-3 top-1/2 -translate-y-1/2 px-3 py-1.5 bg-soil-dark border border-bark-brown rounded-lg text-[10px] font-bold whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+1155:                            <div className="absolute inset-0 bg-black/60 flex items-center justify-center rounded-xl">
+1156:                              <span className="text-[10px] font-bold text-white">{tool.currentCooldown}</span>
+1164:                  <div className="space-y-8">
+1165:                    <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+1166:                      <div className="space-y-3">
+1167:                        <div className="flex justify-between text-[10px] font-bold uppercase tracking-widest text-text-secondary">
+1169:                          <span className="text-water-blue">{selectedPlant.water} / {PLANT_STAGES[selectedPlant.stageIndex].maxWater}</span>
+1171:                        <div className="h-2.5 w-full bg-black/40 rounded-full overflow-hidden">
+1173:                            className="h-full bg-water-blue transition-all duration-1000 ease-out" 
+1178:                      <div className="space-y-3">
+1179:                        <div className="flex justify-between text-[10px] font-bold uppercase tracking-widest text-text-secondary">
+1181:                          <span className="text-mineral-gold">{Math.round(selectedPlant.nutrients)}%</span>
+1183:                        <div className="h-2.5 w-full bg-black/40 rounded-full overflow-hidden">
+1185:                            className="h-full bg-mineral-gold transition-all duration-1000 ease-out" 
+1190:                      <div className="space-y-3">
+1191:                        <div className="flex justify-between text-[10px] font-bold uppercase tracking-widest text-text-secondary">
+1193:                          <span className="text-burn-red">{selectedPlant.stress}%</span>
+1195:                        <div className="h-2.5 w-full bg-black/40 rounded-full overflow-hidden">
+1197:                            className="h-full bg-burn-red transition-all duration-1000 ease-out" 
+1202:                      <div className="space-y-3">
+1203:                        <div className="flex justify-between text-[10px] font-bold uppercase tracking-widest text-text-secondary">
+1205:                          <span className="text-leaf-green">{selectedPlant.rootStrength}</span>
+1207:                        <div className="h-2.5 w-full bg-black/40 rounded-full overflow-hidden">
+1209:                            className="h-full bg-leaf-green transition-all duration-1000 ease-out" 
+1216:                    <div className="grid grid-cols-2 gap-4 max-w-2xl mx-auto w-full">
+1220:                          className="col-span-2 flex items-center justify-center gap-3 bg-mineral-gold text-soil-dark font-bold py-4 rounded-2xl hover:scale-[1.02] active:scale-[0.98] transition-all shadow-lg shadow-mineral-gold/10"
+1230:                            className="flex items-center justify-center gap-3 bg-leaf-green text-soil-dark font-bold py-4 rounded-2xl hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 shadow-lg shadow-leaf-green/10"
+1237:                            className="flex items-center justify-center gap-3 bg-water-blue text-soil-dark font-bold py-4 rounded-2xl hover:scale-[1.02] active:scale-[0.98] transition-all shadow-lg shadow-water-blue/10"
+1252:                className="hardware-panel p-12 flex flex-col items-center justify-center text-center gap-6 text-text-secondary border-dashed border-bark-brown/50"
+1254:                <div className="w-20 h-20 rounded-full bg-bark-brown/10 flex items-center justify-center animate-pulse">
+1257:                <div className="space-y-2 max-w-sm">
+1258:                  <h3 className="text-xl font-bold text-text-primary">System Idle</h3>
+1259:                  <p className="text-sm leading-relaxed">Select a specimen from the orchard grid below to initiate neural link and access growth telemetry.</p>
+1266:          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+1267:            <div className="md:col-span-2 space-y-4">
+1275:                    className="space-y-4"
+1277:                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+1278:                      <div className="flex flex-col gap-2 w-full">
+1279:                        <div className="flex items-center gap-2">
+1280:                          <Database size={16} className="text-leaf-green" />
+1281:                          <h2 className="font-serif text-xl italic">{activeOrchard.name}</h2>
+1283:                        <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar">
+1294:                              className={`whitespace-nowrap px-4 py-2 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all ${
+1308:                    <div className="grid grid-cols-3 gap-4">
+1328:                    className="space-y-6"
+1330:                    <div className="flex justify-between items-center">
+1331:                      <h2 className="font-serif text-xl italic">Bio-Genetic Lab</h2>
+1332:                      <span className="text-[10px] font-bold text-text-secondary uppercase tracking-widest">Global Enhancements</span>
+1336:                    <div className="hardware-panel p-6 space-y-6 border-leaf-green/30">
+1337:                      <div className="flex items-center gap-2 text-leaf-green">
+1339:                        <h4 className="text-xs font-bold uppercase tracking-widest">Hybridization Chamber</h4>
+1342:                      <div className="grid grid-cols-2 gap-4">
+1344:                          <div key={idx} className="h-32 rounded-xl border-2 border-dashed border-bark-brown flex flex-col items-center justify-center gap-2 bg-black/20">
+1346:                              <div className="text-center">
+1347:                                <p className="text-[10px] font-bold text-leaf-green uppercase">{activeOrchard.plants[breedingParents[idx]]?.rarity}</p>
+1348:                                <p className="text-xs font-bold">{activeOrchard.plants[breedingParents[idx]]?.type}</p>
+1351:                                  className="mt-2 text-[10px] text-burn-red hover:underline"
+1357:                              <p className="text-[10px] text-text-secondary uppercase">Select Mature Plant</p>
+1363:                      <div className="space-y-4">
+1364:                        <p className="text-[10px] text-text-secondary leading-relaxed">
+1366:                          Hybridization costs <span className="text-mineral-gold font-bold">100🪙</span> and requires an empty plot.
+1369:                        <div className="grid grid-cols-3 gap-2">
+1375:                                className="p-2 rounded-lg bg-bark-brown/20 border border-bark-brown hover:border-leaf-green transition-all text-[10px] font-bold truncate"
+1386:                          className="w-full bg-leaf-green text-soil-dark font-bold py-3 rounded-xl hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 shadow-lg shadow-leaf-green/10"
+1393:                    <div className="grid grid-cols-1 gap-3">
+1402:                          className="hardware-panel p-4 flex items-center gap-4 hover:border-water-blue transition-all group"
+1404:                          <div className="w-12 h-12 rounded-lg bg-water-blue/10 flex items-center justify-center text-water-blue group-hover:scale-110 transition-transform">
+1407:                          <div className="flex-1 text-left">
+1408:                            <h4 className="font-bold text-sm">{u.name}</h4>
+1409:                            <p className="text-xs text-text-secondary">{u.desc}</p>
+1411:                          <div className="text-right">
+1412:                            <span className="text-xs font-mono font-bold text-water-blue">10 🧬</span>
+1426:                    className="space-y-4"
+1428:                    <div className="flex justify-between items-center">
+1429:                      <h2 className="font-serif text-xl italic">Supply Exchange</h2>
+1430:                      <span className="text-[10px] font-bold text-text-secondary uppercase tracking-widest">Resource Acquisition</span>
+1434:                    <div className="hardware-panel p-4 space-y-4 border-water-blue/30">
+1435:                      <div className="flex items-center gap-2 text-water-blue">
+1437:                        <h4 className="text-xs font-bold uppercase tracking-widest">Secure Credit Transfer</h4>
+1439:                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+1445:                          className="bg-black/40 border border-bark-brown rounded-lg px-3 py-2 text-xs font-mono focus:outline-none focus:border-water-blue transition-all"
+1447:                        <div className="flex gap-2">
+1453:                            className="flex-1 bg-black/40 border border-bark-brown rounded-lg px-3 py-2 text-xs font-mono focus:outline-none focus:border-water-blue transition-all"
+1458:                            className="bg-water-blue text-soil-dark px-4 py-2 rounded-lg text-xs font-bold hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50"
+1464:                      <div className="p-2 bg-black/20 rounded border border-bark-brown/30">
+1465:                        <p className="text-[9px] text-text-secondary leading-relaxed">
+1466:                          <ShieldCheck size={10} className="inline mr-1" />
+1467:                          TRANSFERS ARE PERMANENT. YOUR UID: <span className="text-water-blue font-mono select-all">{state.user?.uid}</span>
+1472:                    <div className="grid grid-cols-1 gap-3">
+1477:                          className="hardware-panel p-4 flex items-center gap-4 hover:border-mineral-gold transition-all group"
+1479:                          <div className="w-12 h-12 rounded-lg bg-mineral-gold/10 flex items-center justify-center text-mineral-gold group-hover:scale-110 transition-transform">
+1482:                          <div className="flex-1 text-left">
+1483:                            <h4 className="font-bold text-sm">{item.name}</h4>
+1484:                            <p className="text-xs text-text-secondary">
+1489:                          <div className="text-right">
+1490:                            <span className="text-xs font-mono font-bold text-mineral-gold">{item.cost} 🪙</span>
+1504:                    className="space-y-6"
+1506:                    <div className="flex items-center gap-3 border-b border-bark-brown pb-4">
+1507:                      <Wrench size={24} className="text-burn-red" />
+1508:                      <h2 className="font-serif text-2xl italic">Tool Management</h2>
+1511:                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+1517:                          <div key={tool.id} className="hardware-panel p-5 flex flex-col gap-4 relative overflow-hidden group">
+1518:                            <div className="flex justify-between items-start">
+1519:                              <div className="space-y-1">
+1520:                                <h3 className="font-bold text-lg text-text-primary">{tool.name}</h3>
+1521:                                <p className="text-xs text-text-secondary leading-relaxed">{tool.description}</p>
+1523:                              <div className="bg-black/40 px-3 py-1 rounded-full border border-bark-brown/30">
+1524:                                <span className="text-[10px] font-bold text-leaf-green">LVL {tool.level}</span>
+1528:                            <div className="space-y-2">
+1529:                              <div className="flex justify-between text-[10px] font-bold uppercase tracking-widest text-text-secondary">
+1533:                              <div className="h-1.5 w-full bg-black/40 rounded-full overflow-hidden">
+1535:                                  className="h-full bg-burn-red transition-all duration-500" 
+1544:                              className={`w-full py-3 rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2 ${
+1566:                            <div className="absolute -bottom-4 -right-4 opacity-[0.03] group-hover:opacity-[0.07] transition-opacity pointer-events-none">
+1582:                    className="space-y-6"
+1584:                    <div className="flex items-center gap-3 border-b border-bark-brown pb-4">
+1585:                      <Trophy size={24} className="text-mineral-gold" />
+1586:                      <h2 className="font-serif text-2xl italic">Global Leaderboard</h2>
+1590:                      <div className="flex justify-center py-20">
+1591:                        <RefreshCw className="animate-spin text-mineral-gold" size={48} />
+1594:                      <div className="space-y-4">
+1598:                            className={`hardware-panel p-4 flex items-center justify-between border ${entry.id === state.user?.uid ? 'border-mineral-gold/50 bg-mineral-gold/5' : 'border-bark-brown/30'}`}
+1600:                            <div className="flex items-center gap-4">
+1601:                              <span className="font-mono text-2xl w-8 text-text-secondary">#{idx + 1}</span>
+1602:                              <div className="w-10 h-10 rounded-full bg-black/40 flex items-center justify-center text-text-secondary border border-bark-brown/30">
+1606:                                <p className="font-bold text-text-primary">{entry.displayName || 'Anonymous'}</p>
+1607:                                <p className="text-[10px] text-text-secondary font-mono uppercase tracking-widest">{entry.role || 'player'}</p>
+1610:                            <div className="text-right">
+1611:                              <p className="text-xl font-bold text-mineral-gold">{entry.credits?.toLocaleString()}🪙</p>
+1612:                              <p className="text-[10px] text-text-secondary uppercase tracking-widest">{entry.dataSeeds || 0} Seeds</p>
+1627:                    className="space-y-6"
+1629:                    <div className="flex items-center gap-3 border-b border-bark-brown pb-4">
+1630:                      <BookOpen size={24} className="text-leaf-green" />
+1631:                      <h2 className="font-serif text-2xl italic">Discovery Log</h2>
+1634:                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+1640:                            className={`hardware-panel p-6 flex flex-col items-center text-center transition-all ${isDiscovered ? 'opacity-100' : 'opacity-40 grayscale'}`}
+1643:                              className="w-12 h-12 rounded-xl mb-4 flex items-center justify-center bg-black/40 border border-bark-brown/30"
+1648:                            <h3 className="font-bold text-sm mb-1 text-text-primary">{isDiscovered ? type.name : '???'}</h3>
+1649:                            <p className="text-[10px] text-text-secondary uppercase tracking-widest">
+1660:                          className="hardware-panel p-6 flex flex-col items-center text-center"
+1662:                          <div className="w-12 h-12 rounded-xl mb-4 flex items-center justify-center bg-black/40 border border-bark-brown/30 text-water-blue">
+1665:                          <h3 className="font-bold text-sm mb-1 text-text-primary">{typeName}</h3>
+1666:                          <p className="text-[10px] text-text-secondary uppercase tracking-widest">Hybrid Species</p>
+1679:                    className="space-y-6"
+1681:                    <div className="flex flex-col md:flex-row md:items-center justify-between border-b border-bark-brown pb-4 gap-4">
+1682:                      <div className="flex items-center gap-3">
+1683:                        <Library size={24} className="text-indigo-400" />
+1684:                        <h2 className="font-serif text-2xl italic">Botanical Archives</h2>
+1686:                      <div className="flex items-center gap-4">
+1687:                        <div className="bg-black/40 px-4 py-2 rounded-xl border border-bark-brown/30 flex items-center gap-2">
+1688:                          <span className="text-xs font-bold text-text-secondary uppercase tracking-widest">Seeds</span>
+1689:                          <span className="text-lg font-mono font-bold text-indigo-400">{state.dataSeeds} 🧬</span>
+1694:                          className="bg-indigo-500 hover:bg-indigo-600 disabled:opacity-50 text-white px-4 py-2 rounded-xl text-sm font-bold transition-all"
+1701:                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+1703:                      <div className="lg:col-span-2 space-y-4">
+1704:                        <h3 className="text-sm font-bold text-text-secondary uppercase tracking-widest flex items-center gap-2">
+1708:                        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+1710:                            <div key={idx} className="hardware-panel p-3 text-center group hover:border-indigo-500 transition-all">
+1711:                              <div className="w-10 h-10 mx-auto mb-2 rounded-full bg-indigo-500/10 flex items-center justify-center text-indigo-400 group-hover:scale-110 transition-transform">
+1714:                              <span className="text-xs font-bold block truncate">{type}</span>
+1718:                            <div className="col-span-full py-12 text-center text-text-secondary italic">
+1726:                      <div className="space-y-4">
+1727:                        <h3 className="text-sm font-bold text-text-secondary uppercase tracking-widest flex items-center gap-2">
+1731:                        <div className="hardware-panel p-4 space-y-3">
+1733:                            <div className="py-8 text-center text-text-secondary animate-pulse">Loading rankings...</div>
+1735:                            <div key={entry.id} className="flex items-center justify-between p-2 rounded-lg bg-black/20 border border-white/5">
+1736:                              <div className="flex items-center gap-3">
+1737:                                <span className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold ${idx === 0 ? 'bg-mineral-gold text-soil-dark' : 'bg-bark-brown/30 text-text-secondary'}`}>
+1740:                                <div className="flex flex-col">
+1741:                                  <span className="text-xs font-bold truncate max-w-[100px]">{entry.displayName || 'Unknown'}</span>
+1742:                                  <span className="text-[10px] text-text-secondary uppercase">{entry.role || 'Player'}</span>
+1745:                              <div className="text-right">
+1746:                                <div className="text-xs font-mono font-bold text-leaf-green">{entry.credits}🪙</div>
+1747:                                <div className="text-[10px] font-mono text-indigo-400">{entry.dataSeeds}🧬</div>
+1763:                    className="space-y-6"
+1765:                    <div className="flex items-center gap-3 border-b border-bark-brown pb-4">
+1766:                      <ShieldCheck size={24} className="text-burn-red" />
+1767:                      <h2 className="font-serif text-2xl italic">Admin Control Center</h2>
+1770:                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+1772:                      <div className="hardware-panel p-6 space-y-4">
+1773:                        <h3 className="text-sm font-bold text-text-secondary uppercase tracking-widest flex items-center gap-2">
+1777:                        <div className="grid grid-cols-2 gap-4">
+1778:                          <div className="bg-black/20 p-4 rounded-xl border border-white/5">
+1779:                            <div className="text-[10px] text-text-secondary uppercase font-bold mb-1">Total Players</div>
+1780:                            <div className="text-2xl font-mono font-bold text-leaf-green">{leaderboard.length}+</div>
+1782:                          <div className="bg-black/20 p-4 rounded-xl border border-white/5">
+1783:                            <div className="text-[10px] text-text-secondary uppercase font-bold mb-1">Server Time</div>
+1784:                            <div className="text-sm font-mono font-bold text-text-primary">{new Date().toLocaleTimeString()}</div>
+1790:                      <div className="hardware-panel p-6 space-y-4">
+1791:                        <h3 className="text-sm font-bold text-text-secondary uppercase tracking-widest flex items-center gap-2">
+1795:                        <div className="grid grid-cols-1 gap-3">
+1802:                            className="bg-burn-red/10 hover:bg-burn-red/20 text-burn-red border border-burn-red/30 p-3 rounded-xl text-xs font-bold transition-all flex items-center justify-between"
+1813:                            className="bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 p-3 rounded-xl text-xs font-bold transition-all flex items-center justify-between"
+1823:                    <div className="hardware-panel p-6 space-y-4">
+1824:                      <h3 className="text-sm font-bold text-text-secondary uppercase tracking-widest flex items-center gap-2">
+1828:                      <div className="overflow-x-auto">
+1829:                        <table className="w-full text-left border-collapse">
+1831:                            <tr className="border-b border-bark-brown/30">
+1832:                              <th className="py-3 text-[10px] font-bold text-text-secondary uppercase tracking-widest">Name</th>
+1833:                              <th className="py-3 text-[10px] font-bold text-text-secondary uppercase tracking-widest">Role</th>
+1834:                              <th className="py-3 text-[10px] font-bold text-text-secondary uppercase tracking-widest">Credits</th>
+1835:                              <th className="py-3 text-[10px] font-bold text-text-secondary uppercase tracking-widest">Seeds</th>
+1836:                              <th className="py-3 text-[10px] font-bold text-text-secondary uppercase tracking-widest">Actions</th>
+1841:                              <tr key={user.id} className="border-b border-white/5 hover:bg-white/5 transition-colors">
+1842:                                <td className="py-4 text-xs font-bold">{user.displayName || 'Anon'}</td>
+1843:                                <td className="py-4">
+1844:                                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${user.role === 'admin' ? 'bg-burn-red/20 text-burn-red' : 'bg-leaf-green/20 text-leaf-green'}`}>
+1848:                                <td className="py-4 text-xs font-mono">{user.credits}🪙</td>
+1849:                                <td className="py-4 text-xs font-mono">{user.dataSeeds}🧬</td>
+1850:                                <td className="py-4">
+1857:                                    className="text-[10px] font-bold text-indigo-400 hover:underline"
+1874:            <div className="space-y-4">
+1875:              <div className="flex items-center gap-2 text-text-secondary">
+1877:                <span className="text-[10px] font-bold uppercase tracking-widest">System Logs</span>
+1879:              <div className="hardware-panel p-4 h-64 md:h-full overflow-y-auto font-mono text-[10px] space-y-2 bg-black/40">
+1881:                  <div key={i} className={
+1886:                    <span className="opacity-30 mr-2">[{new Date().toLocaleTimeString([], { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' })}]</span>
+1902:            className="fixed inset-0 z-50 flex items-center justify-center bg-soil-dark/95 backdrop-blur-md p-6"
+1907:              className="hardware-panel max-w-md w-full p-8 text-center space-y-8 border-leaf-green/30"
+1909:              <div className="space-y-4">
+1910:                <div className="w-20 h-20 bg-leaf-green/10 rounded-full flex items-center justify-center mx-auto text-leaf-green">
+1913:                <div className="space-y-2">
+1914:                  <h1 className="text-2xl font-serif italic">Orchard Engine</h1>
+1915:                  <p className="text-xs text-text-secondary uppercase tracking-[0.2em]">Growth Milestone Interface</p>
+1919:              <div className="space-y-6">
+1920:                <p className="text-sm text-text-secondary leading-relaxed">
+1924:                <div className="space-y-4">
+1928:                    className="w-full flex items-center justify-center gap-3 bg-white text-black font-bold py-4 rounded-xl hover:scale-[1.02] active:scale-[0.98] transition-all shadow-lg disabled:opacity-50"
+1931:                      <RefreshCw className="animate-spin" size={20} />
+1938:                  <div className="hardware-panel p-3 h-32 overflow-y-auto font-mono text-[9px] space-y-1 bg-black/60 text-left border-bark-brown/20">
+1939:                    <div className="text-text-secondary uppercase mb-1 border-b border-bark-brown/20 pb-1 flex items-center gap-1">
+1943:                      <div key={i} className={log.type === 'danger' ? 'text-burn-red' : 'text-text-secondary'}>
+1944:                        <span className="opacity-30 mr-1">[{new Date().toLocaleTimeString([], { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' })}]</span>
+1951:                <p className="text-[10px] text-text-secondary italic">
+1956:              <div className="pt-4 border-t border-bark-brown/30">
+1957:                <div className="flex items-center justify-center gap-2 text-[10px] text-text-secondary uppercase tracking-widest">
+1969:        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-soil-dark">
+1970:          <RefreshCw className="animate-spin text-leaf-green" size={40} />

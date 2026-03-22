@@ -1,0 +1,1983 @@
+1:import React, { useState, useEffect, useCallback } from 'react';
+2:import { GameState, Plant, GlobalUpgrades, Orchard, Tool, Weather } from './types';
+3:import { PLANT_STAGES, INITIAL_UPGRADES, SHOP_ITEMS, INITIAL_TOOLS, getRandomWeather, BASE_PLANT_TYPES } from './constants';
+4:import PlantCard from './components/PlantCard';
+5:import PlantVisualizer from './components/PlantVisualizer';
+6:import { 
+7:  Sprout, 
+8:  FlaskConical, 
+9:  Store, 
+10:  Droplets, 
+11:  Zap, 
+12:  Bug, 
+13:  Flame, 
+14:  TrendingUp, 
+15:  ArrowUpCircle,
+16:  RefreshCw,
+17:  Database,
+18:  Send,
+19:  User,
+20:  LogOut,
+21:  LogIn,
+22:  ShieldCheck,
+23:  AlertCircle,
+24:  Wrench,
+25:  Cpu,
+26:  Library,
+27:  BookOpen,
+28:  Trophy,
+29:  Sun,
+30:  CloudRain,
+31:  CloudLightning,
+32:  Thermometer,
+33:  Cloud,
+34:  Search
+35:} from 'lucide-react';
+36:import { motion, AnimatePresence } from 'motion/react';
+37:import { 
+38:  auth, 
+39:  db, 
+40:  signInWithGoogle, 
+41:  logout, 
+42:  handleFirestoreError, 
+43:  OperationType 
+44:} from './firebase';
+45:import { 
+46:  doc, 
+47:  setDoc, 
+48:  onSnapshot, 
+49:  updateDoc, 
+50:  collection, 
+51:  query, 
+52:  where, 
+53:  getDocs, 
+54:  addDoc, 
+55:  serverTimestamp,
+56:  increment,
+57:  writeBatch,
+58:  orderBy,
+59:  limit
+60:} from 'firebase/firestore';
+61:import { onAuthStateChanged } from 'firebase/auth';
+62:import firebaseConfig from '../firebase-applet-config.json';
+63:
+64:interface ErrorBoundaryProps {
+65:  children: React.ReactNode;
+66:}
+67:
+68:interface ErrorBoundaryState {
+69:  hasError: boolean;
+70:  error: any;
+71:}
+72:
+73:class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
+74:  constructor(props: ErrorBoundaryProps) {
+75:    super(props);
+76:    this.state = { hasError: false, error: null };
+77:  }
+78:
+79:  static getDerivedStateFromError(error: any) {
+80:    return { hasError: true, error };
+81:  }
+82:
+83:  render() {
+84:    if (this.state.hasError) {
+85:      let errorData;
+86:      try {
+87:        errorData = JSON.parse(this.state.error.message);
+88:      } catch (e) {
+89:        errorData = { error: this.state.error.message };
+90:      }
+91:
+92:      return (
+93:        <div className="min-h-screen bg-soil-dark flex items-center justify-center p-6">
+94:          <div className="hardware-panel max-w-lg w-full p-8 space-y-6 border-burn-red/50">
+95:            <div className="flex items-center gap-3 text-burn-red">
+96:              <AlertCircle size={32} />
+97:              <h2 className="text-xl font-bold uppercase tracking-tight">System Critical Error</h2>
+98:            </div>
+99:            <div className="bg-black/40 p-4 rounded-lg font-mono text-xs space-y-2 overflow-auto max-h-64">
+100:              <p className="text-burn-red font-bold">Error: {errorData.error || 'Unknown'}</p>
+101:              {errorData.operationType && <p>Operation: {errorData.operationType}</p>}
+102:              {errorData.path && <p>Path: {errorData.path}</p>}
+103:              {errorData.authInfo && (
+104:                <div className="pt-2 border-t border-bark-brown/30">
+105:                  <p className="text-text-secondary">Auth Context:</p>
+106:                  <p>UID: {errorData.authInfo.userId || 'Not Logged In'}</p>
+107:                  <p>Email: {errorData.authInfo.email || 'N/A'}</p>
+108:                </div>
+109:              )}
+110:            </div>
+111:            <button 
+112:              onClick={() => window.location.reload()}
+113:              className="w-full bg-bark-brown/20 hover:bg-bark-brown/40 text-text-primary font-bold py-3 rounded-xl border border-bark-brown transition-all"
+114:            >
+115:              REBOOT SYSTEM
+116:            </button>
+117:          </div>
+118:        </div>
+119:      );
+120:    }
+121:    return this.props.children;
+122:  }
+123:}
+124:
+125:const App: React.FC = () => {
+126:  const [state, setState] = useState<GameState>({
+127:    day: 1,
+128:    credits: 100,
+129:    dataSeeds: 0,
+130:    orchards: [
+131:      {
+132:        id: 'orchard-1',
+133:        name: 'Primary Orchard',
+134:        plants: Array(9).fill(null),
+135:        isUnlocked: true,
+136:        unlockCost: 0,
+137:      },
+138:      {
+139:        id: 'orchard-2',
+140:        name: 'Highland Ridge',
+141:        plants: Array(9).fill(null),
+142:        isUnlocked: false,
+143:        unlockCost: 250,
+144:      },
+145:      {
+146:        id: 'orchard-3',
+147:        name: 'Deep Valley',
+148:        plants: Array(9).fill(null),
+149:        isUnlocked: false,
+150:        unlockCost: 750,
+151:      }
+152:    ],
+153:    activeOrchardId: 'orchard-1',
+154:    selectedPlantIndex: null,
+155:    upgrades: INITIAL_UPGRADES,
+156:    tools: INITIAL_TOOLS,
+157:    activeTab: 'orchard',
+158:    weather: getRandomWeather(),
+159:    user: null,
+160:    isAuthReady: false,
+161:    lastToolEffect: null,
+162:    discoveredTypes: [],
+163:  });
+164:
+165:  const [logs, setLogs] = useState<{ msg: string; type: string }[]>([]);
+166:  const [transferTarget, setTransferTarget] = useState('');
+167:  const [transferAmount, setTransferAmount] = useState('');
+168:  const [isTransferring, setIsTransferring] = useState(false);
+169:  const [isLoginLoading, setIsLoginLoading] = useState(false);
+170:  const [breedingParents, setBreedingParents] = useState<number[]>([]);
+171:  const [leaderboard, setLeaderboard] = useState<any[]>([]);
+172:  const [isLeaderboardLoading, setIsLeaderboardLoading] = useState(false);
+173:  const lastActivityRef = React.useRef(Date.now());
+174:
+175:  const updateActivity = useCallback(() => {
+176:    lastActivityRef.current = Date.now();
+177:  }, []);
+178:
+179:  const addLog = useCallback((msg: string, type: string = 'info') => {
+180:    setLogs(prev => [{ msg, type }, ...prev].slice(0, 20));
+181:  }, []);
+182:
+183:  // Auto-save timer (2 minutes of inactivity)
+184:  useEffect(() => {
+185:    if (!state.user?.uid) return;
+186:
+187:    const interval = setInterval(() => {
+188:      const now = Date.now();
+189:      if (now - lastActivityRef.current >= 120000) { // 2 minutes
+190:        console.log('Auto-saving due to inactivity...');
+191:        saveState({
+192:          day: state.day,
+193:          credits: state.credits,
+194:          dataSeeds: state.dataSeeds,
+195:          orchards: state.orchards,
+196:          upgrades: state.upgrades,
+197:          tools: state.tools,
+198:          weather: state.weather,
+199:          discoveredTypes: state.discoveredTypes,
+200:        });
+201:        updateActivity(); // Reset timer after save
+202:        addLog('Game auto-saved (inactivity).', 'system');
+203:      }
+204:    }, 30000); // Check every 30 seconds
+205:
+206:    return () => clearInterval(interval);
+207:  }, [state.user?.uid, state.day, state.credits, state.dataSeeds, state.orchards, state.upgrades, state.tools, updateActivity]);
+208:
+209:  const handleLogin = async () => {
+210:    setIsLoginLoading(true);
+211:    addLog('Initiating Google Login...', 'system');
+212:    try {
+213:      await signInWithGoogle();
+214:      addLog('Login popup completed.', 'system');
+215:    } catch (error: any) {
+216:      addLog(`Login failed: ${error.message}`, 'danger');
+217:      console.error('Login error:', error);
+218:    } finally {
+219:      setIsLoginLoading(false);
+220:    }
+221:  };
+222:
+223:  // Auth Timeout Check
+224:  useEffect(() => {
+225:    const timer = setTimeout(() => {
+226:      if (!state.isAuthReady) {
+227:        console.warn('Auth: Initialization timeout reached.');
+228:        addLog('Auth initialization is taking longer than expected. Please check your connection or popup blockers.', 'danger');
+229:        // Fallback: Set isAuthReady to true so the user can see the Auth Overlay and logs
+230:        setState(prev => ({ ...prev, isAuthReady: true }));
+231:      }
+232:    }, 10000); // 10 seconds
+233:    return () => clearTimeout(timer);
+234:  }, [state.isAuthReady, addLog]);
+235:
+236:  // Auth Listener
+237:  useEffect(() => {
+238:    console.log('App: Initializing Auth Listener with project:', firebaseConfig.projectId);
+239:    addLog('Initializing Auth Listener...', 'system');
+240:    const unsubscribe = onAuthStateChanged(auth, (user) => {
+241:      console.log('App: Auth state changed', user ? user.uid : 'No user');
+242:      if (user) {
+243:        addLog(`Auth state changed: User ${user.uid} detected.`, 'system');
+244:        setState(prev => ({
+245:          ...prev,
+246:          user: {
+247:            uid: user.uid,
+248:            displayName: user.displayName,
+249:            email: user.email,
+250:            role: user.email === 'via.decide@gmail.com' ? 'admin' : 'player'
+251:          },
+252:          isAuthReady: true
+253:        }));
+254:      } else {
+255:        addLog('Auth state changed: No user detected.', 'system');
+256:        setState(prev => ({ ...prev, user: null, isAuthReady: true }));
+257:      }
+258:    }, (error) => {
+259:      console.error('App: Auth state error', error);
+260:      addLog(`Auth error: ${error.message}`, 'danger');
+261:      setState(prev => ({ ...prev, isAuthReady: true }));
+262:    });
+263:    return () => unsubscribe();
+264:  }, [addLog]);
+265:
+266:  // Firestore Sync
+267:  useEffect(() => {
+268:    if (!state.user?.uid) return;
+269:
+270:    const userDocRef = doc(db, 'users', state.user.uid);
+271:    const unsubscribe = onSnapshot(userDocRef, (snapshot) => {
+272:      if (snapshot.exists()) {
+273:        const data = snapshot.data();
+274:        addLog(`Synchronized data for ${data.displayName || 'User'}`, 'system');
+275:        setState(prev => ({
+276:          ...prev,
+277:          day: data.day ?? prev.day,
+278:          credits: data.credits ?? prev.credits,
+279:          dataSeeds: data.dataSeeds ?? prev.dataSeeds,
+280:          orchards: data.orchards ?? prev.orchards,
+281:          upgrades: data.upgrades ?? prev.upgrades,
+282:          tools: data.tools ?? prev.tools,
+283:          weather: data.weather ?? prev.weather,
+284:          discoveredTypes: data.discoveredTypes ?? prev.discoveredTypes,
+285:          user: prev.user ? { ...prev.user, role: data.role || (prev.user.email === 'via.decide@gmail.com' ? 'admin' : 'player') } : null
+286:        }));
+287:      } else {
+288:        // Initialize new user document
+289:        const initialState = {
+290:          uid: state.user!.uid,
+291:          displayName: state.user!.displayName,
+292:          email: state.user!.email,
+293:          credits: 100,
+294:          dataSeeds: 0,
+295:          day: 1,
+296:          upgrades: INITIAL_UPGRADES,
+297:          tools: INITIAL_TOOLS,
+298:          orchards: state.orchards,
+299:          weather: state.weather,
+300:          role: state.user!.email === 'via.decide@gmail.com' ? 'admin' : 'player',
+301:          discoveredTypes: [],
+302:          createdAt: serverTimestamp()
+303:        };
+304:        setDoc(userDocRef, initialState).catch(e => handleFirestoreError(e, OperationType.WRITE, `users/${state.user!.uid}`));
+305:      }
+306:    }, (error) => handleFirestoreError(error, OperationType.GET, `users/${state.user!.uid}`));
+307:
+308:    return () => unsubscribe();
+309:  }, [state.user?.uid]);
+310:
+311:  const saveState = async (updates: Partial<GameState>) => {
+312:    if (!state.user?.uid) return;
+313:    updateActivity();
+314:    const userDocRef = doc(db, 'users', state.user.uid);
+315:    try {
+316:      await updateDoc(userDocRef, updates);
+317:    } catch (e) {
+318:      handleFirestoreError(e, OperationType.UPDATE, `users/${state.user.uid}`);
+319:    }
+320:  };
+321:
+322:  // Fetch Leaderboard
+323:  const fetchLeaderboard = async () => {
+324:    setIsLeaderboardLoading(true);
+325:    try {
+326:      const usersRef = collection(db, 'users');
+327:      const q = query(usersRef, orderBy('credits', 'desc'), limit(10));
+328:      const querySnapshot = await getDocs(q);
+329:      const data = querySnapshot.docs.map(doc => ({
+330:        id: doc.id,
+331:        ...doc.data()
+332:      }));
+333:      setLeaderboard(data);
+334:    } catch (e) {
+335:      console.error('Leaderboard fetch error:', e);
+336:    } finally {
+337:      setIsLeaderboardLoading(false);
+338:    }
+339:  };
+340:
+341:  useEffect(() => {
+342:    if (state.activeTab === 'archives') {
+343:      fetchLeaderboard();
+344:    }
+345:  }, [state.activeTab]);
+346:
+347:  const handleSellDataSeeds = () => {
+348:    if (state.dataSeeds < 10) {
+349:      addLog('Need at least 10 🧬 to sell.', 'warn');
+350:      return;
+351:    }
+352:    setState(prev => {
+353:      const nextState = { ...prev, dataSeeds: prev.dataSeeds - 10, credits: prev.credits + 50 };
+354:      saveState({ dataSeeds: prev.dataSeeds - 10, credits: prev.credits + 50 });
+355:      return nextState;
+356:    });
+357:    addLog('Sold 10 🧬 for 50 🪙.', 'success');
+358:  };
+359:
+360:  const handleTransferCredits = async () => {
+361:    if (!state.user?.uid || !transferTarget || !transferAmount) return;
+362:    const amount = parseInt(transferAmount);
+363:    if (isNaN(amount) || amount <= 0) {
+364:      addLog('Invalid transfer amount.', 'danger');
+365:      return;
+366:    }
+367:    if (amount > state.credits) {
+368:      addLog('Insufficient credits for transfer.', 'danger');
+369:      return;
+370:    }
+371:    if (transferTarget === state.user.uid) {
+372:      addLog('Cannot transfer to yourself.', 'warn');
+373:      return;
+374:    }
+375:
+376:    setIsTransferring(true);
+377:    try {
+378:      // Find target user
+379:      const usersRef = collection(db, 'users');
+380:      const q = query(usersRef, where('uid', '==', transferTarget));
+381:      const querySnapshot = await getDocs(q);
+382:
+383:      if (querySnapshot.empty) {
+384:        addLog('Target User ID not found.', 'danger');
+385:        setIsTransferring(false);
+386:        return;
+387:      }
+388:
+389:      const targetDoc = querySnapshot.docs[0];
+390:      const batch = writeBatch(db);
+391:
+392:      // Deduct from sender
+393:      batch.update(doc(db, 'users', state.user.uid), {
+394:        credits: increment(-amount)
+395:      });
+396:
+397:      // Add to receiver
+398:      batch.update(targetDoc.ref, {
+399:        credits: increment(amount)
+400:      });
+401:
+402:      // Log transfer
+403:      batch.set(doc(collection(db, 'transfers')), {
+404:        from: state.user.uid,
+405:        to: transferTarget,
+406:        amount,
+407:        timestamp: serverTimestamp()
+408:      });
+409:
+410:      await batch.commit();
+411:      addLog(`Successfully transferred ${amount} credits to ${targetDoc.data().displayName || 'User'}.`, 'success');
+412:      setTransferTarget('');
+413:      setTransferAmount('');
+414:    } catch (e) {
+415:      handleFirestoreError(e, OperationType.WRITE, 'transfers');
+416:    } finally {
+417:      setIsTransferring(false);
+418:    }
+419:  };
+420:
+421:  const activeOrchard = state.orchards.find(o => o.id === state.activeOrchardId)!;
+422:  const selectedPlant = state.selectedPlantIndex !== null ? activeOrchard.plants[state.selectedPlantIndex] : null;
+423:
+424:  const buyTool = (id: string) => {
+425:    const toolIndex = state.tools.findIndex(t => t.id === id);
+426:    if (toolIndex === -1) return;
+427:    const tool = state.tools[toolIndex];
+428:    
+429:    if (tool.level >= tool.maxLevel && tool.maxLevel > 0) {
+430:      addLog(`${tool.name} is already at maximum level.`, 'warn');
+431:      return;
+432:    }
+433:
+434:    const cost = Math.round(tool.baseCost * Math.pow(tool.costMultiplier, tool.level));
+435:    if (state.credits < cost) {
+436:      addLog(`Insufficient credits for ${tool.name} acquisition. Need ${cost}🪙.`, 'danger');
+437:      return;
+438:    }
+439:
+440:    setState(prev => {
+441:      const newTools = [...prev.tools];
+442:      newTools[toolIndex] = { ...tool, level: tool.level + 1 };
+443:      const nextState = {
+444:        ...prev,
+445:        credits: prev.credits - cost,
+446:        tools: newTools
+447:      };
+448:      saveState({ credits: prev.credits - cost, tools: newTools });
+449:      return nextState;
+450:    });
+451:    addLog(`${tool.name} ${tool.type === 'active' ? 'acquired' : 'upgraded to level ' + (tool.level + 1)}!`, 'success');
+452:  };
+453:
+454:  const useActiveTool = (id: string) => {
+455:    const toolIndex = state.tools.findIndex(t => t.id === id);
+456:    if (toolIndex === -1) return;
+457:    const tool = state.tools[toolIndex];
+458:
+459:    if (tool.level === 0) {
+460:      addLog(`You must acquire the ${tool.name} first.`, 'warn');
+461:      return;
+462:    }
+463:
+464:    if ((tool.currentCooldown || 0) > 0) {
+465:      addLog(`${tool.name} is on cooldown for ${tool.currentCooldown} more cycles.`, 'warn');
+466:      return;
+467:    }
+468:
+469:    setState(prev => {
+470:      const newTools = [...prev.tools];
+471:      newTools[toolIndex] = { ...tool, currentCooldown: tool.activeCooldown };
+472:      
+473:      let newOrchards = [...prev.orchards];
+474:      let credits = prev.credits;
+475:      let dataSeeds = prev.dataSeeds;
+476:
+477:      if (id === 'pest-repellent-pulse') {
+478:        // Clear all pests in current orchard
+479:        const orchardIndex = newOrchards.findIndex(o => o.id === prev.activeOrchardId);
+480:        const orchard = { ...newOrchards[orchardIndex] };
+481:        orchard.plants = orchard.plants.map(p => p ? { ...p, pests: 0, pestImmunity: 3 } : null);
+482:        newOrchards[orchardIndex] = orchard;
+483:        addLog('Pest Repellent Pulse activated! All pests cleared and immunity granted for 3 cycles.', 'success');
+484:      }
+485:
+486:      if (id === 'genetic-scanner') {
+487:        // This effect will be checked in buyPlot
+488:        addLog('Genetic Scanner active! Next plot seeded will have significantly higher rarity chance.', 'success');
+489:      }
+490:
+491:      if (id === 'pruning-shears') {
+492:        const orchardIndex = newOrchards.findIndex(o => o.id === prev.activeOrchardId);
+493:        const orchard = { ...newOrchards[orchardIndex] };
+494:        orchard.plants = orchard.plants.map(p => p ? { ...p, stress: Math.max(0, p.stress - 50) } : null);
+495:        newOrchards[orchardIndex] = orchard;
+496:        addLog('Nanotech Pruning Shears used! All plants in the current orchard have significantly reduced stress.', 'success');
+497:      }
+498:
+499:      const nextState = {
+500:        ...prev,
+501:        tools: newTools,
+502:        orchards: newOrchards,
+503:        lastToolEffect: id
+504:      };
+505:      
+506:      saveState({ tools: newTools, orchards: newOrchards });
+507:      
+508:      // Reset effect after 2 seconds
+509:      setTimeout(() => {
+510:        setState(p => ({ ...p, lastToolEffect: null }));
+511:      }, 2000);
+512:
+513:      return nextState;
+514:    });
+515:  };
+516:
+517:  const getToolBonus = (toolId: string) => {
+518:    const tool = state.tools.find(t => t.id === toolId);
+519:    if (!tool || tool.level === 0) return 0;
+520:    return tool.level * tool.bonusValue;
+521:  };
+522:
+523:  const handlePlantAction = (action: 'research' | 'water' | 'fertilize' | 'pesticide' | 'harvest') => {
+524:    if (state.selectedPlantIndex === null || !selectedPlant) return;
+525:
+526:    setState(prev => {
+527:      const newOrchards = [...prev.orchards];
+528:      const orchardIndex = newOrchards.findIndex(o => o.id === prev.activeOrchardId);
+529:      const orchard = { ...newOrchards[orchardIndex] };
+530:      const newPlants = [...orchard.plants];
+531:      const plant = { ...newPlants[prev.selectedPlantIndex!]! };
+532:      let credits = prev.credits;
+533:      let dataSeeds = prev.dataSeeds;
+534:
+535:      // Tool Bonuses
+536:      const stressReduction = getToolBonus('stress-monitor');
+537:      const creditBonus = getToolBonus('data-extractor');
+538:
+539:      if (action === 'harvest') {
+540:        if (!plant.isHarvestable) return prev;
+541:        
+542:        const reward = Math.round((500 + (plant.rootStrength * 2)) * (plant.yieldMultiplier || 1));
+543:        credits += reward;
+544:        dataSeeds += 20;
+545:        
+546:        addLog(`Harvested ${plant.type}! Gained ${reward} credits and 20 genetic data.`, 'success');
+547:        
+548:        // Reset plot
+549:        newPlants[prev.selectedPlantIndex!] = null;
+550:        orchard.plants = newPlants;
+551:        newOrchards[orchardIndex] = orchard;
+552:        
+553:        const nextState = { ...prev, orchards: newOrchards, credits, dataSeeds, selectedPlantIndex: null };
+554:        saveState({ orchards: newOrchards, credits, dataSeeds });
+555:        return nextState;
+556:      }
+557:
+558:      if (action === 'research') {
+559:        if (plant.water < 5) {
+560:          addLog('Insufficient water for research.', 'warn');
+561:          return prev;
+562:        }
+563:        
+564:        const baseG = Math.floor(Math.random() * 8) + 5;
+565:        const finalG = Math.max(1, Math.round(baseG * (plant.nutrients / 100) * (plant.growthSpeedMultiplier || 1)));
+566:        
+567:        plant.rootStrength += finalG;
+568:        plant.water -= 5;
+569:        plant.nutrients -= 10;
+570:        plant.stress += Math.max(0, 5 - stressReduction);
+571:        credits += (10 + creditBonus);
+572:        
+573:        // Check evolution
+574:        let nextStage = 0;
+575:        for (let i = 0; i < PLANT_STAGES.length; i++) {
+576:          if (plant.rootStrength >= PLANT_STAGES[i].threshold) nextStage = i;
+577:        }
+578:        
+579:        if (nextStage > plant.stageIndex) {
+580:          plant.stageIndex = nextStage;
+581:          addLog(`Evolution! ${plant.type} reached stage: ${PLANT_STAGES[nextStage].name}`, 'success');
+582:          dataSeeds += 5;
+583:          
+584:          // Mark as harvestable at final stage
+585:          if (nextStage === PLANT_STAGES.length - 1) {
+586:            plant.isHarvestable = true;
+587:          }
+588:        }
+589:
+590:        // Pest chance
+591:        const pestDefenseBonus = getToolBonus('pest-control');
+592:        const basePestChance = 0.15;
+593:        const finalPestChance = basePestChance * (1 - pestDefenseBonus);
+594:        
+595:        if (plant.pestImmunity === 0 && Math.random() < finalPestChance) {
+596:          plant.pests = Math.min(5, plant.pests + 1);
+597:          addLog('Warning: Pest infestation detected!', 'danger');
+598:        }
+599:
+600:        addLog(`Research complete: +${finalG} roots, +${10 + creditBonus} credits.`, 'success');
+601:      }
+602:
+603:      if (action === 'water') {
+604:        const stage = PLANT_STAGES[plant.stageIndex];
+605:        const waterBonus = getToolBonus('watering-can');
+606:        const waterGain = Math.round(20 * (1 + waterBonus));
+607:        
+608:        plant.water = Math.min(stage.maxWater, plant.water + waterGain);
+609:        plant.stress = Math.max(0, plant.stress - 5);
+610:        addLog(`Hydration levels increased by ${waterGain}.`, 'info');
+611:        
+612:        // Trigger visual effect
+613:        const nextState = { ...prev, orchards: newOrchards, credits, dataSeeds, lastToolEffect: 'water' };
+614:        saveState({ orchards: newOrchards, credits, dataSeeds });
+615:        setTimeout(() => setState(p => ({ ...p, lastToolEffect: null })), 1000);
+616:        return nextState;
+617:      }
+618:
+619:      if (action === 'fertilize' || action === 'pesticide') {
+620:        // These are items, but we can add effects too
+621:        const nextState = { ...prev, orchards: newOrchards, credits, dataSeeds, lastToolEffect: action };
+622:        saveState({ orchards: newOrchards, credits, dataSeeds });
+623:        setTimeout(() => setState(p => ({ ...p, lastToolEffect: null })), 1000);
+624:        return nextState;
+625:      }
+626:
+627:      newPlants[prev.selectedPlantIndex!] = plant;
+628:      orchard.plants = newPlants;
+629:      newOrchards[orchardIndex] = orchard;
+630:      
+631:      const nextState = { ...prev, orchards: newOrchards, credits, dataSeeds };
+632:      saveState({ orchards: newOrchards, credits, dataSeeds });
+633:      return nextState;
+634:    });
+635:  };
+636:
+637:  const nextDay = () => {
+638:    setState(prev => {
+639:      const nutrientBonus = getToolBonus('soil-tester');
+640:      const newWeather = getRandomWeather();
+641:      
+642:      // Update tool cooldowns
+643:      const newTools = prev.tools.map(t => ({
+644:        ...t,
+645:        currentCooldown: Math.max(0, (t.currentCooldown || 0) - 1)
+646:      }));
+647:
+648:      const newOrchards = prev.orchards.map(o => {
+649:        if (!o.isUnlocked) return o;
+650:        const newPlants = o.plants.map(p => {
+651:          if (!p) return null;
+652:          const plant = { ...p };
+653:          
+654:          // Weather Effects (Apply current weather effects before changing to new)
+655:          const weather = prev.weather;
+656:          if (weather.type === 'rain') {
+657:            plant.water = Math.min(PLANT_STAGES[plant.stageIndex].maxWater, plant.water + (15 * weather.intensity));
+658:            plant.stress = Math.max(0, plant.stress - 10);
+659:          } else if (weather.type === 'storm') {
+660:            plant.water = Math.min(PLANT_STAGES[plant.stageIndex].maxWater, plant.water + (30 * weather.intensity));
+661:            plant.stress += (15 * weather.intensity);
+662:          } else if (weather.type === 'heatwave') {
+663:            plant.nutrients = Math.max(0, plant.nutrients - (20 * weather.intensity));
+664:            plant.stress += (25 * weather.intensity);
+665:            plant.water = Math.max(0, plant.water - (20 * weather.intensity));
+666:          } else if (weather.type === 'fog') {
+667:            plant.water = Math.min(PLANT_STAGES[plant.stageIndex].maxWater, plant.water + 5);
+668:            plant.stress = Math.max(0, plant.stress - 5);
+669:          } else if (weather.type === 'clear') {
+670:            plant.nutrients = Math.min(PLANT_STAGES[plant.stageIndex].maxNutrients, plant.nutrients + 5);
+671:            plant.stress = Math.max(0, plant.stress - 15);
+672:          }
+673:
+674:          // Overnight effects
+675:          if (plant.pests > 0) {
+676:            const pestDrain = (plant.pests * 10) * (1 - nutrientBonus);
+677:            plant.nutrients = Math.max(0, plant.nutrients - pestDrain);
+678:            plant.stress += (plant.pests * 5);
+679:          } else {
+680:            plant.stress = Math.max(0, plant.stress - 20);
+681:          }
+682:
+683:          if (plant.pestImmunity > 0) plant.pestImmunity--;
+684:          
+685:          // Check for crop burn
+686:          if (plant.stress >= 100) {
+687:            addLog(`CRITICAL: ${plant.type} in ${o.name} suffered crop burn!`, 'danger');
+688:            plant.rootStrength = Math.max(0, plant.rootStrength - 50);
+689:            plant.stress = 0;
+690:            // Recalculate stage
+691:            let nextStage = 0;
+692:            for (let i = 0; i < PLANT_STAGES.length; i++) {
+693:              if (plant.rootStrength >= PLANT_STAGES[i].threshold) nextStage = i;
+694:            }
+695:            plant.stageIndex = nextStage;
+696:          }
+697:
+698:          return plant;
+699:        });
+700:        return { ...o, plants: newPlants };
+701:      });
+702:
+703:      addLog(`Day ${prev.day + 1} started. Weather shifted to ${newWeather.name}.`, 'system');
+704:      const nextState = { ...prev, day: prev.day + 1, orchards: newOrchards, weather: newWeather };
+705:      saveState({ day: prev.day + 1, orchards: newOrchards, weather: newWeather });
+706:      return nextState;
+707:    });
+708:  };
+709:
+710:  const buyPlot = (index: number) => {
+711:    if (state.credits < 50) {
+712:      addLog('Insufficient credits to clear plot.', 'danger');
+713:      return;
+714:    }
+715:    setState(prev => {
+716:      const newOrchards = [...prev.orchards];
+717:      const orchardIndex = newOrchards.findIndex(o => o.id === prev.activeOrchardId);
+718:      const orchard = { ...newOrchards[orchardIndex] };
+719:      const newPlants = [...orchard.plants];
+720:      
+721:      const randomType = BASE_PLANT_TYPES[Math.floor(Math.random() * BASE_PLANT_TYPES.length)];
+722:      
+723:      // Check for Genetic Scanner effect
+724:      const scannerActive = prev.tools.find(t => t.id === 'genetic-scanner' && (t.currentCooldown || 0) === t.activeCooldown);
+725:      let rarity: Plant['rarity'] = 'Common';
+726:      const roll = Math.random();
+727:      const bonus = scannerActive ? 0.3 : 0;
+728:
+729:      if (roll < 0.02 + bonus/10) rarity = 'Legendary';
+730:      else if (roll < 0.08 + bonus/5) rarity = 'Epic';
+731:      else if (roll < 0.2 + bonus/2) rarity = 'Rare';
+732:      else if (roll < 0.4 + bonus) rarity = 'Uncommon';
+733:
+734:      newPlants[index] = {
+735:        id: Math.random().toString(36).substr(2, 9),
+736:        type: randomType.name,
+737:        rootStrength: 0,
+738:        water: 30,
+739:        nutrients: 100,
+740:        stress: 0,
+741:        pests: 0,
+742:        pestImmunity: 0,
+743:        stageIndex: 0,
+744:        isHarvestable: false,
+745:        rarity,
+746:        growthSpeedMultiplier: randomType.baseGrowthSpeed,
+747:        yieldMultiplier: randomType.baseYield,
+748:        color: randomType.color,
+749:      };
+750:      orchard.plants = newPlants;
+751:      newOrchards[orchardIndex] = orchard;
+752:      const newDiscovered = prev.discoveredTypes.includes(randomType.name) 
+753:        ? prev.discoveredTypes 
+754:        : [...prev.discoveredTypes, randomType.name];
+755:      const nextState = { ...prev, orchards: newOrchards, credits: prev.credits - 50, selectedPlantIndex: index, discoveredTypes: newDiscovered };
+756:      saveState({ orchards: newOrchards, credits: prev.credits - 50, discoveredTypes: newDiscovered });
+757:      return nextState;
+758:    });
+759:    addLog('New plot cleared and seeded.', 'success');
+760:  };
+761:
+762:  const unlockOrchard = (id: string) => {
+763:    const orchard = state.orchards.find(o => o.id === id);
+764:    if (!orchard) return;
+765:    if (state.credits < orchard.unlockCost) {
+766:      addLog(`Need ${orchard.unlockCost} credits to unlock ${orchard.name}.`, 'danger');
+767:      return;
+768:    }
+769:    setState(prev => {
+770:      const nextOrchards = prev.orchards.map(o => o.id === id ? { ...o, isUnlocked: true } : o);
+771:      const nextState = {
+772:        ...prev,
+773:        credits: prev.credits - orchard.unlockCost,
+774:        orchards: nextOrchards,
+775:        activeOrchardId: id,
+776:        selectedPlantIndex: null
+777:      };
+778:      saveState({ credits: prev.credits - orchard.unlockCost, orchards: nextOrchards });
+779:      return nextState;
+780:    });
+781:    addLog(`${orchard.name} discovered and unlocked!`, 'success');
+782:  };
+783:
+784:  const buyUpgrade = (id: keyof GlobalUpgrades) => {
+785:    const cost = 10;
+786:    if (state.dataSeeds < cost) {
+787:      addLog('Insufficient genetic data for upgrade.', 'danger');
+788:      return;
+789:    }
+790:    setState(prev => {
+791:      const nextUpgrades = {
+792:        ...prev.upgrades,
+793:        [id]: id === 'stressResistance' 
+794:          ? (prev.upgrades[id] as number) + 5 
+795:          : (prev.upgrades[id] as number) * 0.9
+796:      };
+797:      const nextState = {
+798:        ...prev,
+799:        dataSeeds: prev.dataSeeds - cost,
+800:        upgrades: nextUpgrades
+801:      };
+802:      saveState({ dataSeeds: prev.dataSeeds - cost, upgrades: nextUpgrades });
+803:      return nextState;
+804:    });
+805:    addLog(`Upgrade acquired: ${id} enhanced.`, 'success');
+806:  };
+807:
+808:  const handleCrossPollinate = () => {
+809:    if (breedingParents.length !== 2) return;
+810:    if (state.credits < 100) {
+811:      addLog('Insufficient credits for cross-pollination. Need 100🪙.', 'danger');
+812:      return;
+813:    }
+814:
+815:    const p1 = activeOrchard.plants[breedingParents[0]]!;
+816:    const p2 = activeOrchard.plants[breedingParents[1]]!;
+817:
+818:    if (p1.stageIndex < 4 || p2.stageIndex < 4) {
+819:      addLog('Only mature plants can be cross-pollinated.', 'warn');
+820:      return;
+821:    }
+822:
+823:    setState(prev => {
+824:      const newOrchards = [...prev.orchards];
+825:      const orchardIndex = newOrchards.findIndex(o => o.id === prev.activeOrchardId);
+826:      const orchard = { ...newOrchards[orchardIndex] };
+827:      const newPlants = [...orchard.plants];
+828:      
+829:      // Find empty slot
+830:      const emptySlot = newPlants.findIndex(p => p === null);
+831:      if (emptySlot === -1) {
+832:        addLog('No empty plots available for the hybrid offspring.', 'danger');
+833:        return prev;
+834:      }
+835:
+836:      // Breeding Logic
+837:      const rarities: Plant['rarity'][] = ['Common', 'Uncommon', 'Rare', 'Epic', 'Legendary'];
+838:      const p1RarityIdx = rarities.indexOf(p1.rarity);
+839:      const p2RarityIdx = rarities.indexOf(p2.rarity);
+840:      
+841:      let newRarityIdx = Math.floor((p1RarityIdx + p2RarityIdx) / 2);
+842:      if (Math.random() < 0.2) newRarityIdx = Math.min(rarities.length - 1, newRarityIdx + 1);
+843:      
+844:      const blendColors = (c1: string, c2: string) => {
+845:        try {
+846:          const r1 = parseInt(c1.slice(1, 3), 16);
+847:          const g1 = parseInt(c1.slice(3, 5), 16);
+848:          const b1 = parseInt(c1.slice(5, 7), 16);
+849:          const r2 = parseInt(c2.slice(1, 3), 16);
+850:          const g2 = parseInt(c2.slice(3, 5), 16);
+851:          const b2 = parseInt(c2.slice(5, 7), 16);
+852:          const r = Math.floor((r1 + r2) / 2).toString(16).padStart(2, '0');
+853:          const g = Math.floor((g1 + g2) / 2).toString(16).padStart(2, '0');
+854:          const b = Math.floor((b1 + b2) / 2).toString(16).padStart(2, '0');
+855:          return `#${r}${g}${b}`;
+856:        } catch (e) {
+857:          return '#4CAF50';
+858:        }
+859:      };
+860:
+861:      const p1Name = p1.type.includes('Hybrid') ? p1.type.split(' ')[1] : p1.type;
+862:      const p2Name = p2.type.includes('Hybrid') ? p2.type.split(' ')[1] : p2.type;
+863:      const hybridName = `Hybrid ${p1Name.split('-')[0]}-${p2Name.split('-')[0]}`;
+864:
+865:      const newPlant: Plant = {
+866:        id: Math.random().toString(36).substr(2, 9),
+867:        type: hybridName,
+868:        rootStrength: 0,
+869:        water: 50,
+870:        nutrients: 100,
+871:        stress: 0,
+872:        pests: 0,
+873:        pestImmunity: 0,
+874:        stageIndex: 0,
+875:        isHarvestable: false,
+876:        rarity: rarities[newRarityIdx],
+877:        growthSpeedMultiplier: (p1.growthSpeedMultiplier + p2.growthSpeedMultiplier) / 2 * (1 + (Math.random() * 0.3 - 0.15)),
+878:        yieldMultiplier: (p1.yieldMultiplier + p2.yieldMultiplier) / 2 * (1 + (Math.random() * 0.3 - 0.15)),
+879:        color: blendColors(p1.color || '#4CAF50', p2.color || '#4CAF50'),
+880:      };
+881:
+882:      newPlants[emptySlot] = newPlant;
+883:      orchard.plants = newPlants;
+884:      newOrchards[orchardIndex] = orchard;
+885:
+886:      const newDiscovered = prev.discoveredTypes.includes(newPlant.type) 
+887:        ? prev.discoveredTypes 
+888:        : [...prev.discoveredTypes, newPlant.type];
+889:
+890:      const nextState = {
+891:        ...prev,
+892:        credits: prev.credits - 100,
+893:        orchards: newOrchards,
+894:        breedingParents: [],
+895:        discoveredTypes: newDiscovered
+896:      };
+897:      saveState({ credits: prev.credits - 100, orchards: newOrchards, discoveredTypes: newDiscovered });
+898:      setBreedingParents([]);
+899:      addLog(`Success! A new ${newPlant.rarity} hybrid has been created.`, 'success');
+900:      return nextState;
+901:    });
+902:  };
+903:
+904:  const buyItem = (item: typeof SHOP_ITEMS[0]) => {
+905:    if (state.credits < item.cost) {
+906:      addLog(`Insufficient credits for ${item.name}.`, 'danger');
+907:      return;
+908:    }
+909:    if (state.selectedPlantIndex === null || !selectedPlant) {
+910:      addLog('Select a plant to apply items.', 'warn');
+911:      return;
+912:    }
+913:
+914:    setState(prev => {
+915:      const newOrchards = [...prev.orchards];
+916:      const orchardIndex = newOrchards.findIndex(o => o.id === prev.activeOrchardId);
+917:      const orchard = { ...newOrchards[orchardIndex] };
+918:      const newPlants = [...orchard.plants];
+919:      const plant = { ...newPlants[prev.selectedPlantIndex!]! };
+920:      
+921:      if (item.type === 'fertilizer') {
+922:        plant.nutrients = Math.min(PLANT_STAGES[plant.stageIndex].maxNutrients, plant.nutrients + (item.nut || 0));
+923:        plant.stress += (item.stress || 0);
+924:      } else if (item.type === 'pesticide') {
+925:        plant.pests = Math.max(0, plant.pests - (item.kills || 0));
+926:        plant.stress += (item.stress || 0);
+927:      }
+928:
+929:      newPlants[prev.selectedPlantIndex!] = plant;
+930:      orchard.plants = newPlants;
+931:      newOrchards[orchardIndex] = orchard;
+932:      const nextState = { ...prev, orchards: newOrchards, credits: prev.credits - item.cost };
+933:      saveState({ orchards: newOrchards, credits: prev.credits - item.cost });
+934:      return nextState;
+935:    });
+936:    addLog(`Applied ${item.name} to ${selectedPlant.type}.`, 'success');
+937:  };
+938:
+939:  return (
+940:    <div className="min-h-screen p-6 flex flex-col items-center gap-6 max-w-6xl mx-auto">
+941:      {/* Header Stats */}
+942:      <div className="w-full flex flex-col md:flex-row justify-between items-center hardware-panel p-4 px-6 md:px-8 gap-4">
+943:        <div className="flex flex-wrap justify-center md:justify-start gap-4 md:gap-8">
+944:          <div className="flex flex-col">
+945:            <span className="text-[10px] font-bold text-text-secondary uppercase tracking-widest">Temporal Cycle</span>
+946:            <span className="text-lg md:text-xl font-mono font-bold text-leaf-green">DAY {state.day}</span>
+947:          </div>
+948:          <div className="flex flex-col">
+949:            <span className="text-[10px] font-bold text-text-secondary uppercase tracking-widest">Liquid Capital</span>
+950:            <span className="text-lg md:text-xl font-mono font-bold text-mineral-gold">{state.credits} 🪙</span>
+951:          </div>
+952:          <div className="flex flex-col">
+953:            <span className="text-[10px] font-bold text-text-secondary uppercase tracking-widest">Genetic Data</span>
+954:            <span className="text-lg md:text-xl font-mono font-bold text-water-blue">{state.dataSeeds} 🧬</span>
+955:          </div>
+956:          
+957:          {/* Weather Indicator */}
+958:          <div className="flex items-center gap-3 px-4 py-1 bg-black/20 rounded-xl border border-bark-brown/30 overflow-hidden">
+959:            <AnimatePresence mode="wait">
+960:              <motion.div 
+961:                key={state.weather.type}
+962:                initial={{ opacity: 0, x: -10 }}
+963:                animate={{ opacity: 1, x: 0 }}
+964:                exit={{ opacity: 0, x: 10 }}
+965:                transition={{ duration: 0.3, ease: "easeOut" }}
+966:                className="flex items-center gap-3"
+967:              >
+968:                <div className={`p-2 rounded-lg ${
+969:                  state.weather.type === 'clear' ? 'text-mineral-gold bg-mineral-gold/10' :
+970:                  state.weather.type === 'rain' ? 'text-water-blue bg-water-blue/10' :
+971:                  state.weather.type === 'storm' ? 'text-violet-400 bg-violet-400/10' :
+972:                  state.weather.type === 'heatwave' ? 'text-burn-red bg-burn-red/10' :
+973:                  'text-text-secondary bg-text-secondary/10'
+974:                }`}>
+975:                  {state.weather.type === 'clear' && <Sun size={20} />}
+976:                  {state.weather.type === 'rain' && <CloudRain size={20} />}
+977:                  {state.weather.type === 'storm' && <CloudLightning size={20} />}
+978:                  {state.weather.type === 'heatwave' && <Thermometer size={20} />}
+979:                  {state.weather.type === 'fog' && <Cloud size={20} />}
+980:                </div>
+981:                <div className="flex flex-col">
+982:                  <span className="text-[10px] font-bold text-text-secondary uppercase tracking-widest">Atmosphere</span>
+983:                  <span className="text-xs font-bold uppercase">{state.weather.name}</span>
+984:                </div>
+985:              </motion.div>
+986:            </AnimatePresence>
+987:          </div>
+988:        </div>
+989:        <div className="flex items-center gap-3 w-full md:w-auto">
+990:          {state.user && (
+991:            <button 
+992:              onClick={logout}
+993:              className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-burn-red/10 hover:bg-burn-red/20 px-4 py-2 rounded-lg border border-burn-red/30 transition-all text-[10px] font-bold text-burn-red uppercase tracking-widest"
+994:            >
+995:              <LogOut size={14} />
+996:              LOGOUT
+997:            </button>
+998:          )}
+999:          <button 
+1000:            onClick={nextDay}
+1001:            className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-bark-brown/20 hover:bg-bark-brown/40 px-6 py-2 rounded-lg border border-bark-brown transition-all text-sm font-bold"
+1002:          >
+1003:            <RefreshCw size={16} />
+1004:            END CYCLE
+1005:          </button>
+1006:        </div>
+1007:      </div>
+1008:
+1009:      <div className="w-full grid grid-cols-1 lg:grid-cols-12 gap-6">
+1010:        {/* Navigation Rail */}
+1011:        <div className="lg:col-span-1 flex flex-row lg:flex-col gap-3 md:gap-4 overflow-x-auto pb-2 lg:pb-0">
+1012:          <button 
+1013:            onClick={() => setState(p => ({ ...p, activeTab: 'orchard' }))}
+1014:            className={`flex-1 lg:flex-none p-4 rounded-xl flex items-center justify-center transition-all ${state.activeTab === 'orchard' ? 'bg-leaf-green text-soil-dark' : 'bg-card-bg text-text-secondary hover:text-white'}`}
+1015:          >
+1016:            <Sprout size={24} />
+1017:          </button>
+1018:          <button 
+1019:            onClick={() => setState(p => ({ ...p, activeTab: 'lab' }))}
+1020:            className={`flex-1 lg:flex-none p-4 rounded-xl flex items-center justify-center transition-all ${state.activeTab === 'lab' ? 'bg-water-blue text-soil-dark' : 'bg-card-bg text-text-secondary hover:text-white'}`}
+1021:          >
+1022:            <FlaskConical size={24} />
+1023:          </button>
+1024:          <button 
+1025:            onClick={() => setState(p => ({ ...p, activeTab: 'market' }))}
+1026:            className={`flex-1 lg:flex-none p-4 rounded-xl flex items-center justify-center transition-all ${state.activeTab === 'market' ? 'bg-mineral-gold text-soil-dark' : 'bg-card-bg text-text-secondary hover:text-white'}`}
+1027:          >
+1028:            <Store size={24} />
+1029:          </button>
+1030:          <button 
+1031:            onClick={() => setState(p => ({ ...p, activeTab: 'tools' }))}
+1032:            className={`flex-1 lg:flex-none p-4 rounded-xl flex items-center justify-center transition-all ${state.activeTab === 'tools' ? 'bg-burn-red text-soil-dark' : 'bg-card-bg text-text-secondary hover:text-white'}`}
+1033:          >
+1034:            <Wrench size={24} />
+1035:          </button>
+1036:          <button 
+1037:            onClick={() => setState(p => ({ ...p, activeTab: 'leaderboard' }))}
+1038:            className={`flex-1 lg:flex-none p-4 rounded-xl flex items-center justify-center transition-all ${state.activeTab === 'leaderboard' ? 'bg-mineral-gold text-soil-dark' : 'bg-card-bg text-text-secondary hover:text-white'}`}
+1039:          >
+1040:            <Trophy size={24} />
+1041:          </button>
+1042:          <button 
+1043:            onClick={() => setState(p => ({ ...p, activeTab: 'discovery' }))}
+1044:            className={`flex-1 lg:flex-none p-4 rounded-xl flex items-center justify-center transition-all ${state.activeTab === 'discovery' ? 'bg-leaf-green text-soil-dark' : 'bg-card-bg text-text-secondary hover:text-white'}`}
+1045:          >
+1046:            <BookOpen size={24} />
+1047:          </button>
+1048:          <button 
+1049:            onClick={() => setState(p => ({ ...p, activeTab: 'archives' }))}
+1050:            className={`flex-1 lg:flex-none p-4 rounded-xl flex items-center justify-center transition-all ${state.activeTab === 'archives' ? 'bg-indigo-500 text-white' : 'bg-card-bg text-text-secondary hover:text-white'}`}
+1051:          >
+1052:            <Library size={24} />
+1053:          </button>
+1054:          {state.user?.role === 'admin' && (
+1055:            <button 
+1056:              onClick={() => setState(p => ({ ...p, activeTab: 'admin' }))}
+1057:              className={`flex-1 lg:flex-none p-4 rounded-xl flex items-center justify-center transition-all ${state.activeTab === 'admin' ? 'bg-burn-red text-soil-dark' : 'bg-card-bg text-text-secondary hover:text-white'}`}
+1058:            >
+1059:              <ShieldCheck size={24} />
+1060:            </button>
+1061:          )}
+1062:        </div>
+1063:
+1064:        {/* Main Content Area */}
+1065:        <div className="lg:col-span-11 space-y-6">
+1066:          {/* Main Animation Section (Hero) */}
+1067:          <AnimatePresence mode="wait">
+1068:            {selectedPlant ? (
+1069:              <motion.div 
+1070:                key={selectedPlant.id}
+1071:                initial={{ opacity: 0, y: 20 }}
+1072:                animate={{ opacity: 1, y: 0 }}
+1073:                exit={{ opacity: 0, y: -20 }}
+1074:                className="hardware-panel p-6 md:p-8 space-y-8"
+1075:              >
+1076:                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-bark-brown pb-6">
+1077:                  <div>
+1078:                    <div className="flex items-center gap-2 mb-1">
+1079:                      <span className="text-xs font-bold uppercase tracking-widest px-2 py-0.5 rounded bg-white/10 text-text-primary">
+1080:                        {selectedPlant.type}
+1081:                      </span>
+1082:                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded bg-black/40 
+1083:                        ${selectedPlant.rarity === 'Legendary' ? 'text-mineral-gold' : 
+1084:                          selectedPlant.rarity === 'Epic' ? 'text-violet-400' : 
+1085:                          selectedPlant.rarity === 'Rare' ? 'text-water-blue' : 
+1086:                          selectedPlant.rarity === 'Uncommon' ? 'text-leaf-green' : 'text-text-secondary'}`}
+1087:                      >
+1088:                        {selectedPlant.rarity}
+1089:                      </span>
+1090:                    </div>
+1091:                    <h3 className="text-2xl md:text-3xl font-bold font-serif italic">{PLANT_STAGES[selectedPlant.stageIndex].name}</h3>
+1092:                    <p className="text-xs text-text-secondary font-mono tracking-wider">TELEMETRY ID: {selectedPlant.id}</p>
+1093:                    <p className="text-xs text-text-secondary mt-2 italic max-w-md">
+1094:                      {BASE_PLANT_TYPES.find(t => t.name === selectedPlant.type)?.description || 'A complex genetic cross between two distinct species.'}
+1095:                    </p>
+1096:                  </div>
+1097:                  <div className="flex items-center gap-4">
+1098:                    <div className="px-4 py-1.5 rounded-full bg-leaf-green/10 border border-leaf-green/30 text-leaf-green text-[10px] font-bold uppercase tracking-widest">
+1099:                      Active Growth Phase
+1100:                    </div>
+1101:                    <button 
+1102:                      onClick={() => setState(p => ({ ...p, selectedPlantIndex: null }))}
+1103:                      className="text-text-secondary hover:text-white transition-colors"
+1104:                    >
+1105:                      <RefreshCw size={20} />
+1106:                    </button>
+1107:                  </div>
+1108:                </div>
+1109:
+1110:                <div className="flex flex-col gap-8">
+1111:                  <div className="h-[400px] md:h-[500px] bg-black/30 rounded-3xl dashed-border relative overflow-hidden group">
+1112:                    {(() => {
+1113:                      const currentThreshold = PLANT_STAGES[selectedPlant.stageIndex].threshold;
+1114:                      const nextThreshold = PLANT_STAGES[selectedPlant.stageIndex + 1]?.threshold || (currentThreshold * 2);
+1115:                      const progress = Math.min(1, Math.max(0, (selectedPlant.rootStrength - currentThreshold) / (nextThreshold - currentThreshold)));
+1116:                      
+1117:                      return (
+1118:                        <PlantVisualizer 
+1119:                          stageIndex={selectedPlant.stageIndex} 
+1120:                          progress={progress}
+1121:                          type={selectedPlant.type}
+1122:                          color={selectedPlant.color}
+1123:                          hasPests={selectedPlant.pests > 0}
+1124:                          isBurning={selectedPlant.stress > 90}
+1125:                          stress={selectedPlant.stress}
+1126:                          weather={state.weather.type}
+1127:                          toolEffect={state.lastToolEffect}
+1128:                        />
+1129:                      );
+1130:                    })()}
+1131:                    <div className="absolute inset-0 pointer-events-none bg-gradient-to-t from-black/40 to-transparent" />
+1132:                    
+1133:                    {/* Quick Tools Overlay */}
+1134:                    <div className="absolute top-4 right-4 flex flex-col gap-2">
+1135:                      {state.tools.filter(t => t.type === 'active' && t.level > 0).map(tool => (
+1136:                        <button
+1137:                          key={tool.id}
+1138:                          onClick={() => useActiveTool(tool.id)}
+1139:                          disabled={(tool.currentCooldown || 0) > 0}
+1140:                          className={`p-3 rounded-xl border backdrop-blur-md transition-all group relative
+1141:                            ${(tool.currentCooldown || 0) > 0 
+1142:                              ? 'bg-black/40 border-bark-brown/30 text-text-secondary opacity-50' 
+1143:                              : 'bg-leaf-green/20 border-leaf-green/40 text-leaf-green hover:bg-leaf-green/40'}`}
+1144:                        >
+1145:                          {tool.id === 'pest-repellent-pulse' ? <Bug size={20} /> : <Database size={20} />}
+1146:                          
+1147:                          {/* Tooltip */}
+1148:                          <div className="absolute right-full mr-3 top-1/2 -translate-y-1/2 px-3 py-1.5 bg-soil-dark border border-bark-brown rounded-lg text-[10px] font-bold whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+1149:                            {tool.name.toUpperCase()} 
+1150:                            {(tool.currentCooldown || 0) > 0 && ` (${tool.currentCooldown}c)`}
+1151:                          </div>
+1152:
+1153:                          {/* Cooldown Progress */}
+1154:                          {(tool.currentCooldown || 0) > 0 && (
+1155:                            <div className="absolute inset-0 bg-black/60 flex items-center justify-center rounded-xl">
+1156:                              <span className="text-[10px] font-bold text-white">{tool.currentCooldown}</span>
+1157:                            </div>
+1158:                          )}
+1159:                        </button>
+1160:                      ))}
+1161:                    </div>
+1162:                  </div>
+1163:
+1164:                  <div className="space-y-8">
+1165:                    <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+1166:                      <div className="space-y-3">
+1167:                        <div className="flex justify-between text-[10px] font-bold uppercase tracking-widest text-text-secondary">
+1168:                          <span>Hydration</span>
+1169:                          <span className="text-water-blue">{selectedPlant.water} / {PLANT_STAGES[selectedPlant.stageIndex].maxWater}</span>
+1170:                        </div>
+1171:                        <div className="h-2.5 w-full bg-black/40 rounded-full overflow-hidden">
+1172:                          <div 
+1173:                            className="h-full bg-water-blue transition-all duration-1000 ease-out" 
+1174:                            style={{ width: `${(selectedPlant.water / PLANT_STAGES[selectedPlant.stageIndex].maxWater) * 100}%` }}
+1175:                          />
+1176:                        </div>
+1177:                      </div>
+1178:                      <div className="space-y-3">
+1179:                        <div className="flex justify-between text-[10px] font-bold uppercase tracking-widest text-text-secondary">
+1180:                          <span>Nutrients</span>
+1181:                          <span className="text-mineral-gold">{Math.round(selectedPlant.nutrients)}%</span>
+1182:                        </div>
+1183:                        <div className="h-2.5 w-full bg-black/40 rounded-full overflow-hidden">
+1184:                          <div 
+1185:                            className="h-full bg-mineral-gold transition-all duration-1000 ease-out" 
+1186:                            style={{ width: `${(selectedPlant.nutrients / PLANT_STAGES[selectedPlant.stageIndex].maxNutrients) * 100}%` }}
+1187:                          />
+1188:                        </div>
+1189:                      </div>
+1190:                      <div className="space-y-3">
+1191:                        <div className="flex justify-between text-[10px] font-bold uppercase tracking-widest text-text-secondary">
+1192:                          <span>Stress</span>
+1193:                          <span className="text-burn-red">{selectedPlant.stress}%</span>
+1194:                        </div>
+1195:                        <div className="h-2.5 w-full bg-black/40 rounded-full overflow-hidden">
+1196:                          <div 
+1197:                            className="h-full bg-burn-red transition-all duration-1000 ease-out" 
+1198:                            style={{ width: `${selectedPlant.stress}%` }}
+1199:                          />
+1200:                        </div>
+1201:                      </div>
+1202:                      <div className="space-y-3">
+1203:                        <div className="flex justify-between text-[10px] font-bold uppercase tracking-widest text-text-secondary">
+1204:                          <span>Root XP</span>
+1205:                          <span className="text-leaf-green">{selectedPlant.rootStrength}</span>
+1206:                        </div>
+1207:                        <div className="h-2.5 w-full bg-black/40 rounded-full overflow-hidden">
+1208:                          <div 
+1209:                            className="h-full bg-leaf-green transition-all duration-1000 ease-out" 
+1210:                            style={{ width: `${(selectedPlant.rootStrength / (PLANT_STAGES[selectedPlant.stageIndex + 1]?.threshold || 1000)) * 100}%` }}
+1211:                          />
+1212:                        </div>
+1213:                      </div>
+1214:                    </div>
+1215:
+1216:                    <div className="grid grid-cols-2 gap-4 max-w-2xl mx-auto w-full">
+1217:                      {selectedPlant.isHarvestable ? (
+1218:                        <button 
+1219:                          onClick={() => handlePlantAction('harvest')}
+1220:                          className="col-span-2 flex items-center justify-center gap-3 bg-mineral-gold text-soil-dark font-bold py-4 rounded-2xl hover:scale-[1.02] active:scale-[0.98] transition-all shadow-lg shadow-mineral-gold/10"
+1221:                        >
+1222:                          <TrendingUp size={20} />
+1223:                          HARVEST SPECIMEN
+1224:                        </button>
+1225:                      ) : (
+1226:                        <>
+1227:                          <button 
+1228:                            onClick={() => handlePlantAction('research')}
+1229:                            disabled={selectedPlant.water < 5}
+1230:                            className="flex items-center justify-center gap-3 bg-leaf-green text-soil-dark font-bold py-4 rounded-2xl hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 shadow-lg shadow-leaf-green/10"
+1231:                          >
+1232:                            <Zap size={20} />
+1233:                            RESEARCH
+1234:                          </button>
+1235:                          <button 
+1236:                            onClick={() => handlePlantAction('water')}
+1237:                            className="flex items-center justify-center gap-3 bg-water-blue text-soil-dark font-bold py-4 rounded-2xl hover:scale-[1.02] active:scale-[0.98] transition-all shadow-lg shadow-water-blue/10"
+1238:                          >
+1239:                            <Droplets size={20} />
+1240:                            HYDRATE
+1241:                          </button>
+1242:                        </>
+1243:                      )}
+1244:                    </div>
+1245:                  </div>
+1246:                </div>
+1247:              </motion.div>
+1248:            ) : (
+1249:              <motion.div 
+1250:                initial={{ opacity: 0 }}
+1251:                animate={{ opacity: 1 }}
+1252:                className="hardware-panel p-12 flex flex-col items-center justify-center text-center gap-6 text-text-secondary border-dashed border-bark-brown/50"
+1253:              >
+1254:                <div className="w-20 h-20 rounded-full bg-bark-brown/10 flex items-center justify-center animate-pulse">
+1255:                  <Sprout size={40} />
+1256:                </div>
+1257:                <div className="space-y-2 max-w-sm">
+1258:                  <h3 className="text-xl font-bold text-text-primary">System Idle</h3>
+1259:                  <p className="text-sm leading-relaxed">Select a specimen from the orchard grid below to initiate neural link and access growth telemetry.</p>
+1260:                </div>
+1261:              </motion.div>
+1262:            )}
+1263:          </AnimatePresence>
+1264:
+1265:          {/* Secondary Content (Tabs) */}
+1266:          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+1267:            <div className="md:col-span-2 space-y-4">
+1268:              <AnimatePresence mode="wait">
+1269:                {state.activeTab === 'orchard' && (
+1270:                  <motion.div 
+1271:                    key="orchard"
+1272:                    initial={{ opacity: 0, x: -20 }}
+1273:                    animate={{ opacity: 1, x: 0 }}
+1274:                    exit={{ opacity: 0, x: 20 }}
+1275:                    className="space-y-4"
+1276:                  >
+1277:                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+1278:                      <div className="flex flex-col gap-2 w-full">
+1279:                        <div className="flex items-center gap-2">
+1280:                          <Database size={16} className="text-leaf-green" />
+1281:                          <h2 className="font-serif text-xl italic">{activeOrchard.name}</h2>
+1282:                        </div>
+1283:                        <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar">
+1284:                          {state.orchards.map(o => (
+1285:                            <button
+1286:                              key={o.id}
+1287:                              onClick={() => {
+1288:                                if (o.isUnlocked) {
+1289:                                  setState(prev => ({ ...prev, activeOrchardId: o.id, selectedPlantIndex: null }));
+1290:                                } else {
+1291:                                  unlockOrchard(o.id);
+1292:                                }
+1293:                              }}
+1294:                              className={`whitespace-nowrap px-4 py-2 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all ${
+1295:                                state.activeOrchardId === o.id 
+1296:                                  ? 'bg-leaf-green text-soil-dark shadow-lg shadow-leaf-green/20' 
+1297:                                  : o.isUnlocked 
+1298:                                    ? 'bg-bark-brown/20 text-text-secondary hover:text-white'
+1299:                                    : 'bg-burn-red/20 text-burn-red border border-burn-red/30'
+1300:                              }`}
+1301:                            >
+1302:                              {o.isUnlocked ? o.name : `Unlock ${o.name} (${o.unlockCost}🪙)`}
+1303:                            </button>
+1304:                          ))}
+1305:                        </div>
+1306:                      </div>
+1307:                    </div>
+1308:                    <div className="grid grid-cols-3 gap-4">
+1309:                      {activeOrchard.plants.map((plant, i) => (
+1310:                        <PlantCard 
+1311:                          key={i} 
+1312:                          plant={plant} 
+1313:                          index={i} 
+1314:                          isSelected={state.selectedPlantIndex === i}
+1315:                          onClick={() => plant ? setState(p => ({ ...p, selectedPlantIndex: i })) : buyPlot(i)}
+1316:                        />
+1317:                      ))}
+1318:                    </div>
+1319:                  </motion.div>
+1320:                )}
+1321:
+1322:                {state.activeTab === 'lab' && (
+1323:                  <motion.div 
+1324:                    key="lab"
+1325:                    initial={{ opacity: 0, x: -20 }}
+1326:                    animate={{ opacity: 1, x: 0 }}
+1327:                    exit={{ opacity: 0, x: 20 }}
+1328:                    className="space-y-6"
+1329:                  >
+1330:                    <div className="flex justify-between items-center">
+1331:                      <h2 className="font-serif text-xl italic">Bio-Genetic Lab</h2>
+1332:                      <span className="text-[10px] font-bold text-text-secondary uppercase tracking-widest">Global Enhancements</span>
+1333:                    </div>
+1334:
+1335:                    {/* Breeding Section */}
+1336:                    <div className="hardware-panel p-6 space-y-6 border-leaf-green/30">
+1337:                      <div className="flex items-center gap-2 text-leaf-green">
+1338:                        <FlaskConical size={18} />
+1339:                        <h4 className="text-xs font-bold uppercase tracking-widest">Hybridization Chamber</h4>
+1340:                      </div>
+1341:                      
+1342:                      <div className="grid grid-cols-2 gap-4">
+1343:                        {[0, 1].map(idx => (
+1344:                          <div key={idx} className="h-32 rounded-xl border-2 border-dashed border-bark-brown flex flex-col items-center justify-center gap-2 bg-black/20">
+1345:                            {breedingParents[idx] !== undefined ? (
+1346:                              <div className="text-center">
+1347:                                <p className="text-[10px] font-bold text-leaf-green uppercase">{activeOrchard.plants[breedingParents[idx]]?.rarity}</p>
+1348:                                <p className="text-xs font-bold">{activeOrchard.plants[breedingParents[idx]]?.type}</p>
+1349:                                <button 
+1350:                                  onClick={() => setBreedingParents(prev => prev.filter((_, i) => i !== idx))}
+1351:                                  className="mt-2 text-[10px] text-burn-red hover:underline"
+1352:                                >
+1353:                                  REMOVE
+1354:                                </button>
+1355:                              </div>
+1356:                            ) : (
+1357:                              <p className="text-[10px] text-text-secondary uppercase">Select Mature Plant</p>
+1358:                            )}
+1359:                          </div>
+1360:                        ))}
+1361:                      </div>
+1362:
+1363:                      <div className="space-y-4">
+1364:                        <p className="text-[10px] text-text-secondary leading-relaxed">
+1365:                          Select two mature (Stage 4) specimens from your current orchard to attempt cross-pollination. 
+1366:                          Hybridization costs <span className="text-mineral-gold font-bold">100🪙</span> and requires an empty plot.
+1367:                        </p>
+1368:                        
+1369:                        <div className="grid grid-cols-3 gap-2">
+1370:                          {activeOrchard.plants.map((p, i) => (
+1371:                            p && p.stageIndex >= 4 && !breedingParents.includes(i) && (
+1372:                              <button
+1373:                                key={i}
+1374:                                onClick={() => breedingParents.length < 2 && setBreedingParents(prev => [...prev, i])}
+1375:                                className="p-2 rounded-lg bg-bark-brown/20 border border-bark-brown hover:border-leaf-green transition-all text-[10px] font-bold truncate"
+1376:                              >
+1377:                                {p.type}
+1378:                              </button>
+1379:                            )
+1380:                          ))}
+1381:                        </div>
+1382:
+1383:                        <button 
+1384:                          onClick={handleCrossPollinate}
+1385:                          disabled={breedingParents.length !== 2 || state.credits < 100}
+1386:                          className="w-full bg-leaf-green text-soil-dark font-bold py-3 rounded-xl hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 shadow-lg shadow-leaf-green/10"
+1387:                        >
+1388:                          INITIATE CROSS-POLLINATION
+1389:                        </button>
+1390:                      </div>
+1391:                    </div>
+1392:
+1393:                    <div className="grid grid-cols-1 gap-3">
+1394:                      {[
+1395:                        { id: 'waterEfficiency', name: 'Deep Roots', desc: 'Reduces water consumption by 10%', icon: Droplets },
+1396:                        { id: 'nutrientRetention', name: 'Efficient Metabolism', desc: 'Reduces nutrient drain by 10%', icon: TrendingUp },
+1397:                        { id: 'stressResistance', name: 'Hardened Bark', desc: 'Reduces stress gain by 5 points', icon: Flame },
+1398:                      ].map(u => (
+1399:                        <button 
+1400:                          key={u.id}
+1401:                          onClick={() => buyUpgrade(u.id as keyof GlobalUpgrades)}
+1402:                          className="hardware-panel p-4 flex items-center gap-4 hover:border-water-blue transition-all group"
+1403:                        >
+1404:                          <div className="w-12 h-12 rounded-lg bg-water-blue/10 flex items-center justify-center text-water-blue group-hover:scale-110 transition-transform">
+1405:                            <u.icon size={24} />
+1406:                          </div>
+1407:                          <div className="flex-1 text-left">
+1408:                            <h4 className="font-bold text-sm">{u.name}</h4>
+1409:                            <p className="text-xs text-text-secondary">{u.desc}</p>
+1410:                          </div>
+1411:                          <div className="text-right">
+1412:                            <span className="text-xs font-mono font-bold text-water-blue">10 🧬</span>
+1413:                          </div>
+1414:                        </button>
+1415:                      ))}
+1416:                    </div>
+1417:                  </motion.div>
+1418:                )}
+1419:
+1420:                {state.activeTab === 'market' && (
+1421:                  <motion.div 
+1422:                    key="market"
+1423:                    initial={{ opacity: 0, x: -20 }}
+1424:                    animate={{ opacity: 1, x: 0 }}
+1425:                    exit={{ opacity: 0, x: 20 }}
+1426:                    className="space-y-4"
+1427:                  >
+1428:                    <div className="flex justify-between items-center">
+1429:                      <h2 className="font-serif text-xl italic">Supply Exchange</h2>
+1430:                      <span className="text-[10px] font-bold text-text-secondary uppercase tracking-widest">Resource Acquisition</span>
+1431:                    </div>
+1432:
+1433:                    {/* Credit Transfer UI */}
+1434:                    <div className="hardware-panel p-4 space-y-4 border-water-blue/30">
+1435:                      <div className="flex items-center gap-2 text-water-blue">
+1436:                        <Send size={16} />
+1437:                        <h4 className="text-xs font-bold uppercase tracking-widest">Secure Credit Transfer</h4>
+1438:                      </div>
+1439:                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+1440:                        <input 
+1441:                          type="text" 
+1442:                          placeholder="Recipient UID"
+1443:                          value={transferTarget}
+1444:                          onChange={(e) => setTransferTarget(e.target.value)}
+1445:                          className="bg-black/40 border border-bark-brown rounded-lg px-3 py-2 text-xs font-mono focus:outline-none focus:border-water-blue transition-all"
+1446:                        />
+1447:                        <div className="flex gap-2">
+1448:                          <input 
+1449:                            type="number" 
+1450:                            placeholder="Amount"
+1451:                            value={transferAmount}
+1452:                            onChange={(e) => setTransferAmount(e.target.value)}
+1453:                            className="flex-1 bg-black/40 border border-bark-brown rounded-lg px-3 py-2 text-xs font-mono focus:outline-none focus:border-water-blue transition-all"
+1454:                          />
+1455:                          <button 
+1456:                            onClick={handleTransferCredits}
+1457:                            disabled={isTransferring || !transferTarget || !transferAmount}
+1458:                            className="bg-water-blue text-soil-dark px-4 py-2 rounded-lg text-xs font-bold hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50"
+1459:                          >
+1460:                            {isTransferring ? '...' : 'SEND'}
+1461:                          </button>
+1462:                        </div>
+1463:                      </div>
+1464:                      <div className="p-2 bg-black/20 rounded border border-bark-brown/30">
+1465:                        <p className="text-[9px] text-text-secondary leading-relaxed">
+1466:                          <ShieldCheck size={10} className="inline mr-1" />
+1467:                          TRANSFERS ARE PERMANENT. YOUR UID: <span className="text-water-blue font-mono select-all">{state.user?.uid}</span>
+1468:                        </p>
+1469:                      </div>
+1470:                    </div>
+1471:
+1472:                    <div className="grid grid-cols-1 gap-3">
+1473:                      {SHOP_ITEMS.map(item => (
+1474:                        <button 
+1475:                          key={item.id}
+1476:                          onClick={() => buyItem(item)}
+1477:                          className="hardware-panel p-4 flex items-center gap-4 hover:border-mineral-gold transition-all group"
+1478:                        >
+1479:                          <div className="w-12 h-12 rounded-lg bg-mineral-gold/10 flex items-center justify-center text-mineral-gold group-hover:scale-110 transition-transform">
+1480:                            {item.type === 'fertilizer' ? <ArrowUpCircle size={24} /> : <Bug size={24} />}
+1481:                          </div>
+1482:                          <div className="flex-1 text-left">
+1483:                            <h4 className="font-bold text-sm">{item.name}</h4>
+1484:                            <p className="text-xs text-text-secondary">
+1485:                              {item.type === 'fertilizer' ? `+${item.nut}% Nutrients` : `Kills ${item.kills} Pests`}
+1486:                              {item.stress !== 0 && `, ${item.stress > 0 ? '+' : ''}${item.stress} Stress`}
+1487:                            </p>
+1488:                          </div>
+1489:                          <div className="text-right">
+1490:                            <span className="text-xs font-mono font-bold text-mineral-gold">{item.cost} 🪙</span>
+1491:                          </div>
+1492:                        </button>
+1493:                      ))}
+1494:                    </div>
+1495:                  </motion.div>
+1496:                )}
+1497:
+1498:                {state.activeTab === 'tools' && (
+1499:                  <motion.div 
+1500:                    key="tools"
+1501:                    initial={{ opacity: 0, x: -20 }}
+1502:                    animate={{ opacity: 1, x: 0 }}
+1503:                    exit={{ opacity: 0, x: 20 }}
+1504:                    className="space-y-6"
+1505:                  >
+1506:                    <div className="flex items-center gap-3 border-b border-bark-brown pb-4">
+1507:                      <Wrench size={24} className="text-burn-red" />
+1508:                      <h2 className="font-serif text-2xl italic">Tool Management</h2>
+1509:                    </div>
+1510:                    
+1511:                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+1512:                      {state.tools.map(tool => {
+1513:                        const cost = Math.round(tool.baseCost * Math.pow(tool.costMultiplier, tool.level));
+1514:                        const isMax = tool.level >= tool.maxLevel;
+1515:                        
+1516:                        return (
+1517:                          <div key={tool.id} className="hardware-panel p-5 flex flex-col gap-4 relative overflow-hidden group">
+1518:                            <div className="flex justify-between items-start">
+1519:                              <div className="space-y-1">
+1520:                                <h3 className="font-bold text-lg text-text-primary">{tool.name}</h3>
+1521:                                <p className="text-xs text-text-secondary leading-relaxed">{tool.description}</p>
+1522:                              </div>
+1523:                              <div className="bg-black/40 px-3 py-1 rounded-full border border-bark-brown/30">
+1524:                                <span className="text-[10px] font-bold text-leaf-green">LVL {tool.level}</span>
+1525:                              </div>
+1526:                            </div>
+1527:
+1528:                            <div className="space-y-2">
+1529:                              <div className="flex justify-between text-[10px] font-bold uppercase tracking-widest text-text-secondary">
+1530:                                <span>Upgrade Progress</span>
+1531:                                <span>{tool.level} / {tool.maxLevel}</span>
+1532:                              </div>
+1533:                              <div className="h-1.5 w-full bg-black/40 rounded-full overflow-hidden">
+1534:                                <div 
+1535:                                  className="h-full bg-burn-red transition-all duration-500" 
+1536:                                  style={{ width: `${(tool.level / tool.maxLevel) * 100}%` }}
+1537:                                />
+1538:                              </div>
+1539:                            </div>
+1540:
+1541:                            <button
+1542:                              onClick={() => buyTool(tool.id)}
+1543:                              disabled={isMax || state.credits < cost}
+1544:                              className={`w-full py-3 rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2 ${
+1545:                                isMax 
+1546:                                  ? 'bg-bark-brown/20 text-text-secondary cursor-not-allowed' 
+1547:                                  : state.credits >= cost
+1548:                                    ? 'bg-burn-red text-soil-dark hover:scale-[1.02] active:scale-[0.98]'
+1549:                                    : 'bg-burn-red/10 text-burn-red/50 border border-burn-red/20 cursor-not-allowed'
+1550:                              }`}
+1551:                            >
+1552:                              {isMax ? (
+1553:                                <>
+1554:                                  <ShieldCheck size={16} />
+1555:                                  MAX LEVEL
+1556:                                </>
+1557:                              ) : (
+1558:                                <>
+1559:                                  <ArrowUpCircle size={16} />
+1560:                                  UPGRADE ({cost}🪙)
+1561:                                </>
+1562:                              )}
+1563:                            </button>
+1564:                            
+1565:                            {/* Decorative background icon */}
+1566:                            <div className="absolute -bottom-4 -right-4 opacity-[0.03] group-hover:opacity-[0.07] transition-opacity pointer-events-none">
+1567:                              <Cpu size={120} />
+1568:                            </div>
+1569:                          </div>
+1570:                        );
+1571:                      })}
+1572:                    </div>
+1573:                  </motion.div>
+1574:                )}
+1575:
+1576:                {state.activeTab === 'leaderboard' && (
+1577:                  <motion.div
+1578:                    key="leaderboard"
+1579:                    initial={{ opacity: 0, x: -20 }}
+1580:                    animate={{ opacity: 1, x: 0 }}
+1581:                    exit={{ opacity: 0, x: 20 }}
+1582:                    className="space-y-6"
+1583:                  >
+1584:                    <div className="flex items-center gap-3 border-b border-bark-brown pb-4">
+1585:                      <Trophy size={24} className="text-mineral-gold" />
+1586:                      <h2 className="font-serif text-2xl italic">Global Leaderboard</h2>
+1587:                    </div>
+1588:
+1589:                    {isLeaderboardLoading ? (
+1590:                      <div className="flex justify-center py-20">
+1591:                        <RefreshCw className="animate-spin text-mineral-gold" size={48} />
+1592:                      </div>
+1593:                    ) : (
+1594:                      <div className="space-y-4">
+1595:                        {leaderboard.map((entry, idx) => (
+1596:                          <div 
+1597:                            key={entry.id}
+1598:                            className={`hardware-panel p-4 flex items-center justify-between border ${entry.id === state.user?.uid ? 'border-mineral-gold/50 bg-mineral-gold/5' : 'border-bark-brown/30'}`}
+1599:                          >
+1600:                            <div className="flex items-center gap-4">
+1601:                              <span className="font-mono text-2xl w-8 text-text-secondary">#{idx + 1}</span>
+1602:                              <div className="w-10 h-10 rounded-full bg-black/40 flex items-center justify-center text-text-secondary border border-bark-brown/30">
+1603:                                <User size={20} />
+1604:                              </div>
+1605:                              <div>
+1606:                                <p className="font-bold text-text-primary">{entry.displayName || 'Anonymous'}</p>
+1607:                                <p className="text-[10px] text-text-secondary font-mono uppercase tracking-widest">{entry.role || 'player'}</p>
+1608:                              </div>
+1609:                            </div>
+1610:                            <div className="text-right">
+1611:                              <p className="text-xl font-bold text-mineral-gold">{entry.credits?.toLocaleString()}🪙</p>
+1612:                              <p className="text-[10px] text-text-secondary uppercase tracking-widest">{entry.dataSeeds || 0} Seeds</p>
+1613:                            </div>
+1614:                          </div>
+1615:                        ))}
+1616:                      </div>
+1617:                    )}
+1618:                  </motion.div>
+1619:                )}
+1620:
+1621:                {state.activeTab === 'discovery' && (
+1622:                  <motion.div
+1623:                    key="discovery"
+1624:                    initial={{ opacity: 0, x: -20 }}
+1625:                    animate={{ opacity: 1, x: 0 }}
+1626:                    exit={{ opacity: 0, x: 20 }}
+1627:                    className="space-y-6"
+1628:                  >
+1629:                    <div className="flex items-center gap-3 border-b border-bark-brown pb-4">
+1630:                      <BookOpen size={24} className="text-leaf-green" />
+1631:                      <h2 className="font-serif text-2xl italic">Discovery Log</h2>
+1632:                    </div>
+1633:
+1634:                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+1635:                      {BASE_PLANT_TYPES.map(type => {
+1636:                        const isDiscovered = state.discoveredTypes.includes(type.name);
+1637:                        return (
+1638:                          <div 
+1639:                            key={type.name}
+1640:                            className={`hardware-panel p-6 flex flex-col items-center text-center transition-all ${isDiscovered ? 'opacity-100' : 'opacity-40 grayscale'}`}
+1641:                          >
+1642:                            <div 
+1643:                              className="w-12 h-12 rounded-xl mb-4 flex items-center justify-center bg-black/40 border border-bark-brown/30"
+1644:                              style={{ color: isDiscovered ? type.color : '#666' }}
+1645:                            >
+1646:                              <Sprout size={24} />
+1647:                            </div>
+1648:                            <h3 className="font-bold text-sm mb-1 text-text-primary">{isDiscovered ? type.name : '???'}</h3>
+1649:                            <p className="text-[10px] text-text-secondary uppercase tracking-widest">
+1650:                              {isDiscovered ? `Growth: ${type.baseGrowthSpeed}x` : 'Undiscovered'}
+1651:                            </p>
+1652:                          </div>
+1653:                        );
+1654:                      })}
+1655:                      
+1656:                      {/* Hybrid Discoveries */}
+1657:                      {state.discoveredTypes.filter(t => t.startsWith('Hybrid')).map(typeName => (
+1658:                        <div 
+1659:                          key={typeName}
+1660:                          className="hardware-panel p-6 flex flex-col items-center text-center"
+1661:                        >
+1662:                          <div className="w-12 h-12 rounded-xl mb-4 flex items-center justify-center bg-black/40 border border-bark-brown/30 text-water-blue">
+1663:                            <FlaskConical size={24} />
+1664:                          </div>
+1665:                          <h3 className="font-bold text-sm mb-1 text-text-primary">{typeName}</h3>
+1666:                          <p className="text-[10px] text-text-secondary uppercase tracking-widest">Hybrid Species</p>
+1667:                        </div>
+1668:                      ))}
+1669:                    </div>
+1670:                  </motion.div>
+1671:                )}
+1672:
+1673:                {state.activeTab === 'archives' && (
+1674:                  <motion.div 
+1675:                    key="archives"
+1676:                    initial={{ opacity: 0, x: -20 }}
+1677:                    animate={{ opacity: 1, x: 0 }}
+1678:                    exit={{ opacity: 0, x: 20 }}
+1679:                    className="space-y-6"
+1680:                  >
+1681:                    <div className="flex flex-col md:flex-row md:items-center justify-between border-b border-bark-brown pb-4 gap-4">
+1682:                      <div className="flex items-center gap-3">
+1683:                        <Library size={24} className="text-indigo-400" />
+1684:                        <h2 className="font-serif text-2xl italic">Botanical Archives</h2>
+1685:                      </div>
+1686:                      <div className="flex items-center gap-4">
+1687:                        <div className="bg-black/40 px-4 py-2 rounded-xl border border-bark-brown/30 flex items-center gap-2">
+1688:                          <span className="text-xs font-bold text-text-secondary uppercase tracking-widest">Seeds</span>
+1689:                          <span className="text-lg font-mono font-bold text-indigo-400">{state.dataSeeds} 🧬</span>
+1690:                        </div>
+1691:                        <button 
+1692:                          onClick={handleSellDataSeeds}
+1693:                          disabled={state.dataSeeds < 10}
+1694:                          className="bg-indigo-500 hover:bg-indigo-600 disabled:opacity-50 text-white px-4 py-2 rounded-xl text-sm font-bold transition-all"
+1695:                        >
+1696:                          SELL 10 🧬 (50🪙)
+1697:                        </button>
+1698:                      </div>
+1699:                    </div>
+1700:
+1701:                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+1702:                      {/* Discovered Species */}
+1703:                      <div className="lg:col-span-2 space-y-4">
+1704:                        <h3 className="text-sm font-bold text-text-secondary uppercase tracking-widest flex items-center gap-2">
+1705:                          <BookOpen size={16} />
+1706:                          Discovered Species ({state.discoveredTypes.length})
+1707:                        </h3>
+1708:                        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+1709:                          {state.discoveredTypes.map((type, idx) => (
+1710:                            <div key={idx} className="hardware-panel p-3 text-center group hover:border-indigo-500 transition-all">
+1711:                              <div className="w-10 h-10 mx-auto mb-2 rounded-full bg-indigo-500/10 flex items-center justify-center text-indigo-400 group-hover:scale-110 transition-transform">
+1712:                                <Sprout size={20} />
+1713:                              </div>
+1714:                              <span className="text-xs font-bold block truncate">{type}</span>
+1715:                            </div>
+1716:                          ))}
+1717:                          {state.discoveredTypes.length === 0 && (
+1718:                            <div className="col-span-full py-12 text-center text-text-secondary italic">
+1719:                              No species discovered yet. Start planting!
+1720:                            </div>
+1721:                          )}
+1722:                        </div>
+1723:                      </div>
+1724:
+1725:                      {/* Leaderboard */}
+1726:                      <div className="space-y-4">
+1727:                        <h3 className="text-sm font-bold text-text-secondary uppercase tracking-widest flex items-center gap-2">
+1728:                          <Trophy size={16} />
+1729:                          Top Botanists
+1730:                        </h3>
+1731:                        <div className="hardware-panel p-4 space-y-3">
+1732:                          {isLeaderboardLoading ? (
+1733:                            <div className="py-8 text-center text-text-secondary animate-pulse">Loading rankings...</div>
+1734:                          ) : leaderboard.map((entry, idx) => (
+1735:                            <div key={entry.id} className="flex items-center justify-between p-2 rounded-lg bg-black/20 border border-white/5">
+1736:                              <div className="flex items-center gap-3">
+1737:                                <span className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold ${idx === 0 ? 'bg-mineral-gold text-soil-dark' : 'bg-bark-brown/30 text-text-secondary'}`}>
+1738:                                  {idx + 1}
+1739:                                </span>
+1740:                                <div className="flex flex-col">
+1741:                                  <span className="text-xs font-bold truncate max-w-[100px]">{entry.displayName || 'Unknown'}</span>
+1742:                                  <span className="text-[10px] text-text-secondary uppercase">{entry.role || 'Player'}</span>
+1743:                                </div>
+1744:                              </div>
+1745:                              <div className="text-right">
+1746:                                <div className="text-xs font-mono font-bold text-leaf-green">{entry.credits}🪙</div>
+1747:                                <div className="text-[10px] font-mono text-indigo-400">{entry.dataSeeds}🧬</div>
+1748:                              </div>
+1749:                            </div>
+1750:                          ))}
+1751:                        </div>
+1752:                      </div>
+1753:                    </div>
+1754:                  </motion.div>
+1755:                )}
+1756:
+1757:                {state.activeTab === 'admin' && state.user?.role === 'admin' && (
+1758:                  <motion.div 
+1759:                    key="admin"
+1760:                    initial={{ opacity: 0, x: -20 }}
+1761:                    animate={{ opacity: 1, x: 0 }}
+1762:                    exit={{ opacity: 0, x: 20 }}
+1763:                    className="space-y-6"
+1764:                  >
+1765:                    <div className="flex items-center gap-3 border-b border-bark-brown pb-4">
+1766:                      <ShieldCheck size={24} className="text-burn-red" />
+1767:                      <h2 className="font-serif text-2xl italic">Admin Control Center</h2>
+1768:                    </div>
+1769:
+1770:                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+1771:                      {/* Global Stats */}
+1772:                      <div className="hardware-panel p-6 space-y-4">
+1773:                        <h3 className="text-sm font-bold text-text-secondary uppercase tracking-widest flex items-center gap-2">
+1774:                          <Database size={16} />
+1775:                          System Overview
+1776:                        </h3>
+1777:                        <div className="grid grid-cols-2 gap-4">
+1778:                          <div className="bg-black/20 p-4 rounded-xl border border-white/5">
+1779:                            <div className="text-[10px] text-text-secondary uppercase font-bold mb-1">Total Players</div>
+1780:                            <div className="text-2xl font-mono font-bold text-leaf-green">{leaderboard.length}+</div>
+1781:                          </div>
+1782:                          <div className="bg-black/20 p-4 rounded-xl border border-white/5">
+1783:                            <div className="text-[10px] text-text-secondary uppercase font-bold mb-1">Server Time</div>
+1784:                            <div className="text-sm font-mono font-bold text-text-primary">{new Date().toLocaleTimeString()}</div>
+1785:                          </div>
+1786:                        </div>
+1787:                      </div>
+1788:
+1789:                      {/* Admin Actions */}
+1790:                      <div className="hardware-panel p-6 space-y-4">
+1791:                        <h3 className="text-sm font-bold text-text-secondary uppercase tracking-widest flex items-center gap-2">
+1792:                          <Zap size={16} />
+1793:                          Quick Actions
+1794:                        </h3>
+1795:                        <div className="grid grid-cols-1 gap-3">
+1796:                          <button 
+1797:                            onClick={() => {
+1798:                              setState(prev => ({ ...prev, credits: prev.credits + 1000 }));
+1799:                              saveState({ credits: state.credits + 1000 });
+1800:                              addLog('Admin: Added 1000 credits to self.', 'success');
+1801:                            }}
+1802:                            className="bg-burn-red/10 hover:bg-burn-red/20 text-burn-red border border-burn-red/30 p-3 rounded-xl text-xs font-bold transition-all flex items-center justify-between"
+1803:                          >
+1804:                            <span>Add 1000 Credits (Self)</span>
+1805:                            <ArrowUpCircle size={14} />
+1806:                          </button>
+1807:                          <button 
+1808:                            onClick={() => {
+1809:                              setState(prev => ({ ...prev, dataSeeds: prev.dataSeeds + 100 }));
+1810:                              saveState({ dataSeeds: state.dataSeeds + 100 });
+1811:                              addLog('Admin: Added 100 data seeds to self.', 'success');
+1812:                            }}
+1813:                            className="bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 p-3 rounded-xl text-xs font-bold transition-all flex items-center justify-between"
+1814:                          >
+1815:                            <span>Add 100 Data Seeds (Self)</span>
+1816:                            <Database size={14} />
+1817:                          </button>
+1818:                        </div>
+1819:                      </div>
+1820:                    </div>
+1821:
+1822:                    {/* User Management Table */}
+1823:                    <div className="hardware-panel p-6 space-y-4">
+1824:                      <h3 className="text-sm font-bold text-text-secondary uppercase tracking-widest flex items-center gap-2">
+1825:                        <User size={16} />
+1826:                        Player Management
+1827:                      </h3>
+1828:                      <div className="overflow-x-auto">
+1829:                        <table className="w-full text-left border-collapse">
+1830:                          <thead>
+1831:                            <tr className="border-b border-bark-brown/30">
+1832:                              <th className="py-3 text-[10px] font-bold text-text-secondary uppercase tracking-widest">Name</th>
+1833:                              <th className="py-3 text-[10px] font-bold text-text-secondary uppercase tracking-widest">Role</th>
+1834:                              <th className="py-3 text-[10px] font-bold text-text-secondary uppercase tracking-widest">Credits</th>
+1835:                              <th className="py-3 text-[10px] font-bold text-text-secondary uppercase tracking-widest">Seeds</th>
+1836:                              <th className="py-3 text-[10px] font-bold text-text-secondary uppercase tracking-widest">Actions</th>
+1837:                            </tr>
+1838:                          </thead>
+1839:                          <tbody>
+1840:                            {leaderboard.map(user => (
+1841:                              <tr key={user.id} className="border-b border-white/5 hover:bg-white/5 transition-colors">
+1842:                                <td className="py-4 text-xs font-bold">{user.displayName || 'Anon'}</td>
+1843:                                <td className="py-4">
+1844:                                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${user.role === 'admin' ? 'bg-burn-red/20 text-burn-red' : 'bg-leaf-green/20 text-leaf-green'}`}>
+1845:                                    {user.role || 'player'}
+1846:                                  </span>
+1847:                                </td>
+1848:                                <td className="py-4 text-xs font-mono">{user.credits}🪙</td>
+1849:                                <td className="py-4 text-xs font-mono">{user.dataSeeds}🧬</td>
+1850:                                <td className="py-4">
+1851:                                  <button 
+1852:                                    onClick={() => {
+1853:                                      setTransferTarget(user.id);
+1854:                                      setTransferAmount('100');
+1855:                                      addLog(`Selected ${user.displayName} for credit transfer.`, 'info');
+1856:                                    }}
+1857:                                    className="text-[10px] font-bold text-indigo-400 hover:underline"
+1858:                                  >
+1859:                                    SELECT
+1860:                                  </button>
+1861:                                </td>
+1862:                              </tr>
+1863:                            ))}
+1864:                          </tbody>
+1865:                        </table>
+1866:                      </div>
+1867:                    </div>
+1868:                  </motion.div>
+1869:                )}
+1870:              </AnimatePresence>
+1871:            </div>
+1872:
+1873:            {/* Terminal Log */}
+1874:            <div className="space-y-4">
+1875:              <div className="flex items-center gap-2 text-text-secondary">
+1876:                <AlertCircle size={14} />
+1877:                <span className="text-[10px] font-bold uppercase tracking-widest">System Logs</span>
+1878:              </div>
+1879:              <div className="hardware-panel p-4 h-64 md:h-full overflow-y-auto font-mono text-[10px] space-y-2 bg-black/40">
+1880:                {logs.map((log, i) => (
+1881:                  <div key={i} className={
+1882:                    log.type === 'success' ? 'text-leaf-green' : 
+1883:                    log.type === 'danger' ? 'text-burn-red font-bold' : 
+1884:                    log.type === 'system' ? 'text-text-secondary' : 'text-text-primary'
+1885:                  }>
+1886:                    <span className="opacity-30 mr-2">[{new Date().toLocaleTimeString([], { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' })}]</span>
+1887:                    {log.msg}
+1888:                  </div>
+1889:                ))}
+1890:              </div>
+1891:            </div>
+1892:          </div>
+1893:        </div>
+1894:      </div>
+1895:      {/* Auth Overlay */}
+1896:      <AnimatePresence>
+1897:        {(!state.user && state.isAuthReady) && (
+1898:          <motion.div 
+1899:            initial={{ opacity: 0 }}
+1900:            animate={{ opacity: 1 }}
+1901:            exit={{ opacity: 0 }}
+1902:            className="fixed inset-0 z-50 flex items-center justify-center bg-soil-dark/95 backdrop-blur-md p-6"
+1903:          >
+1904:            <motion.div 
+1905:              initial={{ scale: 0.9, y: 20 }}
+1906:              animate={{ scale: 1, y: 0 }}
+1907:              className="hardware-panel max-w-md w-full p-8 text-center space-y-8 border-leaf-green/30"
+1908:            >
+1909:              <div className="space-y-4">
+1910:                <div className="w-20 h-20 bg-leaf-green/10 rounded-full flex items-center justify-center mx-auto text-leaf-green">
+1911:                  <Database size={40} />
+1912:                </div>
+1913:                <div className="space-y-2">
+1914:                  <h1 className="text-2xl font-serif italic">Orchard Engine</h1>
+1915:                  <p className="text-xs text-text-secondary uppercase tracking-[0.2em]">Growth Milestone Interface</p>
+1916:                </div>
+1917:              </div>
+1918:
+1919:              <div className="space-y-6">
+1920:                <p className="text-sm text-text-secondary leading-relaxed">
+1921:                  Establish a secure link to the Bio-Genetic database to persist your orchard telemetry and enable resource exchange.
+1922:                </p>
+1923:                
+1924:                <div className="space-y-4">
+1925:                  <button 
+1926:                    onClick={handleLogin}
+1927:                    disabled={isLoginLoading}
+1928:                    className="w-full flex items-center justify-center gap-3 bg-white text-black font-bold py-4 rounded-xl hover:scale-[1.02] active:scale-[0.98] transition-all shadow-lg disabled:opacity-50"
+1929:                  >
+1930:                    {isLoginLoading ? (
+1931:                      <RefreshCw className="animate-spin" size={20} />
+1932:                    ) : (
+1933:                      <LogIn size={20} />
+1934:                    )}
+1935:                    {isLoginLoading ? 'CONNECTING...' : 'CONNECT WITH GOOGLE'}
+1936:                  </button>
+1937:
+1938:                  <div className="hardware-panel p-3 h-32 overflow-y-auto font-mono text-[9px] space-y-1 bg-black/60 text-left border-bark-brown/20">
+1939:                    <div className="text-text-secondary uppercase mb-1 border-b border-bark-brown/20 pb-1 flex items-center gap-1">
+1940:                      <Database size={8} /> Auth Telemetry
+1941:                    </div>
+1942:                    {logs.filter(l => l.type === 'system' || l.type === 'danger').map((log, i) => (
+1943:                      <div key={i} className={log.type === 'danger' ? 'text-burn-red' : 'text-text-secondary'}>
+1944:                        <span className="opacity-30 mr-1">[{new Date().toLocaleTimeString([], { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' })}]</span>
+1945:                        {log.msg}
+1946:                      </div>
+1947:                    ))}
+1948:                  </div>
+1949:                </div>
+1950:
+1951:                <p className="text-[10px] text-text-secondary italic">
+1952:                  Note: Ensure popups are allowed for this domain.
+1953:                </p>
+1954:              </div>
+1955:
+1956:              <div className="pt-4 border-t border-bark-brown/30">
+1957:                <div className="flex items-center justify-center gap-2 text-[10px] text-text-secondary uppercase tracking-widest">
+1958:                  <ShieldCheck size={12} />
+1959:                  Secure Protocol v2.4.0
+1960:                </div>
+1961:              </div>
+1962:            </motion.div>
+1963:          </motion.div>
+1964:        )}
+1965:      </AnimatePresence>
+1966:
+1967:      {/* Loading State */}
+1968:      {!state.isAuthReady && (
+1969:        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-soil-dark">
+1970:          <RefreshCw className="animate-spin text-leaf-green" size={40} />
+1971:        </div>
+1972:      )}
+1973:    </div>
+1974:  );
+1975:};
+1976:
+1977:export default function AppWrapper() {
+1978:  return (
+1979:    <ErrorBoundary>
+1980:      <App />
+1981:    </ErrorBoundary>
+1982:  );
+1983:}

@@ -1,4 +1,18 @@
-import { PlantStage } from './types';
+import { PlantStage, Weather, WeatherType } from './types';
+
+export const WEATHER_TYPES: Record<WeatherType, Weather> = {
+  clear: { type: 'clear', name: 'Clear Skies', description: 'Optimal growth conditions.', intensity: 1 },
+  rain: { type: 'rain', name: 'Gentle Rain', description: 'Hydration levels increasing.', intensity: 1.5 },
+  storm: { type: 'storm', name: 'Severe Storm', description: 'High hydration, but increased stress.', intensity: 2 },
+  heatwave: { type: 'heatwave', name: 'Intense Heatwave', description: 'Rapid nutrient drain and high stress.', intensity: 2.5 },
+  fog: { type: 'fog', name: 'Dense Fog', description: 'Reduced water loss, slow research.', intensity: 0.5 },
+};
+
+export const getRandomWeather = (): Weather => {
+  const types = Object.keys(WEATHER_TYPES) as WeatherType[];
+  const type = types[Math.floor(Math.random() * types.length)];
+  return WEATHER_TYPES[type];
+};
 
 export const PLANT_STAGES: PlantStage[] = [
   { threshold: 0, name: 'Dormant Seed', color: '#5D4037', maxWater: 30, maxNutrients: 100 },

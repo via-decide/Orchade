@@ -29,8 +29,6 @@ const PlantCard: React.FC<PlantCardProps> = ({ plant, index, isSelected, onClick
   const stage = PLANT_STAGES[plant.stageIndex];
   const waterPct = (plant.water / stage.maxWater) * 100;
   const nutrientPct = (plant.nutrients / stage.maxNutrients) * 100;
-  const isBurning = plant.stress > 90;
-  const hasPests = plant.pests > 0;
 
   return (
     <button
@@ -44,12 +42,20 @@ const PlantCard: React.FC<PlantCardProps> = ({ plant, index, isSelected, onClick
             <span className="text-[10px] font-bold uppercase tracking-widest text-text-secondary">
               Stage {plant.stageIndex}
             </span>
+            <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded bg-black/20 
+              ${plant.rarity === 'Legendary' ? 'text-mineral-gold' : 
+                plant.rarity === 'Epic' ? 'text-violet-400' : 
+                plant.rarity === 'Rare' ? 'text-water-blue' : 
+                plant.rarity === 'Uncommon' ? 'text-leaf-green' : 'text-text-secondary'}`}
+            >
+              {plant.rarity || 'Common'}
+            </span>
           </div>
           <span className="text-sm font-bold text-text-primary truncate w-full text-left">{plant.type}</span>
         </div>
         <div className="flex gap-1">
-          {hasPests && <Bug size={14} className="text-toxic-green animate-pulse" />}
-          {isBurning && <Flame size={14} className="text-burn-red animate-bounce" />}
+          {plant.pests > 0 && <Bug size={14} className="text-toxic-green animate-pulse" />}
+          {plant.stress > 50 && <Flame size={14} className="text-burn-red animate-bounce" />}
         </div>
       </div>
 
@@ -63,9 +69,18 @@ const PlantCard: React.FC<PlantCardProps> = ({ plant, index, isSelected, onClick
             style={{ backgroundColor: stage.color }}
           />
         </div>
+        {(plant.growthSpeedMultiplier || 1) > 1.1 && (
+          <div className="absolute top-0 right-0 text-leaf-green animate-pulse">
+            <Zap size={12} />
+          </div>
+        )}
       </div>
 
-      <div className="space-y-2 w-full">
+      <div className="space-y-2">
+        <div className="flex justify-between text-[8px] font-mono opacity-50">
+          <span>SPD: x{(plant.growthSpeedMultiplier || 1).toFixed(1)}</span>
+          <span>YLD: x{(plant.yieldMultiplier || 1).toFixed(1)}</span>
+        </div>
         <div className="h-1.5 w-full bg-black/40 rounded-full overflow-hidden">
           <div 
             className="h-full bg-water-blue transition-all duration-500" 

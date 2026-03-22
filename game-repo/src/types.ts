@@ -22,6 +22,9 @@ export type Plant = {
   pestImmunity: number;
   stageIndex: number;
   isHarvestable: boolean;
+  rarity: 'Common' | 'Uncommon' | 'Rare' | 'Epic' | 'Legendary';
+  growthSpeedMultiplier: number;
+  yieldMultiplier: number;
   color?: string;
 };
 
@@ -38,6 +41,21 @@ export type Orchard = {
   plants: (Plant | null)[];
   isUnlocked: boolean;
   unlockCost: number;
+};
+
+export type Tool = {
+  id: string;
+  name: string;
+  description: string;
+  level: number;
+  maxLevel: number;
+  baseCost: number;
+  costMultiplier: number;
+  type: 'passive' | 'active';
+  bonusType: 'water' | 'nutrients' | 'stress' | 'pests' | 'credits';
+  bonusValue: number;
+  activeCooldown?: number;
+  currentCooldown?: number;
 };
 
 export type WeatherType = 'clear' | 'rain' | 'storm' | 'heatwave' | 'fog';
@@ -57,12 +75,16 @@ export type GameState = {
   activeOrchardId: string;
   selectedPlantIndex: number | null;
   upgrades: GlobalUpgrades;
-  activeTab: 'orchard' | 'lab' | 'market' | 'rankings' | 'profile';
-  weather?: Weather;
+  tools: Tool[];
+  activeTab: 'orchard' | 'lab' | 'market' | 'tools' | 'leaderboard' | 'discovery' | 'archives' | 'admin';
+  weather: Weather;
   user: {
     uid: string;
     displayName: string | null;
     email: string | null;
+    role?: 'player' | 'admin';
   } | null;
   isAuthReady: boolean;
+  lastToolEffect: string | null;
+  discoveredTypes: string[];
 };

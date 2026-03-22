@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { GameState, Plant, GlobalUpgrades, Orchard } from './types';
-import { PLANT_STAGES, INITIAL_UPGRADES, SHOP_ITEMS } from './constants';
+import { PLANT_STAGES, INITIAL_UPGRADES, SHOP_ITEMS, getRandomWeather } from './constants';
 import PlantCard from './components/PlantCard';
 import PlantVisualizer from './components/PlantVisualizer';
 import { 
@@ -23,7 +23,12 @@ import {
   AlertCircle,
   Trophy,
   Hammer,
-  HelpCircle
+  HelpCircle,
+  Sun,
+  CloudRain,
+  CloudLightning,
+  Thermometer,
+  Cloud
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
@@ -146,6 +151,7 @@ const App: React.FC = () => {
     selectedPlantIndex: null,
     upgrades: INITIAL_UPGRADES,
     activeTab: 'orchard',
+    weather: getRandomWeather(),
     user: null,
     isAuthReady: false,
     globalStats: null,
@@ -235,6 +241,7 @@ const App: React.FC = () => {
           dataSeeds: data.dataSeeds ?? prev.dataSeeds,
           orchards: data.orchards ?? prev.orchards,
           upgrades: data.upgrades ?? prev.upgrades,
+          weather: data.weather ?? prev.weather,
         }));
       } else {
         // Initialize new user document
@@ -247,6 +254,7 @@ const App: React.FC = () => {
           day: 1,
           upgrades: INITIAL_UPGRADES,
           orchards: state.orchards,
+          weather: getRandomWeather(),
           createdAt: serverTimestamp()
         };
         setDoc(userDocRef, initialState).catch(e => handleFirestoreError(e, OperationType.WRITE, `users/${state.user!.uid}`));
@@ -498,6 +506,7 @@ const App: React.FC = () => {
 
   const nextDay = () => {
     setState(prev => {
+      const newWeather = getRandomWeather();
       const newOrchards = prev.orchards.map(o => {
         if (!o.isUnlocked) return o;
         const newPlants = o.plants.map(p => {
@@ -532,9 +541,9 @@ const App: React.FC = () => {
         return { ...o, plants: newPlants };
       });
 
-      addLog(`Day ${prev.day + 1} started. All orchards processed.`, 'system');
-      const nextState = { ...prev, day: prev.day + 1, orchards: newOrchards };
-      saveState({ day: prev.day + 1, orchards: newOrchards });
+      addLog(`Day ${prev.day + 1} started. Weather shifted to ${newWeather.name}.`, 'system');
+      const nextState = { ...prev, day: prev.day + 1, orchards: newOrchards, weather: newWeather };
+      saveState({ day: prev.day + 1, orchards: newOrchards, weather: newWeather });
       return nextState;
     });
   };
@@ -668,6 +677,40 @@ const App: React.FC = () => {
             <span className="text-[10px] font-bold text-text-secondary uppercase tracking-widest">Genetic Data</span>
             <span className="text-lg md:text-xl font-mono font-bold text-water-blue">{state.dataSeeds} 🧬</span>
           </div>
+          
+          {/* Weather Indicator */}
+          {state.weather && (
+            <div className="flex items-center gap-3 px-4 py-1 bg-black/20 rounded-xl border border-bark-brown/30 overflow-hidden">
+              <AnimatePresence mode="wait">
+                <motion.div 
+                  key={state.weather.type}
+                  initial={{ opacity: 0, x: -10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: 10 }}
+                  transition={{ duration: 0.3, ease: "easeOut" }}
+                  className="flex items-center gap-3"
+                >
+                  <div className={`p-2 rounded-lg ${
+                    state.weather.type === 'clear' ? 'text-mineral-gold bg-mineral-gold/10' :
+                    state.weather.type === 'rain' ? 'text-water-blue bg-water-blue/10' :
+                    state.weather.type === 'storm' ? 'text-violet-400 bg-violet-400/10' :
+                    state.weather.type === 'heatwave' ? 'text-burn-red bg-burn-red/10' :
+                    'text-text-secondary bg-text-secondary/10'
+                  }`}>
+                    {state.weather.type === 'clear' && <Sun size={20} />}
+                    {state.weather.type === 'rain' && <CloudRain size={20} />}
+                    {state.weather.type === 'storm' && <CloudLightning size={20} />}
+                    {state.weather.type === 'heatwave' && <Thermometer size={20} />}
+                    {state.weather.type === 'fog' && <Cloud size={20} />}
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="text-[10px] font-bold text-text-secondary uppercase tracking-widest">Atmosphere</span>
+                    <span className="text-xs font-bold uppercase">{state.weather.name}</span>
+                  </div>
+                </motion.div>
+              </AnimatePresence>
+            </div>
+          )}
         </div>
         <div className="flex items-center gap-3 w-full md:w-auto">
           {state.user && (
@@ -694,38 +737,33 @@ const App: React.FC = () => {
         <div className="lg:col-span-1 flex flex-row lg:flex-col gap-3 md:gap-4 overflow-x-auto pb-2 lg:pb-0 scrollbar-hide">
           <button 
             onClick={() => setState(p => ({ ...p, activeTab: 'orchard' }))}
-            className={`flex-1 lg:flex-none p-3 rounded-xl flex flex-col items-center justify-center transition-all gap-1 ${state.activeTab === 'orchard' ? 'bg-leaf-green text-soil-dark' : 'bg-card-bg text-text-secondary hover:text-white'}`}
+            className={`flex-1 lg:flex-none p-4 rounded-xl flex items-center justify-center transition-all ${state.activeTab === 'orchard' ? 'bg-leaf-green text-soil-dark' : 'bg-card-bg text-text-secondary hover:text-white'}`}
           >
             <Sprout size={24} />
-            <span className="text-[8px] font-bold uppercase tracking-tighter">Orchard</span>
           </button>
           <button 
             onClick={() => setState(p => ({ ...p, activeTab: 'lab' }))}
-            className={`flex-1 lg:flex-none p-3 rounded-xl flex flex-col items-center justify-center transition-all gap-1 ${state.activeTab === 'lab' ? 'bg-water-blue text-soil-dark' : 'bg-card-bg text-text-secondary hover:text-white'}`}
+            className={`flex-1 lg:flex-none p-4 rounded-xl flex items-center justify-center transition-all ${state.activeTab === 'lab' ? 'bg-water-blue text-soil-dark' : 'bg-card-bg text-text-secondary hover:text-white'}`}
           >
             <FlaskConical size={24} />
-            <span className="text-[8px] font-bold uppercase tracking-tighter">Research</span>
           </button>
           <button 
             onClick={() => setState(p => ({ ...p, activeTab: 'market' }))}
-            className={`flex-1 lg:flex-none p-3 rounded-xl flex flex-col items-center justify-center transition-all gap-1 ${state.activeTab === 'market' ? 'bg-mineral-gold text-soil-dark' : 'bg-card-bg text-text-secondary hover:text-white'}`}
+            className={`flex-1 lg:flex-none p-4 rounded-xl flex items-center justify-center transition-all ${state.activeTab === 'market' ? 'bg-mineral-gold text-soil-dark' : 'bg-card-bg text-text-secondary hover:text-white'}`}
           >
             <Store size={24} />
-            <span className="text-[8px] font-bold uppercase tracking-tighter">Tools</span>
           </button>
           <button 
             onClick={() => setState(p => ({ ...p, activeTab: 'rankings' }))}
-            className={`flex-1 lg:flex-none p-3 rounded-xl flex flex-col items-center justify-center transition-all gap-1 ${state.activeTab === 'rankings' ? 'bg-burn-red text-soil-dark' : 'bg-card-bg text-text-secondary hover:text-white'}`}
+            className={`flex-1 lg:flex-none p-4 rounded-xl flex items-center justify-center transition-all ${state.activeTab === 'rankings' ? 'bg-burn-red text-soil-dark' : 'bg-card-bg text-text-secondary hover:text-white'}`}
           >
             <Trophy size={24} />
-            <span className="text-[8px] font-bold uppercase tracking-tighter">Rankings</span>
           </button>
           <button 
             onClick={() => setState(p => ({ ...p, activeTab: 'profile' }))}
-            className={`flex-1 lg:flex-none p-3 rounded-xl flex flex-col items-center justify-center transition-all gap-1 ${state.activeTab === 'profile' ? 'bg-text-primary text-soil-dark' : 'bg-card-bg text-text-secondary hover:text-white'}`}
+            className={`flex-1 lg:flex-none p-4 rounded-xl flex items-center justify-center transition-all ${state.activeTab === 'profile' ? 'bg-text-primary text-soil-dark' : 'bg-card-bg text-text-secondary hover:text-white'}`}
           >
             <User size={24} />
-            <span className="text-[8px] font-bold uppercase tracking-tighter">Profile</span>
           </button>
         </div>
 
@@ -772,8 +810,12 @@ const App: React.FC = () => {
                         <PlantVisualizer 
                           stageIndex={selectedPlant.stageIndex} 
                           progress={progress}
+                          type={selectedPlant.type}
+                          color={selectedPlant.color}
                           hasPests={selectedPlant.pests > 0}
                           isBurning={selectedPlant.stress > 90}
+                          stress={selectedPlant.stress}
+                          weather={state.weather?.type}
                         />
                       );
                     })()}
