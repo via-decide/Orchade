@@ -1,1489 +1,567 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { GameState, Plant, GlobalUpgrades, Orchard } from './types';
-import { PLANT_STAGES, INITIAL_UPGRADES, SHOP_ITEMS, getRandomWeather } from './constants';
-import PlantCard from './components/PlantCard';
-import PlantVisualizer from './components/PlantVisualizer';
-import { 
-  Sprout, 
-  FlaskConical, 
-  Store, 
-  Droplets, 
-  Zap, 
-  Bug, 
-  Flame, 
-  TrendingUp, 
-  ArrowUpCircle,
-  RefreshCw,
-  Database,
-  Send,
-  User,
-  LogOut,
-  LogIn,
-  ShieldCheck,
-  AlertCircle,
-  Trophy,
-  Hammer,
-  HelpCircle,
-  Sun,
-  CloudRain,
-  CloudLightning,
-  Thermometer,
-  Cloud
-} from 'lucide-react';
-import { motion, AnimatePresence } from 'motion/react';
-import { 
-  auth, 
-  db, 
-  signInWithGoogle, 
-  logout, 
-  handleFirestoreError, 
-  OperationType 
-} from './firebase';
-import { 
-  doc, 
-  setDoc, 
-  onSnapshot, 
-  updateDoc, 
-  collection, 
-  query, 
-  where, 
-  getDocs, 
-  addDoc, 
-  serverTimestamp,
-  increment,
-  writeBatch,
-  orderBy,
-  limit
-} from 'firebase/firestore';
+import { useState, useEffect, useCallback } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
-import firebaseConfig from '../firebase-applet-config.json';
+import { doc, getDoc, setDoc, updateDoc, onSnapshot } from 'firebase/firestore';
+import { auth, db, signInWithGoogle, handleRedirectResult, logout } from './firebase';
+import PlantCard from './components/PlantCard';
+import { GameState, Plant, Orchard, GlobalUpgrades } from './types';
+import {
+  PLANT_STAGES, INITIAL_UPGRADES, SHOP_ITEMS,
+  WEATHER_TYPES, getRandomWeather, BASE_PLANT_TYPES, BREEDING_COST, MUTATION_CHANCE, RARITY_COLORS
+} from './constants';
+import { Sprout, Droplets, FlaskConical, ShoppingBag, Wrench, LogOut, Sun, CloudRain, Zap, Bug, Flame, Trophy, User, Loader } from 'lucide-react';
 
-interface ErrorBoundaryProps {
-  children: React.ReactNode;
+// ─── Constants ───────────────────────────────────────────────
+const INITIAL_ORCHARDS: Orchard[] = [
+  { id: 'o1', name: 'Alpha Plot', plants: [null, null, null, null], isUnlocked: true, unlockCost: 0 },
+  { id: 'o2', name: 'Beta Plot', plants: [null, null, null, null], isUnlocked: false, unlockCost: 500 },
+  { id: 'o3', name: 'Gamma Plot', plants: [null, null, null, null], isUnlocked: false, unlockCost: 1500 },
+];
+
+const INITIAL_STATE: Omit<GameState, 'user' | 'isAuthReady'> = {
+  day: 1,
+  credits: 200,
+  dataSeeds: 10,
+  orchards: INITIAL_ORCHARDS,
+  activeOrchardId: 'o1',
+  selectedPlantIndex: null,
+  upgrades: INITIAL_UPGRADES,
+  tools: [],
+  activeTab: 'orchard',
+  weather: getRandomWeather(),
+};
+
+// ─── Helpers ──────────────────────────────────────────────────
+function makePlant(type: string): Plant {
+  const base = BASE_PLANT_TYPES.find(b => b.name === type) ?? BASE_PLANT_TYPES[0];
+  return {
+    id: `plant_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+    type: base.name,
+    rootStrength: 50,
+    water: 20,
+    nutrients: 60,
+    stress: 0,
+    pests: 0,
+    pestImmunity: 0,
+    stageIndex: 0,
+    isHarvestable: false,
+    rarity: 'Common',
+    growthSpeedMultiplier: base.baseGrowthSpeed,
+    yieldMultiplier: base.baseYield,
+    color: base.color,
+  };
 }
 
-interface ErrorBoundaryState {
-  hasError: boolean;
-  error: any;
+function getUserDocRef(uid: string) {
+  return doc(db, 'users', uid);
 }
 
-class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
-  constructor(props: ErrorBoundaryProps) {
-    super(props);
-    this.state = { hasError: false, error: null };
-  }
-
-  static getDerivedStateFromError(error: any) {
-    return { hasError: true, error };
-  }
-
-  render() {
-    if (this.state.hasError) {
-      let errorData;
-      try {
-        errorData = JSON.parse(this.state.error.message);
-      } catch (e) {
-        errorData = { error: this.state.error.message };
-      }
-
-      return (
-        <div className="min-h-screen bg-soil-dark flex items-center justify-center p-6">
-          <div className="hardware-panel max-w-lg w-full p-8 space-y-6 border-burn-red/50">
-            <div className="flex items-center gap-3 text-burn-red">
-              <AlertCircle size={32} />
-              <h2 className="text-xl font-bold uppercase tracking-tight">System Critical Error</h2>
-            </div>
-            <div className="bg-black/40 p-4 rounded-lg font-mono text-xs space-y-2 overflow-auto max-h-64">
-              <p className="text-burn-red font-bold">Error: {errorData.error || 'Unknown'}</p>
-              {errorData.operationType && <p>Operation: {errorData.operationType}</p>}
-              {errorData.path && <p>Path: {errorData.path}</p>}
-              {errorData.authInfo && (
-                <div className="pt-2 border-t border-bark-brown/30">
-                  <p className="text-text-secondary">Auth Context:</p>
-                  <p>UID: {errorData.authInfo.userId || 'Not Logged In'}</p>
-                  <p>Email: {errorData.authInfo.email || 'N/A'}</p>
-                </div>
-              )}
-            </div>
-            <button 
-              onClick={() => window.location.reload()}
-              className="w-full bg-bark-brown/20 hover:bg-bark-brown/40 text-text-primary font-bold py-3 rounded-xl border border-bark-brown transition-all"
-            >
-              REBOOT SYSTEM
-            </button>
-          </div>
-        </div>
-      );
-    }
-    return this.props.children;
-  }
-}
-
-const App: React.FC = () => {
-  const [state, setState] = useState<GameState & { globalStats: any }>({
-    day: 1,
-    credits: 100,
-    dataSeeds: 0,
-    orchards: [
-      {
-        id: 'orchard-1',
-        name: 'Primary Orchard',
-        plants: Array(9).fill(null),
-        isUnlocked: true,
-        unlockCost: 0,
-      },
-      {
-        id: 'orchard-2',
-        name: 'Highland Ridge',
-        plants: Array(9).fill(null),
-        isUnlocked: false,
-        unlockCost: 250,
-      },
-      {
-        id: 'orchard-3',
-        name: 'Deep Valley',
-        plants: Array(9).fill(null),
-        isUnlocked: false,
-        unlockCost: 750,
-      }
-    ],
-    activeOrchardId: 'orchard-1',
-    selectedPlantIndex: null,
-    upgrades: INITIAL_UPGRADES,
-    activeTab: 'orchard',
-    weather: getRandomWeather(),
+// ─── Main Component ───────────────────────────────────────────
+export default function App() {
+  const [gs, setGs] = useState<GameState>({
+    ...INITIAL_STATE,
     user: null,
     isAuthReady: false,
-    globalStats: null,
   });
+  const [authLoading, setAuthLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [notification, setNotification] = useState<string | null>(null);
+  const [selectedType, setSelectedType] = useState(BASE_PLANT_TYPES[0].name);
 
-  const [logs, setLogs] = useState<{ msg: string; type: string }[]>([]);
-  const [transferTarget, setTransferTarget] = useState('');
-  const [transferAmount, setTransferAmount] = useState('');
-  const [isTransferring, setIsTransferring] = useState(false);
-  const [isLoginLoading, setIsLoginLoading] = useState(false);
-  const [rankings, setRankings] = useState<{ uid: string; displayName: string; credits: number; dataSeeds: number }[]>([]);
-  const [toolEffect, setToolEffect] = useState<string | null>(null);
-
-  const addLog = useCallback((msg: string, type: string = 'info') => {
-    setLogs(prev => [{ msg, type }, ...prev].slice(0, 20));
-  }, []);
-
-  const handleLogin = async () => {
-    setIsLoginLoading(true);
-    addLog('Initiating Google Login...', 'system');
-    try {
-      await signInWithGoogle();
-      addLog('Login popup completed.', 'system');
-    } catch (error: any) {
-      addLog(`Login failed: ${error.message}`, 'danger');
-      console.error('Login error:', error);
-    } finally {
-      setIsLoginLoading(false);
-    }
+  // ── Notification helper ──
+  const notify = (msg: string) => {
+    setNotification(msg);
+    setTimeout(() => setNotification(null), 2500);
   };
 
-  // Auth Timeout Check
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      if (!state.isAuthReady) {
-        console.warn('Auth: Initialization timeout reached.');
-        addLog('Auth initialization is taking longer than expected. Please check your connection or popup blockers.', 'danger');
-        // Fallback: Set isAuthReady to true so the user can see the Auth Overlay and logs
-        setState(prev => ({ ...prev, isAuthReady: true }));
-      }
-    }, 10000); // 10 seconds
-    return () => clearTimeout(timer);
-  }, [state.isAuthReady, addLog]);
-
-  // Auth Listener
-  useEffect(() => {
-    console.log('App: Initializing Auth Listener with project:', firebaseConfig.projectId);
-    addLog('Initializing Auth Listener...', 'system');
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      console.log('App: Auth state changed', user ? user.uid : 'No user');
-      if (user) {
-        addLog(`Auth state changed: User ${user.uid} detected.`, 'system');
-        addLog('System Note: If you experience redirects to GitHub, your Gemini API quota may be exhausted. Please deploy the app for a stable experience.', 'system');
-        setState(prev => ({
-          ...prev,
-          user: {
-            uid: user.uid,
-            displayName: user.displayName,
-            email: user.email,
-          },
-          isAuthReady: true
-        }));
-      } else {
-        addLog('Auth state changed: No user detected.', 'system');
-        setState(prev => ({ ...prev, user: null, isAuthReady: true }));
-      }
-    }, (error) => {
-      console.error('App: Auth state error', error);
-      addLog(`Auth error: ${error.message}`, 'danger');
-      setState(prev => ({ ...prev, isAuthReady: true }));
-    });
-    return () => unsubscribe();
-  }, [addLog]);
-
-  // Firestore Sync
-  useEffect(() => {
+  // ── Persist game state to Firestore ──
+  const saveState = useCallback(async (state: GameState) => {
     if (!state.user?.uid) return;
-
-    const userDocRef = doc(db, 'users', state.user.uid);
-    const unsubscribe = onSnapshot(userDocRef, (snapshot) => {
-      if (snapshot.exists()) {
-        const data = snapshot.data();
-        addLog(`Synchronized data for ${data.displayName || 'User'}`, 'system');
-        setState(prev => ({
-          ...prev,
-          day: data.day ?? prev.day,
-          credits: data.credits ?? prev.credits,
-          dataSeeds: data.dataSeeds ?? prev.dataSeeds,
-          orchards: data.orchards ?? prev.orchards,
-          upgrades: data.upgrades ?? prev.upgrades,
-          weather: data.weather ?? prev.weather,
-        }));
-      } else {
-        // Initialize new user document
-        const initialState = {
+    setSaving(true);
+    try {
+      await updateDoc(getUserDocRef(state.user.uid), {
+        credits: state.credits,
+        dataSeeds: state.dataSeeds,
+        day: state.day,
+        orchards: state.orchards,
+        upgrades: state.upgrades,
+      });
+    } catch (e) {
+      // doc may not exist yet on first save — create it
+      try {
+        await setDoc(getUserDocRef(state.user!.uid), {
           uid: state.user!.uid,
           displayName: state.user!.displayName,
           email: state.user!.email,
-          credits: 100,
-          dataSeeds: 0,
-          day: 1,
-          upgrades: INITIAL_UPGRADES,
+          credits: state.credits,
+          dataSeeds: state.dataSeeds,
+          day: state.day,
           orchards: state.orchards,
-          weather: getRandomWeather(),
-          createdAt: serverTimestamp()
-        };
-        setDoc(userDocRef, initialState).catch(e => handleFirestoreError(e, OperationType.WRITE, `users/${state.user!.uid}`));
-      }
-    }, (error) => handleFirestoreError(error, OperationType.GET, `users/${state.user!.uid}`));
-
-    return () => unsubscribe();
-  }, [state.user?.uid]);
-
-  // Rankings & Global Stats Sync
-  useEffect(() => {
-    if (state.activeTab !== 'rankings') return;
-
-    const usersRef = collection(db, 'users');
-    const q = query(usersRef, orderBy('credits', 'desc'), limit(10));
-    
-    const unsubRankings = onSnapshot(q, (snapshot) => {
-      const topUsers = snapshot.docs
-        .map(doc => ({
-          uid: doc.data().uid,
-          displayName: doc.data().displayName || 'Anonymous Specimen',
-          credits: doc.data().credits || 0,
-          dataSeeds: doc.data().dataSeeds || 0,
-        }))
-        .sort((a, b) => (b.credits + b.dataSeeds * 10) - (a.credits + a.dataSeeds * 10))
-        .slice(0, 10);
-      
-      setRankings(topUsers);
-    }, (error) => handleFirestoreError(error, OperationType.GET, 'users_rankings'));
-
-    const unsubStats = onSnapshot(doc(db, 'system', 'global_stats'), (snapshot) => {
-      if (snapshot.exists()) {
-        setState(prev => ({ ...prev, globalStats: snapshot.data() }));
-      }
-    }, (error) => handleFirestoreError(error, OperationType.GET, 'system/global_stats'));
-
-    return () => {
-      unsubRankings();
-      unsubStats();
-    };
-  }, [state.activeTab]);
-
-  // Daily Reward Logic
-  useEffect(() => {
-    if (!state.user?.uid || !state.isAuthReady) return;
-
-    const checkDailyReward = async () => {
-      const userRef = doc(db, 'users', state.user!.uid);
-      const userDoc = await getDocs(query(collection(db, 'users'), where('uid', '==', state.user!.uid), limit(1)));
-      
-      if (!userDoc.empty) {
-        const userData = userDoc.docs[0].data();
-        const lastReward = userData.lastDailyReward?.toDate();
-        const now = new Date();
-        
-        if (!lastReward || lastReward.toDateString() !== now.toDateString()) {
-          const reward = 100;
-          const batch = writeBatch(db);
-          
-          batch.update(userDoc.docs[0].ref, {
-            credits: increment(reward),
-            lastDailyReward: serverTimestamp()
-          });
-
-          const statsRef = doc(db, 'system', 'global_stats');
-          batch.set(statsRef, {
-            totalCredits: increment(reward),
-            totalUsers: increment(lastReward ? 0 : 1)
-          }, { merge: true });
-
-          await batch.commit();
-          addLog(`Daily Login Reward: +${reward} credits!`, 'success');
-        }
-      }
-    };
-
-    checkDailyReward();
-  }, [state.user?.uid, state.isAuthReady, addLog]);
-
-  const saveState = async (updates: Partial<GameState>) => {
-    if (!state.user?.uid) return;
-    const userDocRef = doc(db, 'users', state.user.uid);
-    try {
-      await updateDoc(userDocRef, updates);
-    } catch (e) {
-      handleFirestoreError(e, OperationType.UPDATE, `users/${state.user.uid}`);
-    }
-  };
-
-  const handleTransferCredits = async () => {
-    if (!state.user?.uid || !transferTarget || !transferAmount) return;
-    const amount = parseInt(transferAmount);
-    if (isNaN(amount) || amount <= 0) {
-      addLog('Invalid transfer amount.', 'danger');
-      return;
-    }
-    if (amount > state.credits) {
-      addLog('Insufficient credits for transfer.', 'danger');
-      return;
-    }
-    if (transferTarget === state.user.uid) {
-      addLog('Cannot transfer to yourself.', 'warn');
-      return;
-    }
-
-    setIsTransferring(true);
-    try {
-      // Find target user
-      const usersRef = collection(db, 'users');
-      const q = query(usersRef, where('uid', '==', transferTarget), limit(1));
-      const querySnapshot = await getDocs(q);
-
-      if (querySnapshot.empty) {
-        addLog('Target User ID not found.', 'danger');
-        setIsTransferring(false);
-        return;
-      }
-
-      const targetDoc = querySnapshot.docs[0];
-      const batch = writeBatch(db);
-
-      // Deduct from sender
-      batch.update(doc(db, 'users', state.user.uid), {
-        credits: increment(-amount)
-      });
-
-      // Add to receiver
-      batch.update(targetDoc.ref, {
-        credits: increment(amount)
-      });
-
-      // Log transfer with predictable ID for security rules verification
-      const transferId = `${state.user.uid}_${transferTarget}`;
-      batch.set(doc(db, 'transfers', transferId), {
-        from: state.user.uid,
-        to: transferTarget,
-        amount,
-        timestamp: serverTimestamp()
-      });
-
-      await batch.commit();
-      addLog(`Successfully transferred ${amount} credits to ${targetDoc.data().displayName || 'User'}.`, 'success');
-      setTransferTarget('');
-      setTransferAmount('');
-    } catch (e) {
-      handleFirestoreError(e, OperationType.WRITE, 'transfers');
-    } finally {
-      setIsTransferring(false);
-    }
-  };
-
-  const activeOrchard = state.orchards.find(o => o.id === state.activeOrchardId)!;
-  const selectedPlant = state.selectedPlantIndex !== null ? activeOrchard.plants[state.selectedPlantIndex] : null;
-
-  const handlePlantAction = (action: 'research' | 'water' | 'fertilize' | 'pesticide' | 'harvest') => {
-    if (state.selectedPlantIndex === null || !selectedPlant) return;
-
-    setState(prev => {
-      const newOrchards = [...prev.orchards];
-      const orchardIndex = newOrchards.findIndex(o => o.id === prev.activeOrchardId);
-      const orchard = { ...newOrchards[orchardIndex] };
-      const newPlants = [...orchard.plants];
-      const plant = { ...newPlants[prev.selectedPlantIndex!]! };
-      let credits = prev.credits;
-      let dataSeeds = prev.dataSeeds;
-
-      if (action === 'research') {
-        if (plant.water < 5) {
-          addLog('Insufficient water for research.', 'warn');
-          return prev;
-        }
-        
-        // Trigger visual effect
-        setToolEffect('genetic-scanner');
-        setTimeout(() => setToolEffect(null), 1500);
-        
-        const baseG = Math.floor(Math.random() * 8) + 5;
-        const finalG = Math.max(1, Math.round(baseG * (plant.nutrients / 100)));
-        
-        plant.rootStrength += finalG;
-        plant.water -= 5;
-        plant.nutrients -= 10;
-        plant.stress += 5;
-        credits += 10;
-        
-        // Check evolution
-        let nextStage = 0;
-        for (let i = 0; i < PLANT_STAGES.length; i++) {
-          if (plant.rootStrength >= PLANT_STAGES[i].threshold) nextStage = i;
-        }
-        
-        if (nextStage > plant.stageIndex) {
-          plant.stageIndex = nextStage;
-          addLog(`Evolution! ${plant.type} reached stage: ${PLANT_STAGES[nextStage].name}`, 'success');
-          dataSeeds += 5;
-        }
-
-        // Pest chance (reduced by pestDefense upgrade)
-        const pestChance = 0.15 * (1 - (prev.upgrades.pestDefense / 100));
-        if (plant.pestImmunity === 0 && Math.random() < pestChance) {
-          plant.pests = Math.min(5, plant.pests + 1);
-          addLog('Warning: Pest infestation detected!', 'danger');
-        }
-
-        addLog(`Research complete: +${finalG} roots, +10 credits.`, 'success');
-      }
-
-      if (action === 'water') {
-        setToolEffect('water');
-        setTimeout(() => setToolEffect(null), 1500);
-        const stage = PLANT_STAGES[plant.stageIndex];
-        plant.water = Math.min(stage.maxWater, plant.water + 20);
-        plant.stress = Math.max(0, plant.stress - (5 + prev.upgrades.stressResistance));
-        addLog('Hydration levels increased.', 'info');
-      }
-
-      if (action === 'fertilize') {
-        setToolEffect('fertilize');
-        setTimeout(() => setToolEffect(null), 1500);
-        plant.nutrients = Math.min(PLANT_STAGES[plant.stageIndex].maxNutrients, plant.nutrients + 30);
-        plant.stress += 10;
-        addLog('Nutrient levels boosted.', 'success');
-      }
-
-      if (action === 'pesticide') {
-        setToolEffect('pesticide');
-        setTimeout(() => setToolEffect(null), 1500);
-        plant.pests = 0;
-        plant.pestImmunity = 3;
-        plant.stress += 15;
-        addLog('Pests eradicated. Immunity active for 3 cycles.', 'success');
-      }
-
-      if (action === 'harvest') {
-        if (plant.stageIndex < 4) {
-          addLog('Plant is not ready for harvest.', 'warn');
-          return prev;
-        }
-        setToolEffect('pruning-shears');
-        setTimeout(() => setToolEffect(null), 1500);
-        const reward = 500 + (plant.rootStrength * 0.5);
-        const dataReward = 5;
-        credits += reward;
-        dataSeeds += dataReward;
-        newPlants[prev.selectedPlantIndex!] = null;
-        addLog(`Harvest complete! Gained ${Math.floor(reward)} credits and ${dataReward} data seeds.`, 'success');
-      }
-
-      if (action !== 'harvest') {
-        newPlants[prev.selectedPlantIndex!] = plant;
-      }
-      
-      orchard.plants = newPlants;
-      newOrchards[orchardIndex] = orchard;
-      
-      const nextState = { ...prev, orchards: newOrchards, credits, dataSeeds, selectedPlantIndex: action === 'harvest' ? null : prev.selectedPlantIndex };
-      saveState({ orchards: newOrchards, credits, dataSeeds });
-      return nextState;
-    });
-  };
-
-  const nextDay = () => {
-    setState(prev => {
-      const newWeather = getRandomWeather();
-      const newOrchards = prev.orchards.map(o => {
-        if (!o.isUnlocked) return o;
-        const newPlants = o.plants.map(p => {
-          if (!p) return null;
-          const plant = { ...p };
-          
-          // Overnight effects
-          if (plant.pests > 0) {
-            plant.nutrients = Math.max(0, plant.nutrients - (plant.pests * 10));
-            plant.stress += (plant.pests * 5);
-          } else {
-            plant.stress = Math.max(0, plant.stress - 20);
-          }
-
-          if (plant.pestImmunity > 0) plant.pestImmunity--;
-          
-          // Check for crop burn
-          if (plant.stress >= 100) {
-            addLog(`CRITICAL: ${plant.type} in ${o.name} suffered crop burn!`, 'danger');
-            plant.rootStrength = Math.max(0, plant.rootStrength - 50);
-            plant.stress = 0;
-            // Recalculate stage
-            let nextStage = 0;
-            for (let i = 0; i < PLANT_STAGES.length; i++) {
-              if (plant.rootStrength >= PLANT_STAGES[i].threshold) nextStage = i;
-            }
-            plant.stageIndex = nextStage;
-          }
-
-          return plant;
+          upgrades: state.upgrades,
         });
-        return { ...o, plants: newPlants };
-      });
-
-      addLog(`Day ${prev.day + 1} started. Weather shifted to ${newWeather.name}.`, 'system');
-      const nextState = { ...prev, day: prev.day + 1, orchards: newOrchards, weather: newWeather };
-      saveState({ day: prev.day + 1, orchards: newOrchards, weather: newWeather });
-      return nextState;
-    });
-  };
-
-  const buyPlot = (index: number) => {
-    if (state.credits < 50) {
-      addLog('Insufficient credits to clear plot.', 'danger');
-      return;
-    }
-    setState(prev => {
-      const newOrchards = [...prev.orchards];
-      const orchardIndex = newOrchards.findIndex(o => o.id === prev.activeOrchardId);
-      const orchard = { ...newOrchards[orchardIndex] };
-      const newPlants = [...orchard.plants];
-      newPlants[index] = {
-        id: Math.random().toString(36).substr(2, 9),
-        type: 'Basic',
-        rootStrength: 0,
-        water: 30,
-        nutrients: 100,
-        stress: 0,
-        pests: 0,
-        pestImmunity: 0,
-        stageIndex: 0,
-        isHarvestable: false,
-      };
-      orchard.plants = newPlants;
-      newOrchards[orchardIndex] = orchard;
-      const nextState = { ...prev, orchards: newOrchards, credits: prev.credits - 50, selectedPlantIndex: index };
-      saveState({ orchards: newOrchards, credits: prev.credits - 50 });
-      return nextState;
-    });
-    addLog('New plot cleared and seeded. Neural link established.', 'success');
-  };
-
-  const unlockOrchard = (id: string) => {
-    const orchard = state.orchards.find(o => o.id === id);
-    if (!orchard) return;
-    if (state.credits < orchard.unlockCost) {
-      addLog(`Need ${orchard.unlockCost} credits to unlock ${orchard.name}.`, 'danger');
-      return;
-    }
-    setState(prev => {
-      const nextOrchards = prev.orchards.map(o => o.id === id ? { ...o, isUnlocked: true } : o);
-      const nextState = {
-        ...prev,
-        credits: prev.credits - orchard.unlockCost,
-        orchards: nextOrchards,
-        activeOrchardId: id,
-        selectedPlantIndex: null
-      };
-      saveState({ credits: prev.credits - orchard.unlockCost, orchards: nextOrchards });
-      return nextState;
-    });
-    addLog(`${orchard.name} discovered and unlocked!`, 'success');
-  };
-
-  const buyUpgrade = (id: keyof GlobalUpgrades) => {
-    const cost = 10;
-    if (state.dataSeeds < cost) {
-      addLog('Insufficient genetic data for upgrade.', 'danger');
-      return;
-    }
-    setState(prev => {
-      const nextUpgrades = {
-        ...prev.upgrades,
-        [id]: id === 'stressResistance' 
-          ? (prev.upgrades[id] as number) + 5 
-          : (prev.upgrades[id] as number) * 0.9
-      };
-      const nextState = {
-        ...prev,
-        dataSeeds: prev.dataSeeds - cost,
-        upgrades: nextUpgrades
-      };
-      saveState({ dataSeeds: prev.dataSeeds - cost, upgrades: nextUpgrades });
-      return nextState;
-    });
-    addLog(`Upgrade acquired: ${id} enhanced.`, 'success');
-  };
-
-  const buyItem = (item: typeof SHOP_ITEMS[0]) => {
-    if (state.credits < item.cost) {
-      addLog(`Insufficient credits for ${item.name}.`, 'danger');
-      return;
-    }
-    if (state.selectedPlantIndex === null || !selectedPlant) {
-      addLog('Select a plant to apply items.', 'warn');
-      return;
-    }
-
-    setState(prev => {
-      const newOrchards = [...prev.orchards];
-      const orchardIndex = newOrchards.findIndex(o => o.id === prev.activeOrchardId);
-      const orchard = { ...newOrchards[orchardIndex] };
-      const newPlants = [...orchard.plants];
-      const plant = { ...newPlants[prev.selectedPlantIndex!]! };
-      
-      if (item.type === 'fertilizer') {
-        plant.nutrients = Math.min(PLANT_STAGES[plant.stageIndex].maxNutrients, plant.nutrients + (item.nut || 0));
-        plant.stress += (item.stress || 0);
-      } else if (item.type === 'pesticide') {
-        plant.pests = Math.max(0, plant.pests - (item.kills || 0));
-        plant.stress += (item.stress || 0);
+      } catch (err) {
+        console.error('saveState error:', err);
       }
+    } finally {
+      setSaving(false);
+    }
+  }, []);
 
-      newPlants[prev.selectedPlantIndex!] = plant;
-      orchard.plants = newPlants;
-      newOrchards[orchardIndex] = orchard;
-      const nextState = { ...prev, orchards: newOrchards, credits: prev.credits - item.cost };
-      saveState({ orchards: newOrchards, credits: prev.credits - item.cost });
-      return nextState;
+  // ── Auth bootstrap ──
+  useEffect(() => {
+    // ✅ FIX: Pick up redirect sign-in result on every app load
+    handleRedirectResult().catch(console.error);
+
+    const unsub = onAuthStateChanged(auth, async (firebaseUser) => {
+      if (firebaseUser) {
+        const ref = getUserDocRef(firebaseUser.uid);
+        const snap = await getDoc(ref);
+        const saved = snap.exists() ? snap.data() : null;
+
+        setGs(prev => ({
+          ...prev,
+          ...(saved ? {
+            credits: saved.credits ?? prev.credits,
+            dataSeeds: saved.dataSeeds ?? prev.dataSeeds,
+            day: saved.day ?? prev.day,
+            orchards: saved.orchards ?? prev.orchards,
+            upgrades: saved.upgrades ?? prev.upgrades,
+          } : {}),
+          user: {
+            uid: firebaseUser.uid,
+            displayName: firebaseUser.displayName,
+            email: firebaseUser.email,
+          },
+          isAuthReady: true,
+        }));
+      } else {
+        setGs(prev => ({ ...prev, user: null, isAuthReady: true }));
+      }
+      setAuthLoading(false);
     });
-    addLog(`Applied ${item.name} to ${selectedPlant.type}.`, 'success');
+
+    return unsub;
+  }, []);
+
+  // ── Auto-advance day every 60s (dev: 10s) ──
+  useEffect(() => {
+    if (!gs.user) return;
+    const t = setInterval(() => {
+      setGs(prev => {
+        const next = tickDay(prev);
+        saveState(next);
+        return next;
+      });
+    }, 60_000);
+    return () => clearInterval(t);
+  }, [gs.user, saveState]);
+
+  // ── Game tick logic ──
+  function tickDay(prev: GameState): GameState {
+    const weather = getRandomWeather();
+    const orchards = prev.orchards.map(orch => ({
+      ...orch,
+      plants: orch.plants.map(p => {
+        if (!p) return null;
+        const stage = PLANT_STAGES[p.stageIndex];
+        let water = p.water - (weather.type === 'heatwave' ? 8 : weather.type === 'rain' ? -6 : 4);
+        let nutrients = p.nutrients - (weather.type === 'heatwave' ? 6 : 2);
+        let stress = p.stress + (weather.type === 'storm' ? 10 : weather.type === 'heatwave' ? 8 : -2);
+        let pests = p.pests + (Math.random() < 0.1 ? 1 : 0);
+        water = Math.max(0, Math.min(water, stage.maxWater));
+        nutrients = Math.max(0, Math.min(nutrients, stage.maxNutrients));
+        stress = Math.max(0, Math.min(stress, 100));
+        pests = Math.max(0, pests);
+
+        // Growth
+        const rootStrength = p.rootStrength + (water > 10 && nutrients > 20 ? p.growthSpeedMultiplier * 5 : 1);
+        const nextStage = PLANT_STAGES[p.stageIndex + 1];
+        const stageIndex = nextStage && rootStrength >= nextStage.threshold
+          ? p.stageIndex + 1 : p.stageIndex;
+        const isHarvestable = stageIndex >= PLANT_STAGES.length - 1;
+
+        return { ...p, water, nutrients, stress, pests, rootStrength, stageIndex, isHarvestable };
+      }),
+    }));
+
+    return { ...prev, day: prev.day + 1, weather, orchards };
+  }
+
+  // ── Actions ──
+  const activeOrchard = gs.orchards.find(o => o.id === gs.activeOrchardId)!;
+
+  function updatePlant(fn: (p: Plant) => Plant) {
+    if (gs.selectedPlantIndex === null) return;
+    setGs(prev => {
+      const orchards = prev.orchards.map(o => {
+        if (o.id !== prev.activeOrchardId) return o;
+        const plants = o.plants.map((p, i) =>
+          i === prev.selectedPlantIndex && p ? fn(p) : p
+        );
+        return { ...o, plants };
+      });
+      const next = { ...prev, orchards };
+      saveState(next);
+      return next;
+    });
+  }
+
+  function handleWater() {
+    const plant = activeOrchard.plants[gs.selectedPlantIndex!];
+    if (!plant) return notify('Select a plant first.');
+    const stage = PLANT_STAGES[plant.stageIndex];
+    if (plant.water >= stage.maxWater) return notify('Already fully hydrated!');
+    updatePlant(p => ({ ...p, water: Math.min(p.water + 25, PLANT_STAGES[p.stageIndex].maxWater) }));
+    notify('💧 Watered!');
+  }
+
+  function handleFeed() {
+    if (gs.credits < 15) return notify('Not enough credits!');
+    const plant = activeOrchard.plants[gs.selectedPlantIndex!];
+    if (!plant) return notify('Select a plant first.');
+    updatePlant(p => ({ ...p, nutrients: Math.min(p.nutrients + 40, PLANT_STAGES[p.stageIndex].maxNutrients), stress: Math.max(0, p.stress - 5) }));
+    setGs(prev => ({ ...prev, credits: prev.credits - 15 }));
+    notify('🌿 Fed! -15 credits');
+  }
+
+  function handlePestControl() {
+    const plant = activeOrchard.plants[gs.selectedPlantIndex!];
+    if (!plant) return notify('Select a plant first.');
+    if (plant.pests === 0) return notify('No pests detected.');
+    if (gs.credits < 15) return notify('Not enough credits!');
+    updatePlant(p => ({ ...p, pests: 0 }));
+    setGs(prev => ({ ...prev, credits: prev.credits - 15 }));
+    notify('🐛 Pests cleared! -15 credits');
+  }
+
+  function handleHarvest() {
+    const plant = activeOrchard.plants[gs.selectedPlantIndex!];
+    if (!plant) return notify('Select a plant first.');
+    if (!plant.isHarvestable) return notify('Plant not ready to harvest yet.');
+    const reward = Math.floor(100 * plant.yieldMultiplier * (plant.stress < 30 ? 1.2 : 1));
+    const seeds = Math.random() < 0.3 ? 1 : 0;
+    setGs(prev => {
+      const orchards = prev.orchards.map(o => {
+        if (o.id !== prev.activeOrchardId) return o;
+        const plants = [...o.plants];
+        plants[prev.selectedPlantIndex!] = null;
+        return { ...o, plants };
+      });
+      const next = { ...prev, credits: prev.credits + reward, dataSeeds: prev.dataSeeds + seeds, selectedPlantIndex: null, orchards };
+      saveState(next);
+      return next;
+    });
+    notify(`🌾 Harvested! +${reward} credits${seeds ? ' +1 seed' : ''}`);
+  }
+
+  function handlePlant() {
+    if (gs.selectedPlantIndex === null) return notify('Select an empty plot first.');
+    if (activeOrchard.plants[gs.selectedPlantIndex] !== null) return notify('Plot is occupied.');
+    if (gs.dataSeeds < 1) return notify('No data seeds left!');
+    const plant = makePlant(selectedType);
+    setGs(prev => {
+      const orchards = prev.orchards.map(o => {
+        if (o.id !== prev.activeOrchardId) return o;
+        const plants = [...o.plants];
+        plants[prev.selectedPlantIndex!] = plant;
+        return { ...o, plants };
+      });
+      const next = { ...prev, dataSeeds: prev.dataSeeds - 1, orchards };
+      saveState(next);
+      return next;
+    });
+    notify(`🌱 Planted ${selectedType}!`);
+  }
+
+  function handleUnlockOrchard(orchardId: string) {
+    const orchard = gs.orchards.find(o => o.id === orchardId);
+    if (!orchard || orchard.isUnlocked) return;
+    if (gs.credits < orchard.unlockCost) return notify(`Need ${orchard.unlockCost} credits.`);
+    setGs(prev => {
+      const orchards = prev.orchards.map(o =>
+        o.id === orchardId ? { ...o, isUnlocked: true } : o
+      );
+      const next = { ...prev, credits: prev.credits - orchard.unlockCost, orchards };
+      saveState(next);
+      return next;
+    });
+    notify(`🔓 ${orchard.name} unlocked!`);
+  }
+
+  // ── Weather icon ──
+  const WeatherIcon = () => {
+    const w = gs.weather;
+    if (!w) return null;
+    const icons: Record<string, JSX.Element> = {
+      clear: <Sun size={14} className="text-mineral-gold" />,
+      rain: <CloudRain size={14} className="text-water-blue" />,
+      storm: <Zap size={14} className="text-purple-400" />,
+      heatwave: <Flame size={14} className="text-burn-red" />,
+      fog: <Sun size={14} className="text-gray-400" />,
+    };
+    return icons[w.type] ?? null;
   };
+
+  // ── Loading screen ──
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-soil-dark flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <Loader size={32} className="text-leaf-green animate-spin" />
+          <span className="text-text-secondary text-sm font-mono">Initializing Orchard...</span>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Sign-in screen ──
+  if (!gs.user) {
+    return (
+      <div className="min-h-screen bg-soil-dark flex items-center justify-center p-4">
+        <div className="hardware-panel p-8 max-w-sm w-full flex flex-col items-center gap-6">
+          <div className="w-16 h-16 rounded-2xl bg-leaf-green/10 flex items-center justify-center">
+            <Sprout size={32} className="text-leaf-green" />
+          </div>
+          <div className="text-center">
+            <h1 className="text-2xl font-bold text-text-primary">Orchade</h1>
+            <p className="text-text-secondary text-sm mt-1">Growth Milestone Engine</p>
+          </div>
+          <button
+            onClick={() => signInWithGoogle().catch(e => notify(e.message))}
+            className="w-full py-3 px-6 rounded-xl bg-leaf-green text-soil-dark font-bold text-sm hover:bg-leaf-dark transition-colors flex items-center justify-center gap-2"
+          >
+            <svg width="18" height="18" viewBox="0 0 18 18"><path fill="#4285F4" d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.874 2.684-6.615z"/><path fill="#34A853" d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 009 18z"/><path fill="#FBBC05" d="M3.964 10.71A5.41 5.41 0 013.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 000 9c0 1.452.348 2.827.957 4.042l3.007-2.332z"/><path fill="#EA4335" d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 00.957 4.958L3.964 6.29C4.672 4.163 6.656 3.58 9 3.58z"/></svg>
+            Continue with Google
+          </button>
+          <p className="text-[10px] text-text-secondary text-center">Your progress is saved to your account.</p>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Main game UI ──
+  const selectedPlant = gs.selectedPlantIndex !== null ? activeOrchard.plants[gs.selectedPlantIndex] : null;
 
   return (
-    <div className="min-h-screen p-6 flex flex-col items-center gap-6 max-w-6xl mx-auto">
-      {/* Header Stats */}
-      <div className="w-full flex flex-col md:flex-row justify-between items-center hardware-panel p-4 px-6 md:px-8 gap-4">
-        <div className="flex flex-wrap justify-center md:justify-start gap-4 md:gap-8">
-          <div className="flex flex-col">
-            <span className="text-[10px] font-bold text-text-secondary uppercase tracking-widest">Temporal Cycle</span>
-            <span className="text-lg md:text-xl font-mono font-bold text-leaf-green">DAY {state.day}</span>
-          </div>
-          <div className="flex flex-col">
-            <span className="text-[10px] font-bold text-text-secondary uppercase tracking-widest">Liquid Capital</span>
-            <span className="text-lg md:text-xl font-mono font-bold text-mineral-gold">{state.credits} 🪙</span>
-          </div>
-          <div className="flex flex-col">
-            <span className="text-[10px] font-bold text-text-secondary uppercase tracking-widest">Genetic Data</span>
-            <span className="text-lg md:text-xl font-mono font-bold text-water-blue">{state.dataSeeds} 🧬</span>
-          </div>
-          
-          {/* Weather Indicator */}
-          {state.weather && (
-            <div className="flex items-center gap-3 px-4 py-1 bg-black/20 rounded-xl border border-bark-brown/30 overflow-hidden">
-              <AnimatePresence mode="wait">
-                <motion.div 
-                  key={state.weather.type}
-                  initial={{ opacity: 0, x: -10 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: 10 }}
-                  transition={{ duration: 0.3, ease: "easeOut" }}
-                  className="flex items-center gap-3"
-                >
-                  <div className={`p-2 rounded-lg ${
-                    state.weather.type === 'clear' ? 'text-mineral-gold bg-mineral-gold/10' :
-                    state.weather.type === 'rain' ? 'text-water-blue bg-water-blue/10' :
-                    state.weather.type === 'storm' ? 'text-violet-400 bg-violet-400/10' :
-                    state.weather.type === 'heatwave' ? 'text-burn-red bg-burn-red/10' :
-                    'text-text-secondary bg-text-secondary/10'
-                  }`}>
-                    {state.weather.type === 'clear' && <Sun size={20} />}
-                    {state.weather.type === 'rain' && <CloudRain size={20} />}
-                    {state.weather.type === 'storm' && <CloudLightning size={20} />}
-                    {state.weather.type === 'heatwave' && <Thermometer size={20} />}
-                    {state.weather.type === 'fog' && <Cloud size={20} />}
-                  </div>
-                  <div className="flex flex-col">
-                    <span className="text-[10px] font-bold text-text-secondary uppercase tracking-widest">Atmosphere</span>
-                    <span className="text-xs font-bold uppercase">{state.weather.name}</span>
-                  </div>
-                </motion.div>
-              </AnimatePresence>
-            </div>
-          )}
-        </div>
-        <div className="flex items-center gap-3 w-full md:w-auto">
-          {state.user && (
-            <button 
-              onClick={logout}
-              className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-burn-red/10 hover:bg-burn-red/20 px-4 py-2 rounded-lg border border-burn-red/30 transition-all text-[10px] font-bold text-burn-red uppercase tracking-widest"
-            >
-              <LogOut size={14} />
-              LOGOUT
-            </button>
-          )}
-          <button 
-            onClick={nextDay}
-            className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-bark-brown/20 hover:bg-bark-brown/40 px-6 py-2 rounded-lg border border-bark-brown transition-all text-sm font-bold"
-          >
-            <RefreshCw size={16} />
-            END CYCLE
-          </button>
-        </div>
-      </div>
-
-      <div className="w-full grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Navigation Rail */}
-        <div className="lg:col-span-1 flex flex-row lg:flex-col gap-3 md:gap-4 overflow-x-auto pb-2 lg:pb-0 scrollbar-hide">
-          <button 
-            onClick={() => setState(p => ({ ...p, activeTab: 'orchard' }))}
-            className={`flex-1 lg:flex-none p-4 rounded-xl flex items-center justify-center transition-all ${state.activeTab === 'orchard' ? 'bg-leaf-green text-soil-dark' : 'bg-card-bg text-text-secondary hover:text-white'}`}
-          >
-            <Sprout size={24} />
-          </button>
-          <button 
-            onClick={() => setState(p => ({ ...p, activeTab: 'lab' }))}
-            className={`flex-1 lg:flex-none p-4 rounded-xl flex items-center justify-center transition-all ${state.activeTab === 'lab' ? 'bg-water-blue text-soil-dark' : 'bg-card-bg text-text-secondary hover:text-white'}`}
-          >
-            <FlaskConical size={24} />
-          </button>
-          <button 
-            onClick={() => setState(p => ({ ...p, activeTab: 'market' }))}
-            className={`flex-1 lg:flex-none p-4 rounded-xl flex items-center justify-center transition-all ${state.activeTab === 'market' ? 'bg-mineral-gold text-soil-dark' : 'bg-card-bg text-text-secondary hover:text-white'}`}
-          >
-            <Store size={24} />
-          </button>
-          <button 
-            onClick={() => setState(p => ({ ...p, activeTab: 'rankings' }))}
-            className={`flex-1 lg:flex-none p-4 rounded-xl flex items-center justify-center transition-all ${state.activeTab === 'rankings' ? 'bg-burn-red text-soil-dark' : 'bg-card-bg text-text-secondary hover:text-white'}`}
-          >
-            <Trophy size={24} />
-          </button>
-          <button 
-            onClick={() => setState(p => ({ ...p, activeTab: 'profile' }))}
-            className={`flex-1 lg:flex-none p-4 rounded-xl flex items-center justify-center transition-all ${state.activeTab === 'profile' ? 'bg-text-primary text-soil-dark' : 'bg-card-bg text-text-secondary hover:text-white'}`}
-          >
-            <User size={24} />
-          </button>
-        </div>
-
-        {/* Main Content Area */}
-        <div className="lg:col-span-11 space-y-6">
-          {/* Main Animation Section (Hero) */}
-          <AnimatePresence mode="wait">
-            {selectedPlant ? (
-              <motion.div 
-                key={selectedPlant.id}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -20 }}
-                className="hardware-panel p-6 md:p-8 space-y-8"
-              >
-                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-bark-brown pb-6">
-                  <div>
-                    <h3 className="text-2xl md:text-3xl font-bold font-serif italic">{PLANT_STAGES[selectedPlant.stageIndex].name}</h3>
-                    <p className="text-xs text-text-secondary font-mono tracking-wider">TELEMETRY ID: {selectedPlant.id}</p>
-                  </div>
-                  <div className="flex items-center gap-4">
-                    <div className="px-4 py-1.5 rounded-full bg-leaf-green/10 border border-leaf-green/30 text-leaf-green text-[10px] font-bold uppercase tracking-widest">
-                      Active Growth Phase
-                    </div>
-                    <button 
-                      onClick={() => setState(p => ({ ...p, selectedPlantIndex: null }))}
-                      className="text-text-secondary hover:text-white transition-colors"
-                    >
-                      <RefreshCw size={20} />
-                    </button>
-                  </div>
-                </div>
-
-                <div className="flex flex-col gap-8">
-                  <div className="h-[400px] md:h-[500px] bg-[#0a0a0a] rounded-3xl dashed-border relative overflow-hidden group">
-                    {(() => {
-                      const currentThreshold = PLANT_STAGES[selectedPlant.stageIndex].threshold;
-                      const nextThreshold = PLANT_STAGES[selectedPlant.stageIndex + 1]?.threshold || (currentThreshold * 2);
-                      const progress = Math.min(1, Math.max(0, (selectedPlant.rootStrength - currentThreshold) / (nextThreshold - currentThreshold)));
-                      
-                      console.log(`Specimen ${selectedPlant.id} Telemetry - Stage: ${selectedPlant.stageIndex}, Progress: ${progress.toFixed(4)}`);
-
-                      return (
-                        <PlantVisualizer 
-                          stageIndex={selectedPlant.stageIndex} 
-                          progress={progress}
-                          type={selectedPlant.type}
-                          color={selectedPlant.color}
-                          hasPests={selectedPlant.pests > 0}
-                          isBurning={selectedPlant.stress > 90}
-                          stress={selectedPlant.stress}
-                          weather={state.weather?.type}
-                          toolEffect={toolEffect}
-                        />
-                      );
-                    })()}
-                    <div className="absolute inset-0 pointer-events-none bg-gradient-to-t from-black/40 to-transparent" />
-                  </div>
-
-                  <div className="space-y-8">
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-                      <div className="space-y-3">
-                        <div className="flex justify-between text-[10px] font-bold uppercase tracking-widest text-text-secondary">
-                          <span>Hydration</span>
-                          <span className="text-water-blue">{selectedPlant.water} / {PLANT_STAGES[selectedPlant.stageIndex].maxWater}</span>
-                        </div>
-                        <div className="h-2.5 w-full bg-black/40 rounded-full overflow-hidden">
-                          <div 
-                            className="h-full bg-water-blue transition-all duration-1000 ease-out" 
-                            style={{ width: `${(selectedPlant.water / PLANT_STAGES[selectedPlant.stageIndex].maxWater) * 100}%` }}
-                          />
-                        </div>
-                      </div>
-                      <div className="space-y-3">
-                        <div className="flex justify-between text-[10px] font-bold uppercase tracking-widest text-text-secondary">
-                          <span>Nutrients</span>
-                          <span className="text-mineral-gold">{Math.round(selectedPlant.nutrients)}%</span>
-                        </div>
-                        <div className="h-2.5 w-full bg-black/40 rounded-full overflow-hidden">
-                          <div 
-                            className="h-full bg-mineral-gold transition-all duration-1000 ease-out" 
-                            style={{ width: `${(selectedPlant.nutrients / PLANT_STAGES[selectedPlant.stageIndex].maxNutrients) * 100}%` }}
-                          />
-                        </div>
-                      </div>
-                      <div className="space-y-3">
-                        <div className="flex justify-between text-[10px] font-bold uppercase tracking-widest text-text-secondary">
-                          <span>Stress</span>
-                          <span className="text-burn-red">{selectedPlant.stress}%</span>
-                        </div>
-                        <div className="h-2.5 w-full bg-black/40 rounded-full overflow-hidden">
-                          <div 
-                            className="h-full bg-burn-red transition-all duration-1000 ease-out" 
-                            style={{ width: `${selectedPlant.stress}%` }}
-                          />
-                        </div>
-                      </div>
-                      <div className="space-y-3">
-                        <div className="flex justify-between text-[10px] font-bold uppercase tracking-widest text-text-secondary">
-                          <span>Root XP</span>
-                          <span className="text-leaf-green">{selectedPlant.rootStrength}</span>
-                        </div>
-                        <div className="h-2.5 w-full bg-black/40 rounded-full overflow-hidden">
-                          <div 
-                            className="h-full bg-leaf-green transition-all duration-1000 ease-out" 
-                            style={{ width: `${(selectedPlant.rootStrength / (PLANT_STAGES[selectedPlant.stageIndex + 1]?.threshold || 1000)) * 100}%` }}
-                          />
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 max-w-5xl mx-auto w-full">
-                      <button 
-                        onClick={() => handlePlantAction('research')}
-                        disabled={selectedPlant.water < 5}
-                        className="flex items-center justify-center gap-3 bg-leaf-green text-soil-dark font-bold py-4 rounded-2xl hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 shadow-lg shadow-leaf-green/10"
-                      >
-                        <Zap size={20} />
-                        RESEARCH
-                      </button>
-                      <button 
-                        onClick={() => handlePlantAction('water')}
-                        className="flex items-center justify-center gap-3 bg-water-blue text-soil-dark font-bold py-4 rounded-2xl hover:scale-[1.02] active:scale-[0.98] transition-all shadow-lg shadow-water-blue/10"
-                      >
-                        <Droplets size={20} />
-                        HYDRATE
-                      </button>
-                      <button 
-                        onClick={() => handlePlantAction('fertilize')}
-                        className="flex items-center justify-center gap-3 bg-mineral-gold text-soil-dark font-bold py-4 rounded-2xl hover:scale-[1.02] active:scale-[0.98] transition-all shadow-lg shadow-mineral-gold/10"
-                      >
-                        <ArrowUpCircle size={20} />
-                        BOOST
-                      </button>
-                      <button 
-                        onClick={() => handlePlantAction('pesticide')}
-                        className="flex items-center justify-center gap-3 bg-burn-red text-soil-dark font-bold py-4 rounded-2xl hover:scale-[1.02] active:scale-[0.98] transition-all shadow-lg shadow-burn-red/10"
-                      >
-                        <Bug size={20} />
-                        DEFEND
-                      </button>
-                      <button 
-                        onClick={() => handlePlantAction('harvest')}
-                        disabled={selectedPlant.stageIndex < 4}
-                        className="flex items-center justify-center gap-3 bg-white text-soil-dark font-bold py-4 rounded-2xl hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 shadow-lg shadow-white/10"
-                      >
-                        <Database size={20} />
-                        HARVEST
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </motion.div>
-            ) : (
-              <motion.div 
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                className="hardware-panel p-12 flex flex-col items-center justify-center text-center gap-6 text-text-secondary border-dashed border-bark-brown/50"
-              >
-                <div className="w-20 h-20 rounded-full bg-bark-brown/10 flex items-center justify-center animate-pulse">
-                  <Sprout size={40} />
-                </div>
-                <div className="space-y-2 max-w-sm">
-                  <h3 className="text-xl font-bold text-text-primary">System Idle</h3>
-                  <p className="text-sm leading-relaxed">Select a specimen from the orchard grid below to initiate neural link and access growth telemetry.</p>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-
-          {/* Secondary Content (Tabs) */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="md:col-span-2 space-y-4">
-              <AnimatePresence mode="wait">
-                {state.activeTab === 'orchard' && (
-                  <motion.div 
-                    key="orchard"
-                    initial={{ opacity: 0, x: -20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    exit={{ opacity: 0, x: 20 }}
-                    className="space-y-4"
-                  >
-                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-                      <div className="flex flex-col gap-2 w-full">
-                        <div className="flex items-center gap-2">
-                          <Database size={16} className="text-leaf-green" />
-                          <h2 className="font-serif text-xl italic">{activeOrchard.name}</h2>
-                        </div>
-                        <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar">
-                          {state.orchards.map(o => (
-                            <button
-                              key={o.id}
-                              onClick={() => {
-                                if (o.isUnlocked) {
-                                  setState(prev => ({ ...prev, activeOrchardId: o.id, selectedPlantIndex: null }));
-                                } else {
-                                  unlockOrchard(o.id);
-                                }
-                              }}
-                              className={`whitespace-nowrap px-4 py-2 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all ${
-                                state.activeOrchardId === o.id 
-                                  ? 'bg-leaf-green text-soil-dark shadow-lg shadow-leaf-green/20' 
-                                  : o.isUnlocked 
-                                    ? 'bg-bark-brown/20 text-text-secondary hover:text-white'
-                                    : 'bg-burn-red/20 text-burn-red border border-burn-red/30'
-                              }`}
-                            >
-                              {o.isUnlocked ? o.name : `Unlock ${o.name} (${o.unlockCost}🪙)`}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-3 gap-4">
-                      {activeOrchard.plants.map((plant, i) => (
-                        <PlantCard 
-                          key={i} 
-                          plant={plant} 
-                          index={i} 
-                          isSelected={state.selectedPlantIndex === i}
-                          onClick={() => plant ? setState(p => ({ ...p, selectedPlantIndex: i })) : buyPlot(i)}
-                        />
-                      ))}
-                    </div>
-
-                    {/* Quick Tools Section */}
-                    <div className="hardware-panel p-4 space-y-4 border-mineral-gold/30">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2 text-mineral-gold">
-                          <Hammer size={16} />
-                          <h4 className="text-xs font-bold uppercase tracking-widest">Field Tools</h4>
-                        </div>
-                        <span className="text-[10px] text-text-secondary uppercase tracking-widest">Quick Access</span>
-                      </div>
-                      <div className="grid grid-cols-2 gap-3">
-                        {SHOP_ITEMS.map(item => (
-                          <button 
-                            key={item.id}
-                            onClick={() => buyItem(item)}
-                            disabled={!selectedPlant || state.credits < item.cost}
-                            className="flex items-center gap-3 p-3 bg-black/40 border border-bark-brown rounded-xl hover:border-mineral-gold transition-all disabled:opacity-50 group"
-                          >
-                            <div className="w-8 h-8 rounded-lg bg-mineral-gold/10 flex items-center justify-center text-mineral-gold group-hover:scale-110 transition-transform">
-                              {item.type === 'fertilizer' ? <ArrowUpCircle size={16} /> : <Bug size={16} />}
-                            </div>
-                            <div className="flex-1 text-left">
-                              <p className="text-[10px] font-bold leading-none mb-1">{item.name}</p>
-                              <p className="text-[9px] text-text-secondary">{item.cost}🪙</p>
-                            </div>
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  </motion.div>
-                )}
-
-                {state.activeTab === 'lab' && (
-                  <motion.div 
-                    key="lab"
-                    initial={{ opacity: 0, x: -20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    exit={{ opacity: 0, x: 20 }}
-                    className="space-y-4"
-                  >
-                    <div className="flex justify-between items-center">
-                      <h2 className="font-serif text-xl italic">Bio-Genetic Lab</h2>
-                      <span className="text-[10px] font-bold text-text-secondary uppercase tracking-widest">Global Enhancements</span>
-                    </div>
-                    <div className="grid grid-cols-1 gap-3">
-                      {[
-                        { id: 'waterEfficiency', name: 'Deep Roots', desc: 'Reduces water consumption by 10%', icon: Droplets },
-                        { id: 'nutrientRetention', name: 'Efficient Metabolism', desc: 'Reduces nutrient drain by 10%', icon: TrendingUp },
-                        { id: 'stressResistance', name: 'Hardened Bark', desc: 'Reduces stress gain by 5 points', icon: Flame },
-                        { id: 'pestDefense', name: 'Natural Repellent', desc: 'Reduces pest infestation chance by 10%', icon: ShieldCheck },
-                      ].map(u => (
-                        <button 
-                          key={u.id}
-                          onClick={() => buyUpgrade(u.id as keyof GlobalUpgrades)}
-                          className="hardware-panel p-4 flex items-center gap-4 hover:border-water-blue transition-all group"
-                        >
-                          <div className="w-12 h-12 rounded-lg bg-water-blue/10 flex items-center justify-center text-water-blue group-hover:scale-110 transition-transform">
-                            <u.icon size={24} />
-                          </div>
-                          <div className="flex-1 text-left">
-                            <h4 className="font-bold text-sm">{u.name}</h4>
-                            <p className="text-xs text-text-secondary">{u.desc}</p>
-                          </div>
-                          <div className="text-right">
-                            <span className="text-xs font-mono font-bold text-water-blue">10 🧬</span>
-                          </div>
-                        </button>
-                      ))}
-                    </div>
-                  </motion.div>
-                )}
-
-                {state.activeTab === 'market' && (
-                  <motion.div 
-                    key="market"
-                    initial={{ opacity: 0, x: -20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    exit={{ opacity: 0, x: 20 }}
-                    className="space-y-4"
-                  >
-                    <div className="flex justify-between items-center">
-                      <h2 className="font-serif text-xl italic">Supply Exchange</h2>
-                      <span className="text-[10px] font-bold text-text-secondary uppercase tracking-widest">Resource Acquisition</span>
-                    </div>
-
-                    {/* Credit Transfer UI */}
-                    <div className="hardware-panel p-4 space-y-4 border-water-blue/30">
-                      <div className="flex items-center gap-2 text-water-blue">
-                        <Send size={16} />
-                        <h4 className="text-xs font-bold uppercase tracking-widest">Secure Credit Transfer</h4>
-                      </div>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <input 
-                          type="text" 
-                          placeholder="Recipient UID"
-                          value={transferTarget}
-                          onChange={(e) => setTransferTarget(e.target.value)}
-                          className="bg-black/40 border border-bark-brown rounded-lg px-3 py-2 text-xs font-mono focus:outline-none focus:border-water-blue transition-all"
-                        />
-                        <div className="flex gap-2">
-                          <input 
-                            type="number" 
-                            placeholder="Amount"
-                            value={transferAmount}
-                            onChange={(e) => setTransferAmount(e.target.value)}
-                            className="flex-1 bg-black/40 border border-bark-brown rounded-lg px-3 py-2 text-xs font-mono focus:outline-none focus:border-water-blue transition-all"
-                          />
-                          <button 
-                            onClick={handleTransferCredits}
-                            disabled={isTransferring || !transferTarget || !transferAmount}
-                            className="bg-water-blue text-soil-dark px-4 py-2 rounded-lg text-xs font-bold hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50"
-                          >
-                            {isTransferring ? '...' : 'SEND'}
-                          </button>
-                        </div>
-                      </div>
-                      <div className="p-2 bg-black/20 rounded border border-bark-brown/30">
-                        <p className="text-[9px] text-text-secondary leading-relaxed flex items-center justify-between">
-                          <span>
-                            <ShieldCheck size={10} className="inline mr-1" />
-                            TRANSFERS ARE PERMANENT. YOUR UID: <span className="text-water-blue font-mono select-all">{state.user?.uid}</span>
-                          </span>
-                          <button 
-                            onClick={() => {
-                              if (state.user?.uid) {
-                                navigator.clipboard.writeText(state.user.uid);
-                                addLog('Your UID copied to clipboard.', 'success');
-                              }
-                            }}
-                            className="text-water-blue hover:text-white transition-colors ml-2"
-                          >
-                            COPY
-                          </button>
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 gap-3">
-                      {SHOP_ITEMS.map(item => (
-                        <button 
-                          key={item.id}
-                          onClick={() => buyItem(item)}
-                          className="hardware-panel p-4 flex items-center gap-4 hover:border-mineral-gold transition-all group"
-                        >
-                          <div className="w-12 h-12 rounded-lg bg-mineral-gold/10 flex items-center justify-center text-mineral-gold group-hover:scale-110 transition-transform">
-                            {item.type === 'fertilizer' ? <ArrowUpCircle size={24} /> : <Bug size={24} />}
-                          </div>
-                          <div className="flex-1 text-left">
-                            <h4 className="font-bold text-sm">{item.name}</h4>
-                            <p className="text-xs text-text-secondary">
-                              {item.type === 'fertilizer' ? `+${item.nut}% Nutrients` : `Kills ${item.kills} Pests`}
-                              {item.stress !== 0 && `, ${item.stress > 0 ? '+' : ''}${item.stress} Stress`}
-                            </p>
-                          </div>
-                          <div className="text-right">
-                            <span className="text-xs font-mono font-bold text-mineral-gold">{item.cost} 🪙</span>
-                          </div>
-                        </button>
-                      ))}
-
-                      <div className="hardware-panel p-6 space-y-4 border-leaf-green/30">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2 text-leaf-green">
-                            <Database size={16} />
-                            <h4 className="text-xs font-bold uppercase tracking-widest">Data Liquidation</h4>
-                          </div>
-                          <span className="text-[10px] font-mono text-text-secondary">Rate: 1 Data = 50 Credits</span>
-                        </div>
-                        <div className="flex gap-3">
-                          <button 
-                            onClick={() => {
-                              if (state.dataSeeds >= 1) {
-                                setState(p => ({ ...p, dataSeeds: p.dataSeeds - 1, credits: p.credits + 50 }));
-                                saveState({ dataSeeds: state.dataSeeds - 1, credits: state.credits + 50 });
-                                addLog('Liquidated 1 Data Seed for 50 credits.', 'success');
-                              }
-                            }}
-                            className="flex-1 p-3 bg-black/40 border border-leaf-green/20 rounded-lg text-[10px] font-bold hover:bg-leaf-green/10 transition-all"
-                          >
-                            SELL 1 DATA
-                          </button>
-                          <button 
-                            onClick={() => {
-                              if (state.dataSeeds >= 10) {
-                                setState(p => ({ ...p, dataSeeds: p.dataSeeds - 10, credits: p.credits + 500 }));
-                                saveState({ dataSeeds: state.dataSeeds - 10, credits: state.credits + 500 });
-                                addLog('Liquidated 10 Data Seeds for 500 credits.', 'success');
-                              }
-                            }}
-                            className="flex-1 p-3 bg-black/40 border border-leaf-green/20 rounded-lg text-[10px] font-bold hover:bg-leaf-green/10 transition-all"
-                          >
-                            SELL 10 DATA
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  </motion.div>
-                )}
-
-                {state.activeTab === 'rankings' && (
-                  <motion.div 
-                    key="rankings"
-                    initial={{ opacity: 0, x: -20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    exit={{ opacity: 0, x: 20 }}
-                    className="space-y-4"
-                  >
-                    <div className="flex justify-between items-center">
-                      <h2 className="font-serif text-xl italic">Global Rankings</h2>
-                      <span className="text-[10px] font-bold text-text-secondary uppercase tracking-widest">Top Specimen Managers</span>
-                    </div>
-
-                    {state.globalStats && (
-                      <div className="grid grid-cols-3 gap-4">
-                        <div className="hardware-panel p-3 text-center">
-                          <p className="text-[8px] text-text-secondary uppercase font-bold tracking-widest mb-1">Total Credits</p>
-                          <p className="font-mono text-mineral-gold text-sm">{state.globalStats.totalCredits?.toLocaleString() || 0}</p>
-                        </div>
-                        <div className="hardware-panel p-3 text-center">
-                          <p className="text-[8px] text-text-secondary uppercase font-bold tracking-widest mb-1">Total Plants</p>
-                          <p className="font-mono text-leaf-green text-sm">{state.globalStats.totalPlants?.toLocaleString() || 0}</p>
-                        </div>
-                        <div className="hardware-panel p-3 text-center">
-                          <p className="text-[8px] text-text-secondary uppercase font-bold tracking-widest mb-1">Active Users</p>
-                          <p className="font-mono text-water-blue text-sm">{state.globalStats.totalUsers?.toLocaleString() || 0}</p>
-                        </div>
-                      </div>
-                    )}
-
-                    <div className="hardware-panel overflow-hidden">
-                      <table className="w-full text-left text-xs">
-                        <thead>
-                          <tr className="bg-black/40 text-text-secondary uppercase tracking-widest font-bold">
-                            <th className="p-4">Rank</th>
-                            <th className="p-4">Manager</th>
-                            <th className="p-4 text-right">Credits</th>
-                            <th className="p-4 text-right">Data</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-bark-brown/20">
-                          {rankings.map((r, i) => (
-                            <tr key={r.uid} className={`hover:bg-white/5 transition-colors ${r.uid === state.user?.uid ? 'bg-leaf-green/5' : ''}`}>
-                              <td className="p-4 font-mono text-leaf-green">#{i + 1}</td>
-                              <td className="p-4">
-                                <div className="flex items-center gap-2">
-                                  <div className="w-6 h-6 rounded-full bg-bark-brown/20 flex items-center justify-center text-[8px]">
-                                    {r.displayName.charAt(0)}
-                                  </div>
-                                  <span className="font-bold">{r.displayName}</span>
-                                  {r.uid === state.user?.uid && <span className="text-[8px] bg-leaf-green text-soil-dark px-1 rounded">YOU</span>}
-                                </div>
-                              </td>
-                              <td className="p-4 text-right font-mono text-mineral-gold">{r.credits}</td>
-                              <td className="p-4 text-right font-mono text-water-blue">{r.dataSeeds}</td>
-                            </tr>
-                          ))}
-                          {rankings.length === 0 && (
-                            <tr>
-                              <td colSpan={4} className="p-8 text-center text-text-secondary italic">
-                                Scanning neural network for active managers...
-                              </td>
-                            </tr>
-                          )}
-                        </tbody>
-                      </table>
-                    </div>
-                  </motion.div>
-                )}
-
-                {state.activeTab === 'profile' && (
-                  <motion.div 
-                    key="profile"
-                    initial={{ opacity: 0, x: -20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    exit={{ opacity: 0, x: 20 }}
-                    className="space-y-6"
-                  >
-                    <div className="flex justify-between items-center">
-                      <h2 className="font-serif text-xl italic">Manager Profile</h2>
-                      <span className="text-[10px] font-bold text-text-secondary uppercase tracking-widest">Neural Link Identity</span>
-                    </div>
-                    
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      <div className="hardware-panel p-6 space-y-4">
-                        <div className="flex items-center gap-4">
-                          <div className="w-16 h-16 rounded-full bg-leaf-green/10 flex items-center justify-center text-leaf-green">
-                            <User size={32} />
-                          </div>
-                          <div>
-                            <h4 className="text-lg font-bold">{state.user?.displayName || 'Unknown Manager'}</h4>
-                            <p className="text-xs text-text-secondary font-mono">{state.user?.uid}</p>
-                          </div>
-                        </div>
-                        <div className="space-y-2 pt-4 border-t border-bark-brown/20">
-                          <div className="flex justify-between text-xs">
-                            <span className="text-text-secondary">Email:</span>
-                            <span>{state.user?.email || 'N/A'}</span>
-                          </div>
-                          <div className="flex justify-between text-xs">
-                            <span className="text-text-secondary">Status:</span>
-                            <span className="text-leaf-green font-bold">ACTIVE LINK</span>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="hardware-panel p-6 space-y-4">
-                        <h4 className="text-xs font-bold uppercase tracking-widest text-text-secondary">Lifetime Statistics</h4>
-                        <div className="grid grid-cols-2 gap-4">
-                          <div className="p-3 bg-black/20 rounded-lg">
-                            <span className="block text-[10px] text-text-secondary uppercase">Total Cycles</span>
-                            <span className="text-xl font-mono text-leaf-green">{state.day}</span>
-                          </div>
-                          <div className="p-3 bg-black/20 rounded-lg">
-                            <span className="block text-[10px] text-text-secondary uppercase">Orchards</span>
-                            <span className="text-xl font-mono text-water-blue">{state.orchards.filter(o => o.isUnlocked).length}</span>
-                          </div>
-                          <div className="p-3 bg-black/20 rounded-lg">
-                            <span className="block text-[10px] text-text-secondary uppercase">Total Plants</span>
-                            <span className="text-xl font-mono text-mineral-gold">
-                              {state.orchards.reduce((acc, o) => acc + o.plants.filter(p => p !== null).length, 0)}
-                            </span>
-                          </div>
-                          <div className="p-3 bg-black/20 rounded-lg">
-                            <span className="block text-[10px] text-text-secondary uppercase">Genetic Upgrades</span>
-                            <span className="text-xl font-mono text-burn-red">
-                              {Object.values(state.upgrades).filter(v => v !== 1 && v !== 0).length}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="hardware-panel p-6 space-y-4">
-                      <h4 className="text-xs font-bold uppercase tracking-widest text-text-secondary">System Settings & Help</h4>
-                      <div className="flex items-center justify-between p-4 bg-black/20 rounded-lg">
-                        <div>
-                          <h5 className="text-sm font-bold">Neural Link Stability</h5>
-                          <p className="text-[10px] text-text-secondary">Adjust visual fidelity for lower-end hardware</p>
-                        </div>
-                        <div className="flex gap-2">
-                          <button className="px-3 py-1 bg-leaf-green text-soil-dark text-[10px] font-bold rounded">HIGH</button>
-                          <button className="px-3 py-1 bg-bark-brown/20 text-text-secondary text-[10px] font-bold rounded">LOW</button>
-                        </div>
-                      </div>
-
-                      <div className="p-4 bg-black/20 rounded-lg space-y-3">
-                        <h5 className="text-sm font-bold flex items-center gap-2">
-                          <HelpCircle size={14} className="text-water-blue" />
-                          Operational Manual
-                        </h5>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-[10px] leading-relaxed">
-                          <div className="space-y-1">
-                            <p className="text-text-primary font-bold">GROWTH CYCLE</p>
-                            <p className="text-text-secondary">Plants grow via <span className="text-water-blue">RESEARCH</span>. Each research cycle extracts genetic data and increases root strength. Plants progress through 5 stages: Sprout, Sapling, Mature, Flowering, and Fruiting.</p>
-                          </div>
-                          <div className="space-y-1">
-                            <p className="text-text-primary font-bold">VITAL SIGNS</p>
-                            <p className="text-text-secondary">Maintain <span className="text-water-blue">HYDRATION</span> and <span className="text-mineral-gold">NUTRIENTS</span>. Low vitals increase <span className="text-burn-red">STRESS</span>. High stress leads to crop burn and root degradation.</p>
-                          </div>
-                          <div className="space-y-1">
-                            <p className="text-text-primary font-bold">HARVESTING</p>
-                            <p className="text-text-secondary">Only <span className="text-burn-red">FRUITING</span> plants can be harvested. Harvesting yields high credit rewards and valuable Data Seeds.</p>
-                          </div>
-                          <div className="space-y-1">
-                            <p className="text-text-primary font-bold">DATA SEEDS</p>
-                            <p className="text-text-secondary">Used in the <span className="text-water-blue">LAB</span> for global genetic upgrades or liquidated in the <span className="text-mineral-gold">MARKET</span> for credits.</p>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
-
-            {/* Terminal Log */}
-            <div className="space-y-4">
-              <div className="flex items-center gap-2 text-text-secondary">
-                <AlertCircle size={14} />
-                <span className="text-[10px] font-bold uppercase tracking-widest">System Logs</span>
-              </div>
-              <div className="hardware-panel p-4 h-64 md:h-full overflow-y-auto font-mono text-[10px] space-y-2 bg-black/40">
-                {logs.map((log, i) => (
-                  <div key={i} className={
-                    log.type === 'success' ? 'text-leaf-green' : 
-                    log.type === 'danger' ? 'text-burn-red font-bold' : 
-                    log.type === 'system' ? 'text-text-secondary' : 'text-text-primary'
-                  }>
-                    <span className="opacity-30 mr-2">[{new Date().toLocaleTimeString([], { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' })}]</span>
-                    {log.msg}
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-      {/* Auth Overlay */}
-      <AnimatePresence>
-        {(!state.user && state.isAuthReady) && (
-          <motion.div 
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-center justify-center bg-soil-dark/95 backdrop-blur-md p-6"
-          >
-            <motion.div 
-              initial={{ scale: 0.9, y: 20 }}
-              animate={{ scale: 1, y: 0 }}
-              className="hardware-panel max-w-md w-full p-8 text-center space-y-8 border-leaf-green/30"
-            >
-              <div className="space-y-4">
-                <div className="w-20 h-20 bg-leaf-green/10 rounded-full flex items-center justify-center mx-auto text-leaf-green">
-                  <Database size={40} />
-                </div>
-                <div className="space-y-2">
-                  <h1 className="text-2xl font-serif italic">Orchard Engine</h1>
-                  <p className="text-xs text-text-secondary uppercase tracking-[0.2em]">Growth Milestone Interface</p>
-                </div>
-              </div>
-
-              <div className="space-y-6">
-                <p className="text-sm text-text-secondary leading-relaxed">
-                  Establish a secure link to the Bio-Genetic database to persist your orchard telemetry and enable resource exchange.
-                </p>
-                
-                <div className="space-y-4">
-                  <button 
-                    onClick={handleLogin}
-                    disabled={isLoginLoading}
-                    className="w-full flex items-center justify-center gap-3 bg-white text-black font-bold py-4 rounded-xl hover:scale-[1.02] active:scale-[0.98] transition-all shadow-lg disabled:opacity-50"
-                  >
-                    {isLoginLoading ? (
-                      <RefreshCw className="animate-spin" size={20} />
-                    ) : (
-                      <LogIn size={20} />
-                    )}
-                    {isLoginLoading ? 'CONNECTING...' : 'CONNECT WITH GOOGLE'}
-                  </button>
-
-                  <div className="hardware-panel p-3 h-32 overflow-y-auto font-mono text-[9px] space-y-1 bg-black/60 text-left border-bark-brown/20">
-                    <div className="text-text-secondary uppercase mb-1 border-b border-bark-brown/20 pb-1 flex items-center gap-1">
-                      <Database size={8} /> Auth Telemetry
-                    </div>
-                    {logs.filter(l => l.type === 'system' || l.type === 'danger').map((log, i) => (
-                      <div key={i} className={log.type === 'danger' ? 'text-burn-red' : 'text-text-secondary'}>
-                        <span className="opacity-30 mr-1">[{new Date().toLocaleTimeString([], { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' })}]</span>
-                        {log.msg}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                <p className="text-[10px] text-text-secondary italic">
-                  Note: Ensure popups are allowed for this domain.
-                </p>
-              </div>
-
-              <div className="pt-4 border-t border-bark-brown/30">
-                <div className="flex items-center justify-center gap-2 text-[10px] text-text-secondary uppercase tracking-widest">
-                  <ShieldCheck size={12} />
-                  Secure Protocol v2.4.0
-                </div>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Loading State */}
-      {!state.isAuthReady && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-soil-dark">
-          <RefreshCw className="animate-spin text-leaf-green" size={40} />
+    <div className="min-h-screen bg-soil-dark text-text-primary flex flex-col">
+      {/* Notification */}
+      {notification && (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 bg-soil-light border border-leaf-green/30 text-text-primary text-sm font-medium px-4 py-2 rounded-xl shadow-lg animate-pulse">
+          {notification}
         </div>
       )}
-    </div>
-  );
-};
 
-export default function AppWrapper() {
-  return (
-    <ErrorBoundary>
-      <App />
-    </ErrorBoundary>
+      {/* Header */}
+      <header className="hardware-panel mx-3 mt-3 px-4 py-3 flex items-center justify-between rounded-xl">
+        <div className="flex items-center gap-2">
+          <Sprout size={18} className="text-leaf-green" />
+          <span className="font-bold text-sm">Orchade</span>
+          <span className="text-[10px] font-mono text-text-secondary ml-1">Day {gs.day}</span>
+        </div>
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-1 text-xs">
+            <WeatherIcon />
+            <span className="text-text-secondary hidden sm:inline">{gs.weather?.name}</span>
+          </div>
+          <div className="flex items-center gap-1 text-xs font-mono">
+            <span className="text-mineral-gold">⬡ {gs.credits}</span>
+          </div>
+          <div className="flex items-center gap-1 text-xs font-mono">
+            <span className="text-leaf-green">🌱 {gs.dataSeeds}</span>
+          </div>
+          {saving && <Loader size={12} className="text-text-secondary animate-spin" />}
+          <button onClick={() => logout()} className="text-text-secondary hover:text-text-primary transition-colors">
+            <LogOut size={14} />
+          </button>
+        </div>
+      </header>
+
+      {/* Tab Nav */}
+      <nav className="flex gap-1 px-3 mt-2">
+        {(['orchard', 'lab', 'market', 'rankings', 'profile'] as const).map(tab => (
+          <button
+            key={tab}
+            onClick={() => setGs(prev => ({ ...prev, activeTab: tab }))}
+            className={`flex-1 py-2 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-colors
+              ${gs.activeTab === tab ? 'bg-leaf-green text-soil-dark' : 'text-text-secondary hover:text-text-primary'}`}
+          >
+            {tab === 'orchard' ? <Sprout size={12} className="mx-auto" /> :
+             tab === 'lab' ? <FlaskConical size={12} className="mx-auto" /> :
+             tab === 'market' ? <ShoppingBag size={12} className="mx-auto" /> :
+             tab === 'rankings' ? <Trophy size={12} className="mx-auto" /> :
+             <User size={12} className="mx-auto" />}
+            <span className="block mt-0.5">{tab}</span>
+          </button>
+        ))}
+      </nav>
+
+      {/* Main Content */}
+      <main className="flex-1 px-3 py-3 overflow-y-auto pb-6">
+
+        {/* ── ORCHARD TAB ── */}
+        {gs.activeTab === 'orchard' && (
+          <div className="space-y-4">
+            {/* Orchard selector */}
+            <div className="flex gap-2">
+              {gs.orchards.map(o => (
+                <button
+                  key={o.id}
+                  onClick={() => o.isUnlocked
+                    ? setGs(prev => ({ ...prev, activeOrchardId: o.id, selectedPlantIndex: null }))
+                    : handleUnlockOrchard(o.id)
+                  }
+                  className={`flex-1 py-2 px-3 rounded-lg text-[10px] font-bold transition-colors
+                    ${o.id === gs.activeOrchardId ? 'bg-leaf-green/20 border border-leaf-green text-leaf-green' :
+                      o.isUnlocked ? 'border border-bark-brown text-text-secondary hover:border-leaf-green/40' :
+                      'border border-dashed border-bark-brown text-text-secondary/50'}`}
+                >
+                  {o.isUnlocked ? o.name : `🔒 ${o.unlockCost}⬡`}
+                </button>
+              ))}
+            </div>
+
+            {/* Plant grid */}
+            <div className="grid grid-cols-2 gap-3">
+              {activeOrchard.plants.map((plant, i) => (
+                <PlantCard
+                  key={i}
+                  plant={plant}
+                  index={i}
+                  isSelected={gs.selectedPlantIndex === i}
+                  onClick={() => setGs(prev => ({ ...prev, selectedPlantIndex: prev.selectedPlantIndex === i ? null : i }))}
+                />
+              ))}
+            </div>
+
+            {/* Action panel */}
+            <div className="hardware-panel p-4 space-y-3">
+              {selectedPlant ? (
+                <>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="font-bold text-sm">{selectedPlant.type}</p>
+                      <p className="text-[10px] text-text-secondary">{PLANT_STAGES[selectedPlant.stageIndex].name}</p>
+                    </div>
+                    <div className="flex gap-1">
+                      {selectedPlant.pests > 0 && <Bug size={14} className="text-toxic-green" />}
+                      {selectedPlant.stress > 50 && <Flame size={14} className="text-burn-red" />}
+                      {selectedPlant.isHarvestable && <span className="text-[10px] text-mineral-gold font-bold">READY</span>}
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button onClick={handleWater} className="action-btn py-2 px-3 rounded-lg bg-water-blue/10 border border-water-blue/30 text-water-blue text-xs font-bold flex items-center justify-center gap-1 hover:bg-water-blue/20 transition-colors">
+                      <Droplets size={12} /> Water
+                    </button>
+                    <button onClick={handleFeed} className="py-2 px-3 rounded-lg bg-mineral-gold/10 border border-mineral-gold/30 text-mineral-gold text-xs font-bold flex items-center justify-center gap-1 hover:bg-mineral-gold/20 transition-colors">
+                      <Sprout size={12} /> Feed (15⬡)
+                    </button>
+                    <button onClick={handlePestControl} className="py-2 px-3 rounded-lg bg-toxic-green/10 border border-toxic-green/30 text-toxic-green text-xs font-bold flex items-center justify-center gap-1 hover:bg-toxic-green/20 transition-colors">
+                      <Bug size={12} /> Pest (15⬡)
+                    </button>
+                    <button onClick={handleHarvest} disabled={!selectedPlant.isHarvestable}
+                      className="py-2 px-3 rounded-lg bg-leaf-green/10 border border-leaf-green/30 text-leaf-green text-xs font-bold flex items-center justify-center gap-1 hover:bg-leaf-green/20 transition-colors disabled:opacity-30 disabled:cursor-not-allowed">
+                      🌾 Harvest
+                    </button>
+                  </div>
+                </>
+              ) : gs.selectedPlantIndex !== null && activeOrchard.plants[gs.selectedPlantIndex] === null ? (
+                <div className="space-y-3">
+                  <p className="text-xs text-text-secondary">Select plant type to seed:</p>
+                  <select
+                    value={selectedType}
+                    onChange={e => setSelectedType(e.target.value)}
+                    className="w-full bg-soil-dark border border-bark-brown rounded-lg px-3 py-2 text-sm text-text-primary"
+                  >
+                    {BASE_PLANT_TYPES.map(t => (
+                      <option key={t.name} value={t.name}>{t.name} — {t.description}</option>
+                    ))}
+                  </select>
+                  <button onClick={handlePlant}
+                    className="w-full py-2 rounded-lg bg-leaf-green text-soil-dark font-bold text-sm hover:bg-leaf-dark transition-colors flex items-center justify-center gap-2">
+                    <Sprout size={14} /> Plant Seed (1🌱)
+                  </button>
+                </div>
+              ) : (
+                <p className="text-xs text-text-secondary text-center py-2">Select a plot to get started.</p>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ── LAB TAB ── */}
+        {gs.activeTab === 'lab' && (
+          <div className="hardware-panel p-4 space-y-4">
+            <h2 className="font-bold text-sm">Genetic Lab</h2>
+            <p className="text-text-secondary text-xs">Breed two plants to create a hybrid with combined traits. Costs {BREEDING_COST} credits. Mutation chance: {MUTATION_CHANCE * 100}%.</p>
+            <div className="text-text-secondary text-xs text-center py-8 dashed-border rounded-xl">
+              Plant a full orchard to unlock breeding.
+            </div>
+          </div>
+        )}
+
+        {/* ── MARKET TAB ── */}
+        {gs.activeTab === 'market' && (
+          <div className="space-y-3">
+            <h2 className="font-bold text-sm px-1">Market</h2>
+            {SHOP_ITEMS.map(item => (
+              <div key={item.id} className="hardware-panel p-4 flex items-center justify-between">
+                <div>
+                  <p className="font-bold text-sm">{item.name}</p>
+                  <p className="text-[10px] text-text-secondary capitalize">{item.type}</p>
+                </div>
+                <button
+                  onClick={() => {
+                    if (gs.credits < item.cost) return notify('Not enough credits.');
+                    if (!selectedPlant) return notify('Select a plant first.');
+                    updatePlant(p => ({
+                      ...p,
+                      nutrients: item.nut ? Math.min(p.nutrients + item.nut, PLANT_STAGES[p.stageIndex].maxNutrients) : p.nutrients,
+                      stress: item.stress ? Math.max(0, p.stress + item.stress) : p.stress,
+                      pests: item.kills ? Math.max(0, p.pests - item.kills) : p.pests,
+                    }));
+                    setGs(prev => ({ ...prev, credits: prev.credits - item.cost }));
+                    notify(`✅ Used ${item.name}! -${item.cost}⬡`);
+                  }}
+                  className="py-1.5 px-4 rounded-lg bg-leaf-green/10 border border-leaf-green/30 text-leaf-green text-xs font-bold hover:bg-leaf-green/20 transition-colors"
+                >
+                  {item.cost}⬡
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* ── RANKINGS TAB ── */}
+        {gs.activeTab === 'rankings' && (
+          <div className="hardware-panel p-4 text-center space-y-3">
+            <Trophy size={32} className="text-mineral-gold mx-auto" />
+            <h2 className="font-bold">Leaderboards</h2>
+            <p className="text-text-secondary text-xs">Global rankings coming in the next update.</p>
+          </div>
+        )}
+
+        {/* ── PROFILE TAB ── */}
+        {gs.activeTab === 'profile' && (
+          <div className="space-y-3">
+            <div className="hardware-panel p-4 flex items-center gap-4">
+              <div className="w-12 h-12 rounded-full bg-leaf-green/20 flex items-center justify-center">
+                <User size={24} className="text-leaf-green" />
+              </div>
+              <div>
+                <p className="font-bold">{gs.user?.displayName ?? 'Gardener'}</p>
+                <p className="text-text-secondary text-xs">{gs.user?.email}</p>
+              </div>
+            </div>
+            <div className="hardware-panel p-4 grid grid-cols-3 gap-3 text-center">
+              <div><p className="text-lg font-bold text-mineral-gold">{gs.credits}</p><p className="text-[10px] text-text-secondary">Credits</p></div>
+              <div><p className="text-lg font-bold text-leaf-green">{gs.dataSeeds}</p><p className="text-[10px] text-text-secondary">Seeds</p></div>
+              <div><p className="text-lg font-bold text-water-blue">{gs.day}</p><p className="text-[10px] text-text-secondary">Days</p></div>
+            </div>
+            <button onClick={() => logout()} className="w-full py-2 rounded-lg border border-burn-red/30 text-burn-red text-sm font-bold hover:bg-burn-red/10 transition-colors">
+              Sign Out
+            </button>
+          </div>
+        )}
+      </main>
+    </div>
   );
 }
