@@ -1,14 +1,19 @@
+import React from 'react';
 import { useState, useEffect, useCallback } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
 import { doc, getDoc, setDoc, updateDoc, onSnapshot } from 'firebase/firestore';
 import { auth, db, signInWithGoogle, handleRedirectResult, logout } from './firebase';
 import PlantCard from './components/PlantCard';
+import MarketView from './components/MarketView';
 import { GameState, Plant, Orchard, GlobalUpgrades } from './types';
 import {
   PLANT_STAGES, INITIAL_UPGRADES, SHOP_ITEMS,
   WEATHER_TYPES, getRandomWeather, BASE_PLANT_TYPES, BREEDING_COST, MUTATION_CHANCE, RARITY_COLORS
 } from './constants';
 import { Sprout, Droplets, FlaskConical, ShoppingBag, Wrench, LogOut, Sun, CloudRain, Zap, Bug, Flame, Trophy, User, Loader } from 'lucide-react';
+import { usePersonalityVector } from './hooks/usePersonalityVector';
+import { motion } from 'motion/react';
+import { dominantQuadrant } from './services/personalityService';
 
 // ─── Constants ───────────────────────────────────────────────
 const INITIAL_ORCHARDS: Orchard[] = [
@@ -66,6 +71,7 @@ export default function App() {
   const [saving, setSaving] = useState(false);
   const [notification, setNotification] = useState<string | null>(null);
   const [selectedType, setSelectedType] = useState(BASE_PLANT_TYPES[0].name);
+  const { vector, identityHash, recordAction } = usePersonalityVector(gs.user?.uid);
 
   // ── Notification helper ──
   const notify = (msg: string) => {
@@ -250,6 +256,7 @@ export default function App() {
       saveState(next);
       return next;
     });
+    recordAction('harvest');
     notify(`🌾 Harvested! +${reward} credits${seeds ? ' +1 seed' : ''}`);
   }
 
@@ -269,6 +276,7 @@ export default function App() {
       saveState(next);
       return next;
     });
+    recordAction('planting');
     notify(`🌱 Planted ${selectedType}!`);
   }
 
@@ -291,7 +299,7 @@ export default function App() {
   const WeatherIcon = () => {
     const w = gs.weather;
     if (!w) return null;
-    const icons: Record<string, JSX.Element> = {
+    const icons: Record<string, React.ReactNode> = {
       clear: <Sun size={14} className="text-mineral-gold" />,
       rain: <CloudRain size={14} className="text-water-blue" />,
       storm: <Zap size={14} className="text-purple-400" />,
@@ -395,7 +403,7 @@ export default function App() {
       </nav>
 
       {/* Main Content */}
-      <main className="flex-1 px-3 py-3 overflow-y-auto pb-6">
+      <motion.main className="flex-1 px-3 py-3 overflow-y-auto pb-6" initial={{ opacity: 0.4 }} animate={{ opacity: 1 }} transition={{ duration: 0.2 }}>
 
         {/* ── ORCHARD TAB ── */}
         {gs.activeTab === 'orchard' && (
@@ -495,38 +503,52 @@ export default function App() {
             <div className="text-text-secondary text-xs text-center py-8 dashed-border rounded-xl">
               Plant a full orchard to unlock breeding.
             </div>
+            <button
+              onClick={() => {
+                recordAction('research');
+                notify('🔬 Research logged to the Personality Vector Engine.');
+              }}
+              className="w-full py-2 rounded-lg bg-water-blue/10 border border-water-blue/30 text-water-blue text-xs font-bold hover:bg-water-blue/20 transition-colors"
+            >
+              Run Research Cycle
+            </button>
           </div>
         )}
 
         {/* ── MARKET TAB ── */}
         {gs.activeTab === 'market' && (
-          <div className="space-y-3">
-            <h2 className="font-bold text-sm px-1">Market</h2>
-            {SHOP_ITEMS.map(item => (
-              <div key={item.id} className="hardware-panel p-4 flex items-center justify-between">
-                <div>
-                  <p className="font-bold text-sm">{item.name}</p>
-                  <p className="text-[10px] text-text-secondary capitalize">{item.type}</p>
+          <div className="space-y-4">
+            <MarketView />
+            <div className="space-y-3">
+              <h2 className="font-bold text-sm px-1">Supply Actions</h2>
+              {SHOP_ITEMS.map(item => (
+                <div key={item.id} className="hardware-panel p-4 flex items-center justify-between">
+                  <div>
+                    <p className="font-bold text-sm">{item.name}</p>
+                    <p className="text-[10px] text-text-secondary capitalize">{item.type}</p>
+                  </div>
+                  <button
+                    onClick={() => {
+                      if (gs.credits < item.cost) return notify('Not enough credits.');
+                      if (!selectedPlant) return notify('Select a plant first.');
+                      updatePlant(p => ({
+                        ...p,
+                        nutrients: item.nut ? Math.min(p.nutrients + item.nut, PLANT_STAGES[p.stageIndex].maxNutrients) : p.nutrients,
+                        stress: item.stress ? Math.max(0, p.stress + item.stress) : p.stress,
+                        pests: item.kills ? Math.max(0, p.pests - item.kills) : p.pests,
+                      }));
+                      setGs(prev => ({ ...prev, credits: prev.credits - item.cost }));
+                      recordAction('exchange');
+                      notify(`✅ Used ${item.name}! -${item.cost}⬡`);
+                    }}
+                    className="py-1.5 px-4 rounded-lg bg-leaf-green/10 border border-leaf-green/30 text-leaf-green text-xs font-bold hover:bg-leaf-green/20 transition-colors"
+                  >
+                    {item.cost}⬡
+                  </button>
                 </div>
-                <button
-                  onClick={() => {
-                    if (gs.credits < item.cost) return notify('Not enough credits.');
-                    if (!selectedPlant) return notify('Select a plant first.');
-                    updatePlant(p => ({
-                      ...p,
-                      nutrients: item.nut ? Math.min(p.nutrients + item.nut, PLANT_STAGES[p.stageIndex].maxNutrients) : p.nutrients,
-                      stress: item.stress ? Math.max(0, p.stress + item.stress) : p.stress,
-                      pests: item.kills ? Math.max(0, p.pests - item.kills) : p.pests,
-                    }));
-                    setGs(prev => ({ ...prev, credits: prev.credits - item.cost }));
-                    notify(`✅ Used ${item.name}! -${item.cost}⬡`);
-                  }}
-                  className="py-1.5 px-4 rounded-lg bg-leaf-green/10 border border-leaf-green/30 text-leaf-green text-xs font-bold hover:bg-leaf-green/20 transition-colors"
-                >
-                  {item.cost}⬡
-                </button>
-              </div>
-            ))}
+              ))}
+            </div>
+
           </div>
         )}
 
@@ -556,12 +578,22 @@ export default function App() {
               <div><p className="text-lg font-bold text-leaf-green">{gs.dataSeeds}</p><p className="text-[10px] text-text-secondary">Seeds</p></div>
               <div><p className="text-lg font-bold text-water-blue">{gs.day}</p><p className="text-[10px] text-text-secondary">Days</p></div>
             </div>
+            <div className="hardware-panel p-4 space-y-2">
+              <p className="text-xs font-bold">World Map — Personality Vector</p>
+              <p className="text-[10px] text-text-secondary">Dominant archetype: {dominantQuadrant(vector)}</p>
+              <div className="space-y-1 text-[10px]">
+                <div className="flex items-center gap-2"><span className="w-20">Patel</span><div className="flex-1 h-2 bg-soil-dark rounded"><div className="h-2 bg-leaf-green rounded" style={{ width: `${Math.round(vector.patel * 100)}%` }} /></div><span>{Math.round(vector.patel * 100)}%</span></div>
+                <div className="flex items-center gap-2"><span className="w-20">Socrates</span><div className="flex-1 h-2 bg-soil-dark rounded"><div className="h-2 bg-water-blue rounded" style={{ width: `${Math.round(vector.socrates * 100)}%` }} /></div><span>{Math.round(vector.socrates * 100)}%</span></div>
+                <div className="flex items-center gap-2"><span className="w-20">Singh</span><div className="flex-1 h-2 bg-soil-dark rounded"><div className="h-2 bg-mineral-gold rounded" style={{ width: `${Math.round(vector.singh * 100)}%` }} /></div><span>{Math.round(vector.singh * 100)}%</span></div>
+              </div>
+              {identityHash && <p className="text-[10px] text-text-secondary break-all">Sovereign Identity: {identityHash}</p>}
+            </div>
             <button onClick={() => logout()} className="w-full py-2 rounded-lg border border-burn-red/30 text-burn-red text-sm font-bold hover:bg-burn-red/10 transition-colors">
               Sign Out
             </button>
           </div>
         )}
-      </main>
+      </motion.main>
     </div>
   );
 }
