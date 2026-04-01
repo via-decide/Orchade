@@ -1,10 +1,10 @@
 You are working in repository via-decide/orchade on branch main.
 
 MISSION
-Build 'DaxiniVault'-the autonomous tokenomics and Proof-of-Logic (PoL) engine for the ViaLogic ecosystem. CORE ARCHITECTURE (The Sovereign Mint): 1. The Asset Tokenizer: - Create a module vault/mint.js that assigns a unique 'Logic Token' to every entity in the 24,000-PR run.
+Enhance 'Orchade' by implementing 'DaxiniAtmosphere'-a real-time dynamic weather and environmental physics engine. CORE ARCHITECTURE (The Atmosphere Layer): 1. The Global Weather State: - Update 'src/types.ts' to include an 'Environment' interface: { weather: 'sunny' | 'rainy' | 'stormy' | 'foggy', intensity: number, windSpeed: number }. 2. The Weather Controller Component: - Create 'src/components/WeatherOverlay.tsx' that renders particle systems for rain, snow, or dust based on the current state. 3. Physical Impact Logic: - Modify the growth logic in 'src/App.tsx'.
 
 CONSTRAINTS
-Zero external gas fees. Use the MacBook Air M2's Neural Engine to sign transactions locally. Ensure the 'logic-to-growth' mapping is mathematically consistent with the plant simulation.
+Ensure the particle systems are optimized to maintain 60FPS. The weather transitions must be smooth (interpolated) to prevent sudden visual jumps in the 'PlantVisualizer'.
 
 PROCESS (MANDATORY)
 1. Read README.md and AGENTS.md before editing.
