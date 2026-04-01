@@ -36,3 +36,18 @@ export const SHOP_ITEMS = [
   { id: 'neem', name: 'Neem Oil', cost: 15, kills: 1, stress: 0, type: 'pesticide' },
   { id: 'chemical', name: 'Chemical Spray', cost: 25, kills: 5, stress: 15, type: 'pesticide' },
 ];
+
+export const BASE_PLANT_TYPES = [
+  { name: 'Lumina Fern', description: 'Stable growth profile', baseGrowthSpeed: 1, baseYield: 1, color: '#5BC46D' },
+  { name: 'Citrine Citrus', description: 'Balanced nutrient response', baseGrowthSpeed: 1.1, baseYield: 1.1, color: '#D4AF37' },
+  { name: 'Moonleaf', description: 'High-risk high-reward cultivar', baseGrowthSpeed: 0.9, baseYield: 1.35, color: '#8A7DFF' },
+];
+
+export const BREEDING_COST = 120;
+export const MUTATION_CHANCE = 0.12;
+export const RARITY_COLORS = {
+  Common: '#8FA593',
+  Rare: '#7EB6FF',
+  Epic: '#C48CFF',
+  Legendary: '#F6C453',
+};

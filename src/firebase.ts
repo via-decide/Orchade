@@ -1,4 +1,5 @@
 import { initializeApp } from 'firebase/app';
+import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged, getRedirectResult, User as FirebaseUser } from 'firebase/auth';
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
 import { getRemoteConfig, fetchAndActivate, getValue } from 'firebase/remote-config';
 import { getFirestore, doc, setDoc, getDoc, updateDoc, onSnapshot, collection, query, where, getDocs, addDoc, serverTimestamp, getDocFromServer, FirestoreError } from 'firebase/firestore';
@@ -32,6 +33,7 @@ export const signInWithGoogle = async () => {
   }
 };
 export const logout = () => signOut(auth);
+export const handleRedirectResult = () => getRedirectResult(auth);
 
 // Error Handling Spec for Firestore Operations
 export enum OperationType {

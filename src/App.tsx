@@ -1,3 +1,4 @@
+import React from 'react';
 import { useState, useEffect, useCallback } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
 import { doc, getDoc, setDoc, updateDoc, onSnapshot } from 'firebase/firestore';
@@ -298,7 +299,7 @@ export default function App() {
   const WeatherIcon = () => {
     const w = gs.weather;
     if (!w) return null;
-    const icons: Record<string, JSX.Element> = {
+    const icons: Record<string, React.ReactNode> = {
       clear: <Sun size={14} className="text-mineral-gold" />,
       rain: <CloudRain size={14} className="text-water-blue" />,
       storm: <Zap size={14} className="text-purple-400" />,

@@ -25,6 +25,24 @@
 //   - dayKey: string
 //   - transferCount: number
 //   - lastTransferAt: timestamp
+//
+// Collection: transfers
+// Document ID: {transferId} (senderUid_receiverUid_dayKey_random)
+// Fields:
+//   - from: string (required)
+//   - to: string (required)
+//   - amount: number (required)
+//   - protocol: string (required) - "social-transfer-protocol"
+//   - dayKey: string (required) - YYYYMMDD
+//   - timestamp: timestamp (required)
+//
+// Collection: stp_daily_limits
+// Document ID: {uid_dayKey}
+// Fields:
+//   - uid: string
+//   - dayKey: string
+//   - transferCount: number
+//   - lastTransferAt: timestamp
 //   - displayName: string (optional) - User's public name
 //   - email: string (optional) - User's email
 //   - credits: number (required) - Current liquid capital

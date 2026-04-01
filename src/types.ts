@@ -11,6 +11,8 @@ export type PlantStage = {
   maxNutrients: number;
 };
 
+export type PlantRarity = 'Common' | 'Rare' | 'Epic' | 'Legendary';
+
 export type Plant = {
   id: string;
   type: string;
@@ -22,6 +24,9 @@ export type Plant = {
   pestImmunity: number;
   stageIndex: number;
   isHarvestable: boolean;
+  rarity?: PlantRarity;
+  growthSpeedMultiplier?: number;
+  yieldMultiplier?: number;
   color?: string;
 };
 
@@ -57,6 +62,7 @@ export type GameState = {
   activeOrchardId: string;
   selectedPlantIndex: number | null;
   upgrades: GlobalUpgrades;
+  tools: string[];
   activeTab: 'orchard' | 'lab' | 'market' | 'rankings' | 'profile';
   weather?: Weather;
   user: {
