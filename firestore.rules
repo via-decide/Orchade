@@ -13,14 +13,17 @@
 //   - day: number (required) - Current game day
 //   - upgrades: map (required) - Global upgrades state
 //   - orchards: list (required) - List of orchards and their plants
+//   - batch: number (optional) - Rollout wave membership (1, 2, or 3)
 //   - createdAt: timestamp (optional) - When the user was created
 //
 // Collection: transfers
-// Document ID: {transferId} (Auto-generated)
+// Document ID: {transferId} (senderUid_receiverUid_windowKey)
 // Fields:
 //   - from: string (required) - Sender UID
 //   - to: string (required) - Receiver UID
 //   - amount: number (required) - Amount of credits transferred
+//   - protocol: string (required) - Must be "social-transfer-protocol"
+//   - windowKey: string (required) - YYYYMMDDHHmm (minute bucket)
 //   - timestamp: timestamp (required) - When the transfer occurred
 //
 // ===============================================================
@@ -43,7 +46,7 @@ service cloud.firestore {
 
     function isAdmin() {
       return isAuthenticated() &&
-        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
           (request.auth.token.email == "daxini2404@gmail.com" && request.auth.token.email_verified == true));
     }
@@ -69,11 +72,32 @@ service cloud.firestore {
              data.upgrades is map;
     }
 
-    function isValidTransfer(data) {
+    function isBatchUser(userId) {
+      return exists(/databases/$(database)/documents/users/$(userId)) &&
+             get(/databases/$(database)/documents/users/$(userId)).data.batch in [1, 2, 3];
+    }
+
+    function isSocialTransferProtocol(data) {
+      return data.protocol == 'social-transfer-protocol' &&
+             data.windowKey is string &&
+             data.windowKey.matches('^[0-9]{12}$');
+    }
+
+    function isRateLimitedTransfer(transferId, data) {
+      // Allow at most one transfer per minute bucket for each sender->receiver pair.
+      // transferId must be sender_receiver_YYYYMMDDHHmm.
+      return transferId == (data.from + '_' + data.to + '_' + data.windowKey);
+    }
+
+    function isValidTransfer(transferId, data) {
       return data.from == request.auth.uid &&
              data.to is string && data.to != request.auth.uid &&
              data.amount is number && data.amount > 0 &&
-             data.timestamp == request.time;
+             data.timestamp == request.time &&
+             isBatchUser(data.from) &&
+             isBatchUser(data.to) &&
+             isSocialTransferProtocol(data) &&
+             isRateLimitedTransfer(transferId, data);
     }
 
     function isCreditTransferUpdate(userId) {
@@ -81,7 +105,7 @@ service cloud.firestore {
       let diff = request.resource.data.diff(resource.data);
       let transferId = request.auth.uid + '_' + userId;
       let transferPath = /databases/$(database)/documents/transfers/$(transferId);
-      
+
       return diff.affectedKeys().hasOnly(['credits']) &&
              request.resource.data.credits == resource.data.credits + getAfter(transferPath).data.amount &&
              getAfter(transferPath).data.from == request.auth.uid &&
@@ -95,27 +119,27 @@ service cloud.firestore {
     match /users/{userId} {
       // Users can only read their own profile
       allow read: if isOwner(userId) || isAdmin();
-      
+
       // Allow reading the leaderboard (Top 10)
-      allow list: if isAuthenticated() && 
-                    request.query.limit <= 50 && 
+      allow list: if isAuthenticated() &&
+                    request.query.limit <= 50 &&
                     request.query.orderBy[0].path == 'credits' &&
                     request.query.orderBy[0].direction == 'DESC';
 
       // Allow searching for other users by UID for transfers (only UID and displayName)
-      allow list: if isAuthenticated() && 
-                    request.query.limit <= 1 && 
-                    request.query.filters.size() == 1 && 
-                    request.query.filters[0].op == '==' && 
+      allow list: if isAuthenticated() &&
+                    request.query.limit <= 1 &&
+                    request.query.filters.size() == 1 &&
+                    request.query.filters[0].op == '==' &&
                     request.query.filters[0].path == 'uid';
 
-      allow create: if isOwner(userId) && 
+      allow create: if isOwner(userId) &&
                       isValidUser(request.resource.data) &&
                       (!('role' in request.resource.data) || request.resource.data.role == 'player');
 
-      allow update: if (isOwner(userId) && 
+      allow update: if (isOwner(userId) &&
                        isValidUser(request.resource.data) &&
-                       request.resource.data.role == resource.data.role) || 
+                       request.resource.data.role == resource.data.role) ||
                       isCreditTransferUpdate(userId) ||
                       isAdmin();
     }
@@ -123,14 +147,14 @@ service cloud.firestore {
     match /transfers/{transferId} {
       // Only admins or involved parties can read transfers
       allow read: if isAuthenticated() && (
-        request.auth.uid == resource.data.from || 
-        request.auth.uid == resource.data.to || 
+        request.auth.uid == resource.data.from ||
+        request.auth.uid == resource.data.to ||
         isAdmin()
       );
 
-      // Only authenticated users can create transfers, and they must be the sender
-      allow create: if isAuthenticated() && isValidTransfer(request.resource.data);
-      
+      // Social Transfer Protocol: authenticated Batch 1-3 users with per-minute pair rate limits.
+      allow create: if isAuthenticated() && isValidTransfer(transferId, request.resource.data);
+
       // Transfers are immutable
       allow update, delete: if false;
     }
@@ -138,7 +162,7 @@ service cloud.firestore {
     match /system/global_stats {
       // Anyone authenticated can read global stats
       allow read: if isAuthenticated();
-      
+
       // Only authenticated users can update stats (usually via batch with their own actions)
       // We should ideally restrict this more, but for a game prototype, this is okay.
       allow write: if isAuthenticated();
