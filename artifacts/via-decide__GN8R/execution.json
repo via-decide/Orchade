@@ -1,0 +1,16 @@
+{
+  "repo": "via-decide/GN8R",
+  "mode": "codex_then_antigravity",
+  "branch": "simba/upgrade-the-telegram-notification-system-into-an",
+  "branch": "simba/upgrade-the-gn8r-synthesis-pipeline-with-synapse",
+  "branch": "simba/upgrade-the-telegram-message-listener-to-support",
+  "files_to_create": [
+    "codex-task.md",
+    "antigravity-repair-task.md",
+    "pr-package.md",
+    "execution.json"
+  ],
+  "files_to_modify": [],
+  "codex_prompt_path": "codex-task.md",
+  "repair_prompt_path": "antigravity-repair-task.md"
+}
