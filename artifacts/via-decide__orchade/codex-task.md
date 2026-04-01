@@ -1,10 +1,10 @@
 You are working in repository via-decide/orchade on branch main.
 
 MISSION
-Enhance 'Orchade' into a AAA-grade simulation game by upgrading the core engine and visual stack. CORE ARCHITECTURE (The Ecosystem Engine): 1. The 3D Visual Overhaul: - Transition 'src/components/PlantVisualizer.tsx' from 2D Canvas to 'React Three Fiber' (Three.js). - Implement 'Procedural Growth'-plants should grow in 3D space with unique branch structures based on 'Genetic Seeds'. 2. The Biological Simulation: - Update 'src/types.ts' to include complex environmental variables: [Soil_pH], [Humidity], [Mineral_Composition], and [Cross-Breeding_Logic].
+Build 'DaxiniVault'-the autonomous tokenomics and Proof-of-Logic (PoL) engine for the ViaLogic ecosystem. CORE ARCHITECTURE (The Sovereign Mint): 1. The Asset Tokenizer: - Create a module vault/mint.js that assigns a unique 'Logic Token' to every entity in the 24,000-PR run.
 
 CONSTRAINTS
-Ensure the MacBook Air M2's GPU is utilized for the 3D rendering. Maintain backward compatibility with existing Firebase data structures while adding the new simulation fields.
+Zero external gas fees. Use the MacBook Air M2's Neural Engine to sign transactions locally. Ensure the 'logic-to-growth' mapping is mathematically consistent with the plant simulation.
 
 PROCESS (MANDATORY)
 1. Read README.md and AGENTS.md before editing.
