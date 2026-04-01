@@ -26,6 +26,43 @@
 //   - transferCount: number
 //   - lastTransferAt: timestamp
 //
+// Collection: transfers
+// Document ID: {transferId} (senderUid_receiverUid_dayKey_random)
+// Fields:
+//   - from: string (required)
+//   - to: string (required)
+//   - amount: number (required)
+//   - protocol: string (required) - "social-transfer-protocol"
+//   - dayKey: string (required) - YYYYMMDD
+//   - timestamp: timestamp (required)
+//
+// Collection: stp_daily_limits
+// Document ID: {uid_dayKey}
+// Fields:
+//   - uid: string
+//   - dayKey: string
+//   - transferCount: number
+//   - lastTransferAt: timestamp
+//   - displayName: string (optional) - User's public name
+//   - email: string (optional) - User's email
+//   - credits: number (required) - Current liquid capital
+//   - dataSeeds: number (required) - Current genetic data
+//   - day: number (required) - Current game day
+//   - upgrades: map (required) - Global upgrades state
+//   - orchards: list (required) - List of orchards and their plants
+//   - batch: number (optional) - Rollout wave membership (1, 2, or 3)
+//   - createdAt: timestamp (optional) - When the user was created
+//
+// Collection: transfers
+// Document ID: {transferId} (senderUid_receiverUid_windowKey)
+// Fields:
+//   - from: string (required) - Sender UID
+//   - to: string (required) - Receiver UID
+//   - amount: number (required) - Amount of credits transferred
+//   - protocol: string (required) - Must be "social-transfer-protocol"
+//   - windowKey: string (required) - YYYYMMDDHHmm (minute bucket)
+//   - timestamp: timestamp (required) - When the transfer occurred
+//
 // ===============================================================
 
 rules_version = '2';
@@ -77,6 +114,14 @@ service cloud.firestore {
              counter.transferCount is number &&
              counter.transferCount <= 5 &&
              counter.lastTransferAt == request.time;
+             data.windowKey is string &&
+             data.windowKey.matches('^[0-9]{12}$');
+    }
+
+    function isRateLimitedTransfer(transferId, data) {
+      // Allow at most one transfer per minute bucket for each sender->receiver pair.
+      // transferId must be sender_receiver_YYYYMMDDHHmm.
+      return transferId == (data.from + '_' + data.to + '_' + data.windowKey);
     }
 
     function isValidTransfer(transferId, data) {
@@ -89,6 +134,10 @@ service cloud.firestore {
              isBatchUser(data.to) &&
              isSocialTransferProtocol(data) &&
              isWithinDailyLimit(data);
+             isBatchUser(data.from) &&
+             isBatchUser(data.to) &&
+             isSocialTransferProtocol(data) &&
+             isRateLimitedTransfer(transferId, data);
     }
 
     function isCreditTransferUpdate(userId) {
@@ -105,11 +154,13 @@ service cloud.firestore {
     match /users/{userId} {
       allow read: if isOwner(userId) || isAdmin();
 
+      // Allow reading the leaderboard (Top 10)
       allow list: if isAuthenticated() &&
                     request.query.limit <= 50 &&
                     request.query.orderBy[0].path == 'credits' &&
                     request.query.orderBy[0].direction == 'DESC';
 
+      // Allow searching for other users by UID for transfers (only UID and displayName)
       allow list: if isAuthenticated() &&
                     request.query.limit <= 1 &&
                     request.query.filters.size() == 1 &&
@@ -147,11 +198,18 @@ service cloud.firestore {
       );
 
       allow create: if isAuthenticated() && isValidTransfer(transferId, request.resource.data);
+      // Social Transfer Protocol: authenticated Batch 1-3 users with per-minute pair rate limits.
+      allow create: if isAuthenticated() && isValidTransfer(transferId, request.resource.data);
+
+      // Transfers are immutable
       allow update, delete: if false;
     }
 
     match /system/global_stats {
       allow read: if isAuthenticated();
+
+      // Only authenticated users can update stats (usually via batch with their own actions)
+      // We should ideally restrict this more, but for a game prototype, this is okay.
       allow write: if isAuthenticated();
     }
 

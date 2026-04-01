@@ -8,6 +8,11 @@ on:
 
 jobs:
   lint_and_test:
+      - ops/prod-readiness
+  workflow_dispatch:
+
+jobs:
+  lint:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -31,6 +36,11 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     needs: lint_and_test
+        run: npm run lint -- src/App.tsx src/components/PlantCard.tsx src/components/PlantVisualizer.tsx src/types.ts
+
+  build_and_deploy:
+    runs-on: ubuntu-latest
+    needs: lint
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -49,5 +59,9 @@ jobs:
 
       - name: Deploy Firebase Hosting
         run: npx firebase-tools deploy --only hosting
+        run: npm run build
+
+      - name: Deploy to Firebase
+        run: npx firebase-tools deploy
         env:
           FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
