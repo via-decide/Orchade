@@ -1,5 +1,6 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
+import { getRemoteConfig, fetchAndActivate, getValue } from 'firebase/remote-config';
 import { getFirestore, doc, setDoc, getDoc, updateDoc, onSnapshot, collection, query, where, getDocs, addDoc, serverTimestamp, getDocFromServer, FirestoreError } from 'firebase/firestore';
 import firebaseConfig from '../firebase-applet-config.json';
 
@@ -95,3 +96,20 @@ async function testConnection() {
   }
 }
 testConnection();
+
+const remoteConfig = getRemoteConfig(app);
+remoteConfig.settings = {
+  minimumFetchIntervalMillis: 60_000,
+  fetchTimeoutMillis: 10_000,
+};
+remoteConfig.defaultConfig = {
+  market_launch_open_gates: 'false',
+  market_launch_limit: '1000',
+};
+
+export async function isMarketLaunchEnabled(userOrdinal: number): Promise<boolean> {
+  await fetchAndActivate(remoteConfig);
+  const openGates = getValue(remoteConfig, 'market_launch_open_gates').asString() === 'true';
+  const limit = Number(getValue(remoteConfig, 'market_launch_limit').asString() || '1000');
+  return openGates && userOrdinal <= limit;
+}
