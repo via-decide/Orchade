@@ -6,33 +6,31 @@
 // Document ID: {userId} (Firebase Auth UID)
 // Fields:
 //   - uid: string (required) - Firebase Auth UID
-//   - displayName: string (optional) - User's public name
-//   - email: string (optional) - User's email
-//   - credits: number (required) - Current liquid capital
-//   - dataSeeds: number (required) - Current genetic data
-//   - day: number (required) - Current game day
-//   - upgrades: map (required) - Global upgrades state
-//   - orchards: list (required) - List of orchards and their plants
-//   - createdAt: timestamp (optional) - When the user was created
+//   - batch: number (optional) - Rollout wave membership (1, 2, or 3)
 //
 // Collection: transfers
-// Document ID: {transferId} (Auto-generated)
+// Document ID: {transferId} (senderUid_receiverUid_dayKey_random)
 // Fields:
-//   - from: string (required) - Sender UID
-//   - to: string (required) - Receiver UID
-//   - amount: number (required) - Amount of credits transferred
-//   - timestamp: timestamp (required) - When the transfer occurred
+//   - from: string (required)
+//   - to: string (required)
+//   - amount: number (required)
+//   - protocol: string (required) - "social-transfer-protocol"
+//   - dayKey: string (required) - YYYYMMDD
+//   - timestamp: timestamp (required)
+//
+// Collection: stp_daily_limits
+// Document ID: {uid_dayKey}
+// Fields:
+//   - uid: string
+//   - dayKey: string
+//   - transferCount: number
+//   - lastTransferAt: timestamp
 //
 // ===============================================================
 
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-
-    // ===============================================================
-    // Helper Functions
-    // ===============================================================
-
     function isAuthenticated() {
       return request.auth != null;
     }
@@ -43,22 +41,10 @@ service cloud.firestore {
 
     function isAdmin() {
       return isAuthenticated() &&
-        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
           (request.auth.token.email == "daxini2404@gmail.com" && request.auth.token.email_verified == true));
     }
-
-    function hasRequiredFields(fields) {
-      return request.resource.data.keys().hasAll(fields);
-    }
-
-    function hasOnlyAllowedFields(fields) {
-      return request.resource.data.keys().hasOnly(fields);
-    }
-
-    // ===============================================================
-    // Domain Validators
-    // ===============================================================
 
     function isValidUser(data) {
       return data.uid is string &&
@@ -69,82 +55,106 @@ service cloud.firestore {
              data.upgrades is map;
     }
 
-    function isValidTransfer(data) {
+    function isBatchUser(userId) {
+      return exists(/databases/$(database)/documents/users/$(userId)) &&
+             get(/databases/$(database)/documents/users/$(userId)).data.batch in [1, 2, 3];
+    }
+
+    function isSocialTransferProtocol(data) {
+      return data.protocol == 'social-transfer-protocol' &&
+             data.dayKey is string &&
+             data.dayKey.matches('^[0-9]{8}$');
+    }
+
+    function stpCounterPath(data) {
+      return /databases/$(database)/documents/stp_daily_limits/$(request.auth.uid + '_' + data.dayKey);
+    }
+
+    function isWithinDailyLimit(data) {
+      let counter = getAfter(stpCounterPath(data)).data;
+      return counter.uid == request.auth.uid &&
+             counter.dayKey == data.dayKey &&
+             counter.transferCount is number &&
+             counter.transferCount <= 5 &&
+             counter.lastTransferAt == request.time;
+    }
+
+    function isValidTransfer(transferId, data) {
       return data.from == request.auth.uid &&
              data.to is string && data.to != request.auth.uid &&
              data.amount is number && data.amount > 0 &&
-             data.timestamp == request.time;
+             data.timestamp == request.time &&
+             transferId.matches('^' + data.from + '_' + data.to + '_' + data.dayKey + '_.+$') &&
+             isBatchUser(data.from) &&
+             isBatchUser(data.to) &&
+             isSocialTransferProtocol(data) &&
+             isWithinDailyLimit(data);
     }
 
     function isCreditTransferUpdate(userId) {
-      // Check if this is a credit increment for a receiver
       let diff = request.resource.data.diff(resource.data);
       let transferId = request.auth.uid + '_' + userId;
       let transferPath = /databases/$(database)/documents/transfers/$(transferId);
-      
+
       return diff.affectedKeys().hasOnly(['credits']) &&
              request.resource.data.credits == resource.data.credits + getAfter(transferPath).data.amount &&
              getAfter(transferPath).data.from == request.auth.uid &&
              getAfter(transferPath).data.to == userId;
     }
 
-    // ===============================================================
-    // Rules
-    // ===============================================================
-
     match /users/{userId} {
-      // Users can only read their own profile
       allow read: if isOwner(userId) || isAdmin();
-      
-      // Allow reading the leaderboard (Top 10)
-      allow list: if isAuthenticated() && 
-                    request.query.limit <= 50 && 
+
+      allow list: if isAuthenticated() &&
+                    request.query.limit <= 50 &&
                     request.query.orderBy[0].path == 'credits' &&
                     request.query.orderBy[0].direction == 'DESC';
 
-      // Allow searching for other users by UID for transfers (only UID and displayName)
-      allow list: if isAuthenticated() && 
-                    request.query.limit <= 1 && 
-                    request.query.filters.size() == 1 && 
-                    request.query.filters[0].op == '==' && 
+      allow list: if isAuthenticated() &&
+                    request.query.limit <= 1 &&
+                    request.query.filters.size() == 1 &&
+                    request.query.filters[0].op == '==' &&
                     request.query.filters[0].path == 'uid';
 
-      allow create: if isOwner(userId) && 
+      allow create: if isOwner(userId) &&
                       isValidUser(request.resource.data) &&
                       (!('role' in request.resource.data) || request.resource.data.role == 'player');
 
-      allow update: if (isOwner(userId) && 
+      allow update: if (isOwner(userId) &&
                        isValidUser(request.resource.data) &&
-                       request.resource.data.role == resource.data.role) || 
+                       request.resource.data.role == resource.data.role) ||
                       isCreditTransferUpdate(userId) ||
                       isAdmin();
     }
 
+    match /stp_daily_limits/{counterId} {
+      allow read: if isAuthenticated() && (resource.data.uid == request.auth.uid || isAdmin());
+      allow create, update: if isAuthenticated() &&
+        request.resource.data.uid == request.auth.uid &&
+        request.resource.data.dayKey is string &&
+        request.resource.data.dayKey.matches('^[0-9]{8}$') &&
+        request.resource.data.transferCount is number &&
+        request.resource.data.transferCount <= 5 &&
+        request.resource.data.lastTransferAt == request.time;
+      allow delete: if false;
+    }
+
     match /transfers/{transferId} {
-      // Only admins or involved parties can read transfers
       allow read: if isAuthenticated() && (
-        request.auth.uid == resource.data.from || 
-        request.auth.uid == resource.data.to || 
+        request.auth.uid == resource.data.from ||
+        request.auth.uid == resource.data.to ||
         isAdmin()
       );
 
-      // Only authenticated users can create transfers, and they must be the sender
-      allow create: if isAuthenticated() && isValidTransfer(request.resource.data);
-      
-      // Transfers are immutable
+      allow create: if isAuthenticated() && isValidTransfer(transferId, request.resource.data);
       allow update, delete: if false;
     }
 
     match /system/global_stats {
-      // Anyone authenticated can read global stats
       allow read: if isAuthenticated();
-      
-      // Only authenticated users can update stats (usually via batch with their own actions)
-      // We should ideally restrict this more, but for a game prototype, this is okay.
       allow write: if isAuthenticated();
     }
 
-    // Default deny
     match /{path=**} {
       allow read, write: if false;
     }
