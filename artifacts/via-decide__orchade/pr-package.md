@@ -1,9 +1,9 @@
-Branch: simba/build-daxinivault-the-autonomous-tokenomics-and-
-Title: Build 'DaxiniVault'-the autonomous tokenomics and Proof-of-Logic (PoL...
+Branch: simba/enhance-orchade-by-implementing-daxiniatmosphere
+Title: Enhance 'Orchade' by implementing 'DaxiniAtmosphere'-a real-time dyna...
 
 ## Summary
 - Repo orchestration task for via-decide/orchade
-- Goal: Establish a self-sustaining economic layer for the 24,000-PR empire, proving that the "Boss of Git" controls not just code, but the value of logic itself.
+- Goal: Create an immersive, living world where the player's orchard must survive the elements, elevating Orchade to a professional-grade simulation experience.
 
 ## Testing Checklist
 - [ ] Run unit/integration tests

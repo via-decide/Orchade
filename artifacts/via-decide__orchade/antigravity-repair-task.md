@@ -4,7 +4,7 @@ TARGET
 Validate and repair only the files touched by the previous implementation.
 
 TASK
-Build 'DaxiniVault'-the autonomous tokenomics and Proof-of-Logic (PoL) engine for the ViaLogic ecosystem. CORE ARCHITECTURE (The Sovereign Mint): 1. The Asset Tokenizer: - Create a module vault/mint.js that assigns a unique 'Logic Token' to every entity in the 24,000-PR run.
+Enhance 'Orchade' by implementing 'DaxiniAtmosphere'-a real-time dynamic weather and environmental physics engine. CORE ARCHITECTURE (The Atmosphere Layer): 1. The Global Weather State: - Update 'src/types.ts' to include an 'Environment' interface: { weather: 'sunny' | 'rainy' | 'stormy' | 'foggy', intensity: number, windSpeed: number }. 2. The Weather Controller Component: - Create 'src/components/WeatherOverlay.tsx' that renders particle systems for rain, snow, or dust based on the current state. 3. Physical Impact Logic: - Modify the growth logic in 'src/App.tsx'.
 
 RULES
 1. Audit touched files first and identify regressions.
