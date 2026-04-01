@@ -4,7 +4,7 @@ TARGET
 Validate and repair only the files touched by the previous implementation.
 
 TASK
-Enhance 'Orchade' into a AAA-grade simulation game by upgrading the core engine and visual stack. CORE ARCHITECTURE (The Ecosystem Engine): 1. The 3D Visual Overhaul: - Transition 'src/components/PlantVisualizer.tsx' from 2D Canvas to 'React Three Fiber' (Three.js). - Implement 'Procedural Growth'-plants should grow in 3D space with unique branch structures based on 'Genetic Seeds'. 2. The Biological Simulation: - Update 'src/types.ts' to include complex environmental variables: [Soil_pH], [Humidity], [Mineral_Composition], and [Cross-Breeding_Logic].
+Build 'DaxiniVault'-the autonomous tokenomics and Proof-of-Logic (PoL) engine for the ViaLogic ecosystem. CORE ARCHITECTURE (The Sovereign Mint): 1. The Asset Tokenizer: - Create a module vault/mint.js that assigns a unique 'Logic Token' to every entity in the 24,000-PR run.
 
 RULES
 1. Audit touched files first and identify regressions.
