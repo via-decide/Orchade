@@ -113,7 +113,7 @@ service cloud.firestore {
              counter.dayKey == data.dayKey &&
              counter.transferCount is number &&
              counter.transferCount <= 5 &&
-             counter.lastTransferAt == request.time;
+             counter.lastTransferAt == request.time &&
              data.windowKey is string &&
              data.windowKey.matches('^[0-9]{12}$');
     }
@@ -129,14 +129,10 @@ service cloud.firestore {
              data.to is string && data.to != request.auth.uid &&
              data.amount is number && data.amount > 0 &&
              data.timestamp == request.time &&
-             transferId.matches('^' + data.from + '_' + data.to + '_' + data.dayKey + '_.+$') &&
              isBatchUser(data.from) &&
              isBatchUser(data.to) &&
              isSocialTransferProtocol(data) &&
-             isWithinDailyLimit(data);
-             isBatchUser(data.from) &&
-             isBatchUser(data.to) &&
-             isSocialTransferProtocol(data) &&
+             isWithinDailyLimit(data) &&
              isRateLimitedTransfer(transferId, data);
     }
 
@@ -197,8 +193,6 @@ service cloud.firestore {
         isAdmin()
       );
 
-      allow create: if isAuthenticated() && isValidTransfer(transferId, request.resource.data);
-      // Social Transfer Protocol: authenticated Batch 1-3 users with per-minute pair rate limits.
       allow create: if isAuthenticated() && isValidTransfer(transferId, request.resource.data);
 
       // Transfers are immutable

@@ -11,7 +11,7 @@ interface PlantVisualizerProps {
   isBurning?: boolean;
   hasPests?: boolean;
   stress?: number;
-  weather?: WeatherType;
+  weather?: WeatherType | null;
   toolEffect?: string | null;
 }
 
@@ -141,6 +141,7 @@ const PlantVisualizer: React.FC<PlantVisualizerProps> = ({
   weather = 'clear',
   toolEffect = null
 }) => {
+  const safeWeather: WeatherType = weather ?? 'clear';
   const containerRef = useRef<HTMLDivElement>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
@@ -503,9 +504,9 @@ const PlantVisualizer: React.FC<PlantVisualizerProps> = ({
   }, [toolEffect]);
 
   useEffect(() => {
-    weatherRef.current = weather;
-    createWeatherParticles(weather);
-  }, [weather]);
+    weatherRef.current = safeWeather;
+    createWeatherParticles(safeWeather);
+  }, [safeWeather]);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -567,7 +568,7 @@ const PlantVisualizer: React.FC<PlantVisualizerProps> = ({
     plantGroupRef.current = plantGroup;
 
     // Initial particles
-    createWeatherParticles(weather);
+    createWeatherParticles(safeWeather);
     createStatusParticles();
 
     // Animation loop

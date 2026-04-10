@@ -193,7 +193,10 @@ export default function App() {
   }
 
   // ── Actions ──
-  const activeOrchard = gs.orchards.find(o => o.id === gs.activeOrchardId)!;
+  const activeOrchard =
+    gs.orchards.find(o => o.id === gs.activeOrchardId)
+    ?? gs.orchards.find(o => o.isUnlocked)
+    ?? gs.orchards[0];
 
   function updatePlant(fn: (p: Plant) => Plant) {
     if (gs.selectedPlantIndex === null) return;
@@ -211,6 +214,29 @@ export default function App() {
     });
   }
 
+  function applyPlantAndSpend(cost: number, fn: (p: Plant) => Plant) {
+    if (gs.selectedPlantIndex === null) return false;
+    let changed = false;
+    setGs(prev => {
+      const orchards = prev.orchards.map(o => {
+        if (o.id !== prev.activeOrchardId) return o;
+        const plants = o.plants.map((p, i) => {
+          if (i === prev.selectedPlantIndex && p) {
+            changed = true;
+            return fn(p);
+          }
+          return p;
+        });
+        return { ...o, plants };
+      });
+      if (!changed) return prev;
+      const next = { ...prev, credits: prev.credits - cost, orchards };
+      saveState(next);
+      return next;
+    });
+    return changed;
+  }
+
   function handleWater() {
     const plant = activeOrchard.plants[gs.selectedPlantIndex!];
     if (!plant) return notify('Select a plant first.');
@@ -224,8 +250,7 @@ export default function App() {
     if (gs.credits < 15) return notify('Not enough credits!');
     const plant = activeOrchard.plants[gs.selectedPlantIndex!];
     if (!plant) return notify('Select a plant first.');
-    updatePlant(p => ({ ...p, nutrients: Math.min(p.nutrients + 40, PLANT_STAGES[p.stageIndex].maxNutrients), stress: Math.max(0, p.stress - 5) }));
-    setGs(prev => ({ ...prev, credits: prev.credits - 15 }));
+    applyPlantAndSpend(15, p => ({ ...p, nutrients: Math.min(p.nutrients + 40, PLANT_STAGES[p.stageIndex].maxNutrients), stress: Math.max(0, p.stress - 5) }));
     notify('🌿 Fed! -15 credits');
   }
 
@@ -234,8 +259,7 @@ export default function App() {
     if (!plant) return notify('Select a plant first.');
     if (plant.pests === 0) return notify('No pests detected.');
     if (gs.credits < 15) return notify('Not enough credits!');
-    updatePlant(p => ({ ...p, pests: 0 }));
-    setGs(prev => ({ ...prev, credits: prev.credits - 15 }));
+    applyPlantAndSpend(15, p => ({ ...p, pests: 0 }));
     notify('🐛 Pests cleared! -15 credits');
   }
 
@@ -531,13 +555,13 @@ export default function App() {
                     onClick={() => {
                       if (gs.credits < item.cost) return notify('Not enough credits.');
                       if (!selectedPlant) return notify('Select a plant first.');
-                      updatePlant(p => ({
+                      const applied = applyPlantAndSpend(item.cost, p => ({
                         ...p,
                         nutrients: item.nut ? Math.min(p.nutrients + item.nut, PLANT_STAGES[p.stageIndex].maxNutrients) : p.nutrients,
                         stress: item.stress ? Math.max(0, p.stress + item.stress) : p.stress,
                         pests: item.kills ? Math.max(0, p.pests - item.kills) : p.pests,
                       }));
-                      setGs(prev => ({ ...prev, credits: prev.credits - item.cost }));
+                      if (!applied) return notify('Select a plant first.');
                       recordAction('exchange');
                       notify(`✅ Used ${item.name}! -${item.cost}⬡`);
                     }}
