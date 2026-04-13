@@ -1,0 +1,29 @@
+[
+  {
+    "title": "Zayvora: Local Research Engine",
+    "slug": "zayvora-local-research-engine",
+    "summary": "Introduction to Zayvora research architecture",
+    "tags": ["AI", "research"],
+    "date": "2026-03-10",
+    "author": "Orchade Team",
+    "content": "<p>Zayvora is a local-first research engine that indexes knowledge snippets and ranks relevance with lightweight heuristics.</p><p>This vanilla rebuild keeps the same information architecture while removing framework overhead.</p>"
+  },
+  {
+    "title": "Orchade Graph Inference",
+    "slug": "orchade-graph-inference",
+    "summary": "How concept edges are scored in a browser-only stack.",
+    "tags": ["graph", "research"],
+    "date": "2026-02-22",
+    "author": "System Lab",
+    "content": "<p>Graph inference in Orchade computes edge confidence by counting tag overlap and recency weighting.</p>"
+  },
+  {
+    "title": "Static Search Ranking",
+    "slug": "static-search-ranking",
+    "summary": "Simple weighted ranking across title, tags and summary.",
+    "tags": ["search", "AI"],
+    "date": "2026-01-30",
+    "author": "System Lab",
+    "content": "<p>Title matches are weighted highest, followed by tags, then summary text matches.</p>"
+  }
+]

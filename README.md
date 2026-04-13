@@ -1,20 +1,29 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+# Orchade (Vanilla JS Static Build)
 
-# Run and deploy your AI Studio app
+This project is now a framework-free static web application.
 
-This contains everything you need to run your app locally.
+## Run
 
-View your app in AI Studio: https://ai.studio/apps/4551aa60-882a-40fc-9e99-c54088cc40d6
+### Option 1: Open directly
+Open `index.html` in a modern browser.
 
-## Run Locally
+### Option 2: Static server
+```bash
+python -m http.server
+```
+Then visit `http://localhost:8000`.
 
-**Prerequisites:**  Node.js
+## Architecture
 
+- HTML pages: `index.html`, `public/index.html`, `public/research.html`, `public/article.html`
+- CSS: `assets/css/base.css`, `assets/css/layout.css`, `assets/css/components.css`
+- JS modules: `assets/js/router.js`, `api.js`, `ui.js`, `articles.js`, `search.js`, `graph.js`
+- Data: `data/articles.json`, `data/graph.json`
+- Components: `components/header.html`, `components/footer.html`, `components/article-card.html`
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+## Routing
+
+- `/` homepage
+- `/articles` article list
+- `/article/:slug` article detail page
+- `/research` research explorer graph
