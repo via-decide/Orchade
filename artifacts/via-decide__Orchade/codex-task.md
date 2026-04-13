@@ -1,6 +1,7 @@
 You are working in repository via-decide/Orchade on branch main.
 
 MISSION
+Create frontend runtime diagnostics harness.
 Create performance bottleneck inspector.
 
 CONSTRAINTS

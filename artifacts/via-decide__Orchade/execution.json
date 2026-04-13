@@ -1,6 +1,7 @@
 {
   "repo": "via-decide/Orchade",
   "mode": "codex_then_antigravity",
+  "branch": "simba/create-frontend-runtime-diagnostics-harness",
   "branch": "simba/create-performance-bottleneck-inspector",
   "files_to_create": [
     "codex-task.md",

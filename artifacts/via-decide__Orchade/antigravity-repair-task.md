@@ -4,6 +4,7 @@ TARGET
 Validate and repair only the files touched by the previous implementation.
 
 TASK
+Create frontend runtime diagnostics harness.
 Create performance bottleneck inspector.
 
 RULES
