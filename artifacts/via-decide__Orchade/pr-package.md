@@ -4,6 +4,12 @@ Title: Create frontend runtime diagnostics harness.
 ## Summary
 - Repo orchestration task for via-decide/Orchade
 - Goal: Create frontend runtime diagnostics harness.
+Branch: simba/create-performance-bottleneck-inspector
+Title: Create performance bottleneck inspector.
+
+## Summary
+- Repo orchestration task for via-decide/Orchade
+- Goal: Create performance bottleneck inspector.
 
 ## Testing Checklist
 - [ ] Run unit/integration tests

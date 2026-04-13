@@ -5,6 +5,7 @@ Validate and repair only the files touched by the previous implementation.
 
 TASK
 Create frontend runtime diagnostics harness.
+Create performance bottleneck inspector.
 
 RULES
 1. Audit touched files first and identify regressions.
