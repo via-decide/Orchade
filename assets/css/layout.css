@@ -1,7 +1,0 @@
-.container { width: min(1000px, 92%); margin: 0 auto; }
-main { padding: 1.5rem 0 3rem; }
-.grid { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
-.nav { display: flex; justify-content: space-between; align-items: center; padding: 1rem 0; }
-.nav ul { list-style: none; display: flex; gap: 1rem; padding: 0; margin: 0; }
-.search-row { display: flex; gap: .5rem; margin: 1rem 0; }
-#graph { width: 100%; max-width: 640px; height: 360px; border: 1px solid #334; background: #0c101a; }

@@ -1,0 +1,66 @@
+@import "tailwindcss";
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&family=Merriweather:ital,wght@0,400;0,700;1,400&display=swap');
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  --font-serif: "Merriweather", serif;
+
+  --color-soil-dark: #1A1614;
+  --color-soil-light: #282320;
+  --color-bark-brown: #4A3B32;
+  --color-leaf-green: #52B756;
+  --color-leaf-dark: #388E3C;
+  --color-water-blue: #29B6F6;
+  --color-mineral-gold: #FFCA28;
+  --color-burn-red: #E53935;
+  --color-toxic-green: #76FF03;
+}
+
+:root {
+  --bg: #151619;
+  --card-bg: #1c1d21;
+  --text-primary: #FFFFFF;
+  --text-secondary: #8E9299;
+}
+
+body {
+  background-color: var(--bg);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+}
+
+.hardware-panel {
+  background-color: var(--card-bg);
+  border: 1px solid #2a2b2f;
+  border-radius: 12px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+}
+
+.dashed-border {
+  border: 1px dashed #3a3b3f;
+}
+
+.status-glow-green {
+  box-shadow: 0 0 15px rgba(82, 183, 86, 0.3);
+}
+
+.status-glow-red {
+  box-shadow: 0 0 15px rgba(229, 57, 53, 0.3);
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #3a3b3f;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #4a4b4f;
+}
+
