@@ -1,0 +1,11 @@
+{
+  "module": "games",
+  "name": "Strategic Simulations",
+  "ecosystem": "aporaksha",
+  "requires": [
+    "passport",
+    "orchade",
+    "zayvora",
+    "skillhex"
+  ]
+}
