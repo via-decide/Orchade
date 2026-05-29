@@ -52,7 +52,43 @@ const createPlantModel = (index: number, progress: number, type: string = 'Basic
     // Trunk/Stem
     const trunkRadiusTop = stemThickness * (type === 'Xero-Cactus' ? 2 : type === 'Aether-Grass' ? 0.5 : 1);
     const trunkRadiusBottom = trunkRadiusTop * 1.5;
-    const trunkGeom = new THREE.CylinderGeometry(trunkRadiusTop, trunkRadiusBottom, stemHeight, 8);
+    
+    let trunkGeom;
+    if (type === 'Neon-Vine') {
+      // Twisted vine stem
+      class CustomVineCurve extends THREE.Curve<THREE.Vector3> {
+        constructor() {
+          super();
+        }
+        getPoint(t: number, optionalTarget = new THREE.Vector3()) {
+          const tx = Math.sin(t * Math.PI * 4) * 0.1;
+          const ty = t * stemHeight;
+          const tz = Math.cos(t * Math.PI * 4) * 0.1;
+          return optionalTarget.set(tx, ty, tz);
+        }
+      }
+      const path = new CustomVineCurve();
+      trunkGeom = new THREE.TubeGeometry(path, 20, trunkRadiusTop, 8, false);
+    } else if (type === 'Quartz-Fern') {
+      // Hexagonal crystalline stem
+      trunkGeom = new THREE.CylinderGeometry(trunkRadiusTop, trunkRadiusBottom, stemHeight, 6);
+    } else if (type === 'Void-Willow') {
+      // Thicker, gnarled trunk
+      trunkGeom = new THREE.CylinderGeometry(trunkRadiusTop * 1.2, trunkRadiusBottom * 1.5, stemHeight, 8, 4, false);
+      // Displace vertices to make it look gnarled
+      const posAttribute = trunkGeom.attributes.position;
+      for (let i = 0; i < posAttribute.count; i++) {
+        const x = posAttribute.getX(i);
+        const z = posAttribute.getZ(i);
+        posAttribute.setX(i, x + (Math.random() - 0.5) * 0.05);
+        posAttribute.setZ(i, z + (Math.random() - 0.5) * 0.05);
+      }
+      trunkGeom.computeVertexNormals();
+    } else {
+      // Default cylindrical stem
+      trunkGeom = new THREE.CylinderGeometry(trunkRadiusTop, trunkRadiusBottom, stemHeight, 8);
+    }
+
     const trunkMat = new THREE.MeshStandardMaterial({ 
       color: trunkColor,
       emissive: (type === 'Neon-Vine' || type === 'Plasma-Orchid') ? trunkColor : 0x000000,
@@ -60,7 +96,9 @@ const createPlantModel = (index: number, progress: number, type: string = 'Basic
     });
     const trunk = new THREE.Mesh(trunkGeom, trunkMat);
     trunk.name = 'stem';
-    trunk.position.y = stemHeight / 2;
+    if (type !== 'Neon-Vine') {
+      trunk.position.y = stemHeight / 2;
+    }
     group.add(trunk);
 
     // Leaves/Canopy
@@ -76,30 +114,61 @@ const createPlantModel = (index: number, progress: number, type: string = 'Basic
     
     if (type === 'Shadow-Fungi') {
       // Mushroom cap
-      const capGeom = new THREE.ConeGeometry(0.5 * index, 0.3 * index, 16);
+      const capRadius = 0.3 + (index * 0.2) + (progress * 0.1);
+      const capHeight = 0.2 + (index * 0.1);
+      const capGeom = new THREE.ConeGeometry(capRadius, capHeight, 16);
       const cap = new THREE.Mesh(capGeom, leafMat);
       cap.name = 'leaf';
       cap.position.y = stemHeight;
       group.add(cap);
+      
+      // Add spots for mature fungi
+      if (index >= 2) {
+        const spotMat = new THREE.MeshStandardMaterial({ color: 0xFFFFFF });
+        for (let i = 0; i < index * 3; i++) {
+          const spotGeom = new THREE.SphereGeometry(0.05, 4, 4);
+          const spot = new THREE.Mesh(spotGeom, spotMat);
+          const angle = Math.random() * Math.PI * 2;
+          const r = Math.random() * capRadius * 0.8;
+          spot.position.set(Math.cos(angle) * r, stemHeight + (capHeight * 0.2), Math.sin(angle) * r);
+          group.add(spot);
+        }
+      }
     } else if (type === 'Xero-Cactus') {
       // Spines instead of leaves
-      for (let i = 0; i < 12; i++) {
-        const spine = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.1, 0.02), new THREE.MeshStandardMaterial({ color: 0xFFFFFF }));
-        const angle = (i / 12) * Math.PI * 2;
-        spine.position.set(Math.cos(angle) * trunkRadiusTop, (Math.random() * stemHeight), Math.sin(angle) * trunkRadiusTop);
+      const spineCount = 12 + (index * 8);
+      for (let i = 0; i < spineCount; i++) {
+        const spine = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.1 + (index * 0.05), 0.02), new THREE.MeshStandardMaterial({ color: 0xFFFFFF }));
+        const angle = (i / spineCount) * Math.PI * 2;
+        const heightPos = (Math.random() * stemHeight);
+        spine.position.set(Math.cos(angle) * trunkRadiusTop, heightPos, Math.sin(angle) * trunkRadiusTop);
         spine.rotation.z = Math.random() * Math.PI;
         spine.name = 'leaf';
         group.add(spine);
       }
+      
+      // Add flower if mature
+      if (index >= 3) {
+        const flowerGeom = new THREE.DodecahedronGeometry(0.2 + (progress * 0.1));
+        const flowerMat = new THREE.MeshStandardMaterial({ color: 0xFF4081, emissive: 0xFF4081, emissiveIntensity: 0.4 });
+        const flower = new THREE.Mesh(flowerGeom, flowerMat);
+        flower.position.y = stemHeight + 0.1;
+        group.add(flower);
+      }
     } else {
       for (let i = 0; i < leafCount; i++) {
         let leafGeom;
+        const leafScale = 0.15 + (index * 0.1) + (progress * 0.05);
+        
         if (type === 'Quartz-Fern' || type === 'Cryo-Lily') {
-          leafGeom = new THREE.IcosahedronGeometry(0.2 * (1 + progress * 0.5), 0);
+          leafGeom = new THREE.IcosahedronGeometry(leafScale, 0);
         } else if (type === 'Aether-Grass') {
-          leafGeom = new THREE.BoxGeometry(0.05, 0.8 * (1 + progress), 0.01);
+          leafGeom = new THREE.BoxGeometry(0.05, leafScale * 4, 0.01);
+        } else if (type === 'Neon-Vine') {
+          leafGeom = new THREE.TorusGeometry(leafScale, 0.05, 8, 16);
         } else {
-          leafGeom = new THREE.SphereGeometry(0.2 * (1 + progress * 0.5), 8, 8);
+          // Default leaf shape (flattened sphere)
+          leafGeom = new THREE.SphereGeometry(leafScale, 8, 8);
         }
 
         const leaf = new THREE.Mesh(leafGeom, leafMat);
@@ -108,17 +177,25 @@ const createPlantModel = (index: number, progress: number, type: string = 'Basic
         const dist = trunkRadiusTop + (0.1 * index);
         
         if (type === 'Aether-Grass') {
-          leaf.position.set(Math.cos(angle) * 0.1, stemHeight, Math.sin(angle) * 0.1);
-          leaf.rotation.x = 0.2;
+          leaf.position.set(Math.cos(angle) * 0.1, stemHeight * 0.8, Math.sin(angle) * 0.1);
+          leaf.rotation.x = 0.2 + (index * 0.1);
           leaf.rotation.y = angle;
         } else if (type === 'Void-Willow') {
-          leaf.position.set(Math.cos(angle) * dist * 2, stemHeight - (Math.random() * 0.5), Math.sin(angle) * dist * 2);
-          leaf.scale.set(1, 2, 0.5);
+          leaf.position.set(Math.cos(angle) * dist * 2, stemHeight - (Math.random() * 0.5 * index), Math.sin(angle) * dist * 2);
+          leaf.scale.set(1, 2 + index, 0.5);
+          leaf.rotation.z = Math.PI / 4;
+        } else if (type === 'Neon-Vine') {
+           leaf.position.set(Math.cos(angle) * dist, stemHeight * (i/leafCount), Math.sin(angle) * dist);
+           leaf.rotation.x = Math.random() * Math.PI;
+           leaf.rotation.y = Math.random() * Math.PI;
         } else {
+          // Default leaf placement
           leaf.position.set(Math.cos(angle) * dist, (stemHeight * 0.6) + (Math.random() * stemHeight * 0.4), Math.sin(angle) * dist);
-          leaf.scale.set(1, 0.3, 1);
-          leaf.rotation.z = angle;
+          leaf.scale.set(1, 0.2, 1); // Flatten to look more like a leaf
+          leaf.rotation.y = angle;
+          leaf.rotation.z = Math.PI / 6; // Angle slightly upwards
         }
+        
         // Store original position and rotation for animation
         leaf.userData.originalRotation = leaf.rotation.clone();
         leaf.userData.originalPosition = leaf.position.clone();

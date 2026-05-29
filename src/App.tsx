@@ -57,11 +57,6 @@ import {
 } from 'firebase/firestore';
 import { onAuthStateChanged } from 'firebase/auth';
 import firebaseConfig from '../firebase-applet-config.json';
-import { verifyPassport } from './auth/passport';
-import { loginViaNFC } from './auth/nfc-login';
-import { sendOrchadeEvent } from './events/orchade-events';
-import { analyzeDecision } from './ai/reasoning';
-import { updateSkill } from './skills/update-skill';
 
 interface ErrorBoundaryProps {
   children: React.ReactNode;
@@ -125,10 +120,6 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
 }
 
 const App: React.FC = () => {
-  const [passportStatus, setPassportStatus] = useState<'idle' | 'verifying' | 'verified' | 'failed'>('idle');
-  const [passportIdentity, setPassportIdentity] = useState<any>(null);
-  const [nfcUid, setNfcUid] = useState('');
-  const [strategyLevel, setStrategyLevel] = useState(0);
   const [state, setState] = useState<GameState & { globalStats: any }>({
     day: 1,
     credits: 100,
@@ -177,20 +168,6 @@ const App: React.FC = () => {
   const addLog = useCallback((msg: string, type: string = 'info') => {
     setLogs(prev => [{ msg, type }, ...prev].slice(0, 20));
   }, []);
-
-  const emitEcosystemEvent = useCallback((type: string, payload: Record<string, unknown> = {}) => {
-    const event = {
-      type,
-      source: 'game',
-      timestamp: new Date().toISOString(),
-      userId: state.user?.uid || null,
-      passportId: passportIdentity?.passportId || passportIdentity?.id || null,
-      ...payload
-    };
-    sendOrchadeEvent(event).catch((error) => {
-      console.error('Orchade event failed:', error);
-    });
-  }, [passportIdentity, state.user?.uid]);
 
   const handleLogin = async () => {
     setIsLoginLoading(true);
@@ -287,66 +264,6 @@ const App: React.FC = () => {
 
     return () => unsubscribe();
   }, [state.user?.uid]);
-
-  useEffect(() => {
-    if (!state.user?.uid) {
-      setPassportStatus('idle');
-      setPassportIdentity(null);
-      return;
-    }
-
-    const verifyIdentity = async () => {
-      setPassportStatus('verifying');
-      try {
-        const passportData = await verifyPassport();
-        const isVerified = Boolean(
-          passportData?.valid ??
-          passportData?.verified ??
-          passportData?.ok ??
-          passportData?.status === 'verified'
-        );
-
-        if (!isVerified) {
-          setPassportStatus('failed');
-          setPassportIdentity(null);
-          addLog('Passport verification failed. Simulation controls are locked.', 'danger');
-          emitEcosystemEvent('game_failure', { reason: 'passport_verification_failed' });
-          return;
-        }
-
-        setPassportStatus('verified');
-        setPassportIdentity(passportData);
-        addLog('Passport identity verified. Simulation unlocked.', 'success');
-        emitEcosystemEvent('game_started', { channel: 'passport' });
-      } catch (error: any) {
-        setPassportStatus('failed');
-        setPassportIdentity(null);
-        addLog(`Passport verification error: ${error.message}`, 'danger');
-      }
-    };
-
-    verifyIdentity();
-  }, [state.user?.uid, addLog, emitEcosystemEvent]);
-
-  const handleNfcPassportLogin = async () => {
-    if (!nfcUid.trim()) {
-      addLog('Enter an NFC UID to continue.', 'warn');
-      return;
-    }
-
-    try {
-      setPassportStatus('verifying');
-      await loginViaNFC(nfcUid.trim());
-      const passportData = await verifyPassport();
-      setPassportStatus('verified');
-      setPassportIdentity(passportData);
-      addLog('NFC Passport login successful.', 'success');
-      emitEcosystemEvent('game_started', { channel: 'nfc' });
-    } catch (error: any) {
-      setPassportStatus('failed');
-      addLog(`NFC Passport login failed: ${error.message}`, 'danger');
-    }
-  };
 
   // Rankings & Global Stats Sync
   useEffect(() => {
@@ -494,13 +411,7 @@ const App: React.FC = () => {
   const selectedPlant = state.selectedPlantIndex !== null ? activeOrchard.plants[state.selectedPlantIndex] : null;
 
   const handlePlantAction = (action: 'research' | 'water' | 'fertilize' | 'pesticide' | 'harvest') => {
-    if (passportStatus !== 'verified') {
-      addLog('Passport identity required before simulation actions.', 'danger');
-      return;
-    }
     if (state.selectedPlantIndex === null || !selectedPlant) return;
-    let actionApplied = false;
-    let completedSession = false;
 
     setState(prev => {
       const newOrchards = [...prev.orchards];
@@ -550,7 +461,6 @@ const App: React.FC = () => {
         }
 
         addLog(`Research complete: +${finalG} roots, +10 credits.`, 'success');
-        actionApplied = true;
       }
 
       if (action === 'water') {
@@ -560,7 +470,6 @@ const App: React.FC = () => {
         plant.water = Math.min(stage.maxWater, plant.water + 20);
         plant.stress = Math.max(0, plant.stress - (5 + prev.upgrades.stressResistance));
         addLog('Hydration levels increased.', 'info');
-        actionApplied = true;
       }
 
       if (action === 'fertilize') {
@@ -569,7 +478,6 @@ const App: React.FC = () => {
         plant.nutrients = Math.min(PLANT_STAGES[plant.stageIndex].maxNutrients, plant.nutrients + 30);
         plant.stress += 10;
         addLog('Nutrient levels boosted.', 'success');
-        actionApplied = true;
       }
 
       if (action === 'pesticide') {
@@ -579,7 +487,6 @@ const App: React.FC = () => {
         plant.pestImmunity = 3;
         plant.stress += 15;
         addLog('Pests eradicated. Immunity active for 3 cycles.', 'success');
-        actionApplied = true;
       }
 
       if (action === 'harvest') {
@@ -595,8 +502,6 @@ const App: React.FC = () => {
         dataSeeds += dataReward;
         newPlants[prev.selectedPlantIndex!] = null;
         addLog(`Harvest complete! Gained ${Math.floor(reward)} credits and ${dataReward} data seeds.`, 'success');
-        actionApplied = true;
-        completedSession = true;
       }
 
       if (action !== 'harvest') {
@@ -610,35 +515,9 @@ const App: React.FC = () => {
       saveState({ orchards: newOrchards, credits, dataSeeds });
       return nextState;
     });
-
-    if (actionApplied) {
-      analyzeDecision({
-        action,
-        day: state.day,
-        score: state.credits + state.dataSeeds * 10,
-        passportId: passportIdentity?.passportId || passportIdentity?.id || null
-      }).catch((error) => console.error('Zayvora reasoning failed:', error));
-    }
-
-    if (action === 'research' && actionApplied) {
-      updateSkill({ skill: 'strategy', level: 1 }).catch((error) => {
-        console.error('SkillHex update failed:', error);
-      });
-      setStrategyLevel(prev => prev + 1);
-      emitEcosystemEvent('strategy_learned', { skill: 'strategy', levelDelta: 1 });
-    }
-
-    if (completedSession) {
-      emitEcosystemEvent('game_completed', { result: 'harvest' });
-    }
   };
 
   const nextDay = () => {
-    if (passportStatus !== 'verified') {
-      addLog('Passport identity required before simulation actions.', 'danger');
-      return;
-    }
-    let hadFailure = false;
     setState(prev => {
       const newWeather = getRandomWeather();
       const newOrchards = prev.orchards.map(o => {
@@ -660,7 +539,6 @@ const App: React.FC = () => {
           // Check for crop burn
           if (plant.stress >= 100) {
             addLog(`CRITICAL: ${plant.type} in ${o.name} suffered crop burn!`, 'danger');
-            hadFailure = true;
             plant.rootStrength = Math.max(0, plant.rootStrength - 50);
             plant.stress = 0;
             // Recalculate stage
@@ -681,16 +559,9 @@ const App: React.FC = () => {
       saveState({ day: prev.day + 1, orchards: newOrchards, weather: newWeather });
       return nextState;
     });
-    if (hadFailure) {
-      emitEcosystemEvent('game_failure', { reason: 'crop_burn' });
-    }
   };
 
   const buyPlot = (index: number) => {
-    if (passportStatus !== 'verified') {
-      addLog('Passport identity required before simulation actions.', 'danger');
-      return;
-    }
     if (state.credits < 50) {
       addLog('Insufficient credits to clear plot.', 'danger');
       return;
@@ -722,10 +593,6 @@ const App: React.FC = () => {
   };
 
   const unlockOrchard = (id: string) => {
-    if (passportStatus !== 'verified') {
-      addLog('Passport identity required before simulation actions.', 'danger');
-      return;
-    }
     const orchard = state.orchards.find(o => o.id === id);
     if (!orchard) return;
     if (state.credits < orchard.unlockCost) {
@@ -748,10 +615,6 @@ const App: React.FC = () => {
   };
 
   const buyUpgrade = (id: keyof GlobalUpgrades) => {
-    if (passportStatus !== 'verified') {
-      addLog('Passport identity required before simulation actions.', 'danger');
-      return;
-    }
     const cost = 10;
     if (state.dataSeeds < cost) {
       addLog('Insufficient genetic data for upgrade.', 'danger');
@@ -776,10 +639,6 @@ const App: React.FC = () => {
   };
 
   const buyItem = (item: typeof SHOP_ITEMS[0]) => {
-    if (passportStatus !== 'verified') {
-      addLog('Passport identity required before simulation actions.', 'danger');
-      return;
-    }
     if (state.credits < item.cost) {
       addLog(`Insufficient credits for ${item.name}.`, 'danger');
       return;
@@ -831,20 +690,6 @@ const App: React.FC = () => {
             <span className="text-[10px] font-bold text-text-secondary uppercase tracking-widest">Genetic Data</span>
             <span className="text-lg md:text-xl font-mono font-bold text-water-blue">{state.dataSeeds} 🧬</span>
           </div>
-          <div className="flex flex-col">
-            <span className="text-[10px] font-bold text-text-secondary uppercase tracking-widest">Passport Owner</span>
-            <span className="text-xs md:text-sm font-mono font-bold text-text-primary">
-              {passportIdentity?.owner || passportIdentity?.name || state.user?.displayName || 'Unverified'}
-            </span>
-          </div>
-          <div className="flex flex-col">
-            <span className="text-[10px] font-bold text-text-secondary uppercase tracking-widest">Skill Progress</span>
-            <span className="text-xs md:text-sm font-mono font-bold text-leaf-green">Strategy Level {strategyLevel}</span>
-          </div>
-          <div className="flex flex-col">
-            <span className="text-[10px] font-bold text-text-secondary uppercase tracking-widest">Session Score</span>
-            <span className="text-xs md:text-sm font-mono font-bold text-mineral-gold">{state.credits + state.dataSeeds * 10}</span>
-          </div>
           
           {/* Weather Indicator */}
           {state.weather && (
@@ -892,7 +737,6 @@ const App: React.FC = () => {
           )}
           <button 
             onClick={nextDay}
-            disabled={passportStatus !== 'verified'}
             className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-bark-brown/20 hover:bg-bark-brown/40 px-6 py-2 rounded-lg border border-bark-brown transition-all text-sm font-bold"
           >
             <RefreshCw size={16} />
@@ -1452,18 +1296,12 @@ const App: React.FC = () => {
                         </div>
                         <div className="space-y-2 pt-4 border-t border-bark-brown/20">
                           <div className="flex justify-between text-xs">
-                            <span className="text-text-secondary">Passport:</span>
-                            <span>{passportIdentity?.passportId || passportIdentity?.id || 'Not linked'}</span>
-                          </div>
-                          <div className="flex justify-between text-xs">
                             <span className="text-text-secondary">Email:</span>
                             <span>{state.user?.email || 'N/A'}</span>
                           </div>
                           <div className="flex justify-between text-xs">
                             <span className="text-text-secondary">Status:</span>
-                            <span className={`font-bold ${passportStatus === 'verified' ? 'text-leaf-green' : 'text-burn-red'}`}>
-                              {passportStatus === 'verified' ? 'PASSPORT VERIFIED' : 'PASSPORT REQUIRED'}
-                            </span>
+                            <span className="text-leaf-green font-bold">ACTIVE LINK</span>
                           </div>
                         </div>
                       </div>
@@ -1492,24 +1330,6 @@ const App: React.FC = () => {
                             </span>
                           </div>
                         </div>
-                      </div>
-                    </div>
-
-                    <div className="hardware-panel p-6 space-y-4">
-                      <h4 className="text-xs font-bold uppercase tracking-widest text-text-secondary">NFC Passport Login</h4>
-                      <div className="flex flex-col sm:flex-row gap-3">
-                        <input
-                          value={nfcUid}
-                          onChange={(e) => setNfcUid(e.target.value)}
-                          placeholder="Enter NFC UID"
-                          className="flex-1 bg-black/30 border border-bark-brown/40 rounded-lg px-3 py-2 text-sm outline-none focus:border-water-blue"
-                        />
-                        <button
-                          onClick={handleNfcPassportLogin}
-                          className="px-4 py-2 rounded-lg bg-water-blue text-soil-dark text-xs font-bold uppercase tracking-widest"
-                        >
-                          Verify NFC
-                        </button>
                       </div>
                     </div>
 
