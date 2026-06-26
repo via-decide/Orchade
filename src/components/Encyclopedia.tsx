@@ -226,6 +226,8 @@ const itemVariants: Variants = {
 export const Encyclopedia: React.FC<EncyclopediaProps> = ({ harvestedTypes }) => {
   const [selectedType, setSelectedType] = useState<string>('Basic');
   const [searchTerm, setSearchTerm] = useState<string>('');
+  const [pulsePlantType, setPulsePlantType] = useState<string | null>(null);
+  const [pulseKey, setPulseKey] = useState<number>(0);
 
   const filteredPlants = ENCYCLOPEDIA_DATA.filter(p => 
     p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -239,6 +241,71 @@ export const Encyclopedia: React.FC<EncyclopediaProps> = ({ harvestedTypes }) =>
   const totalSpecies = ENCYCLOPEDIA_DATA.length;
   const unlockedCount = harvestedTypes.length;
   const completionPercentage = Math.round((unlockedCount / totalSpecies) * 100);
+
+  const handlePlantClick = (type: string, plantUnlocked: boolean) => {
+    setSelectedType(type);
+    setPulsePlantType(type);
+    setPulseKey(prev => prev + 1);
+
+    // Dynamic bio-electronic synthesized haptic feedback chime via Web Audio API
+    try {
+      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+      if (AudioContextClass) {
+        const ctx = new AudioContextClass();
+        
+        if (plantUnlocked) {
+          // A beautiful, pristine futuristic double-chirp chime (high-frequency pleasant bio-beep)
+          const osc1 = ctx.createOscillator();
+          const osc2 = ctx.createOscillator();
+          const gainNode = ctx.createGain();
+          
+          osc1.type = 'sine';
+          osc1.frequency.setValueAtTime(659.25, ctx.currentTime); // E5
+          osc1.frequency.exponentialRampToValueAtTime(1318.51, ctx.currentTime + 0.12); // E6
+          
+          osc2.type = 'sine';
+          osc2.frequency.setValueAtTime(880.00, ctx.currentTime); // A5
+          osc2.frequency.exponentialRampToValueAtTime(1760.00, ctx.currentTime + 0.12); // A6
+          
+          gainNode.gain.setValueAtTime(0.08, ctx.currentTime);
+          gainNode.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.2);
+          
+          osc1.connect(gainNode);
+          osc2.connect(gainNode);
+          gainNode.connect(ctx.destination);
+          
+          osc1.start();
+          osc2.start();
+          osc1.stop(ctx.currentTime + 0.2);
+          osc2.stop(ctx.currentTime + 0.2);
+        } else {
+          // Muted, encrypted cybernetic buzz (representing encrypted locks)
+          const osc = ctx.createOscillator();
+          const filter = ctx.createBiquadFilter();
+          const gainNode = ctx.createGain();
+          
+          osc.type = 'triangle';
+          osc.frequency.setValueAtTime(160, ctx.currentTime);
+          osc.frequency.linearRampToValueAtTime(80, ctx.currentTime + 0.15);
+          
+          filter.type = 'lowpass';
+          filter.frequency.setValueAtTime(250, ctx.currentTime);
+          
+          gainNode.gain.setValueAtTime(0.12, ctx.currentTime);
+          gainNode.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.15);
+          
+          osc.connect(filter);
+          filter.connect(gainNode);
+          gainNode.connect(ctx.destination);
+          
+          osc.start();
+          osc.stop(ctx.currentTime + 0.15);
+        }
+      }
+    } catch (e) {
+      console.warn('Web Audio Context initialization or execution is blocked or unsupported:', e);
+    }
+  };
 
   return (
     <div id="encyclopedia-root" className="space-y-6">
@@ -320,24 +387,54 @@ export const Encyclopedia: React.FC<EncyclopediaProps> = ({ harvestedTypes }) =>
               return (
                 <motion.button
                   variants={itemVariants}
-                  whileHover={{ x: 4, transition: { duration: 0.1 } }}
+                  whileHover={{ x: 4, scale: 1.01, transition: { duration: 0.1 } }}
+                  whileTap={{ scale: 0.98 }}
                   id={`encyclopedia-btn-${plant.type}`}
                   key={plant.type}
-                  onClick={() => setSelectedType(plant.type)}
-                  className={`w-full p-3 rounded-lg text-left transition-all flex items-center justify-between border ${
+                  onClick={() => handlePlantClick(plant.type, plantUnlocked)}
+                  className={`w-full p-3 rounded-lg text-left transition-all flex items-center justify-between border relative overflow-hidden ${
                     isSelected 
-                      ? 'bg-fuchsia-500/10 border-fuchsia-500/50' 
+                      ? 'bg-fuchsia-500/10 border-fuchsia-500/50 shadow-[0_0_15px_rgba(217,70,239,0.1)]' 
                       : 'bg-black/30 border-white/5 hover:border-white/10'
                   }`}
                 >
-                  <div className="flex items-center gap-3">
-                    <span 
-                      className="w-3 h-3 rounded-full animate-pulse shadow-sm" 
-                      style={{ 
-                        backgroundColor: plant.color, 
-                        boxShadow: `0 0 8px ${plant.color}80` 
-                      }} 
+                  {/* Visual Haptic Expansion Ripple */}
+                  {pulsePlantType === plant.type && (
+                    <motion.span
+                      key={`ripple-${pulseKey}`}
+                      initial={{ scale: 0.3, opacity: 0.8 }}
+                      animate={{ scale: 2.2, opacity: 0 }}
+                      transition={{ duration: 0.45, ease: "easeOut" }}
+                      className="absolute inset-0 rounded-lg pointer-events-none"
+                      style={{
+                        background: plantUnlocked 
+                          ? `radial-gradient(circle, ${plant.color}33 0%, transparent 70%)`
+                          : 'radial-gradient(circle, rgba(239,68,68,0.2) 0%, transparent 70%)'
+                      }}
                     />
+                  )}
+
+                  <div className="flex items-center gap-3 relative z-10">
+                    <div className="relative flex items-center justify-center w-3 h-3">
+                      <span 
+                        className="w-3 h-3 rounded-full animate-pulse shadow-sm z-10" 
+                        style={{ 
+                          backgroundColor: plant.color, 
+                          boxShadow: `0 0 8px ${plant.color}80` 
+                        }} 
+                      />
+                      {/* Concentric visual haptic ring wave */}
+                      {pulsePlantType === plant.type && (
+                        <motion.span
+                          key={`dot-pulse-${pulseKey}`}
+                          initial={{ scale: 1, opacity: 1 }}
+                          animate={{ scale: 3.5, opacity: 0 }}
+                          transition={{ duration: 0.5, ease: "easeOut" }}
+                          className="absolute rounded-full w-3 h-3 pointer-events-none z-0"
+                          style={{ border: `1.5px solid ${plantUnlocked ? plant.color : '#EF4444'}` }}
+                        />
+                      )}
+                    </div>
                     <div>
                       <h4 className="text-xs font-bold text-text-primary leading-tight">
                         {plant.name}
@@ -348,7 +445,7 @@ export const Encyclopedia: React.FC<EncyclopediaProps> = ({ harvestedTypes }) =>
                     </div>
                   </div>
                   
-                  <div>
+                  <div className="relative z-10">
                     {plantUnlocked ? (
                       <span className="text-[8px] bg-leaf-green/10 text-leaf-green px-1.5 py-0.5 rounded font-mono uppercase tracking-wider font-bold">
                         Discovered
