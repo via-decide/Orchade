@@ -12,7 +12,8 @@
         "dataSeeds": { "type": "number", "description": "Current genetic data" },
         "day": { "type": "number", "description": "Current game day" },
         "upgrades": { "type": "object", "description": "Global upgrades state" },
-        "orchards": { "type": "array", "description": "List of orchards and their plants" }
+        "orchards": { "type": "array", "description": "List of orchards and their plants" },
+        "harvestedTypes": { "type": "array", "description": "List of plant types successfully harvested" }
       },
       "required": ["uid", "credits", "dataSeeds", "day", "orchards"]
     },

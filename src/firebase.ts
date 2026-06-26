@@ -1,5 +1,5 @@
 import { initializeApp } from 'firebase/app';
-import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
+import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged, User as FirebaseUser, signInAnonymously } from 'firebase/auth';
 import { getFirestore, doc, setDoc, getDoc, updateDoc, onSnapshot, collection, query, where, getDocs, addDoc, serverTimestamp, getDocFromServer, FirestoreError } from 'firebase/firestore';
 import firebaseConfig from '../firebase-applet-config.json';
 
@@ -30,6 +30,19 @@ export const signInWithGoogle = async () => {
     throw error;
   }
 };
+
+export const signInAsGuest = async () => {
+  console.log('signInAsGuest: Starting anonymous auth...');
+  try {
+    const result = await signInAnonymously(auth);
+    console.log('signInAsGuest: Anonymous auth success', result.user.uid);
+    return result;
+  } catch (error) {
+    console.error('signInAsGuest: Anonymous auth error', error);
+    throw error;
+  }
+};
+
 export const logout = () => signOut(auth);
 
 // Error Handling Spec for Firestore Operations

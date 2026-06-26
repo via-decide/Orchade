@@ -937,15 +937,25 @@ const PlantVisualizer: React.FC<PlantVisualizerProps> = ({
     };
   }, []);
 
-  // Update model when stage, type or color changes
+  // Update model when stage, type, color, or progress changes
   useEffect(() => {
     if (sceneRef.current && plantGroupRef.current) {
+      const prevRotationX = plantGroupRef.current.rotation.x;
+      const prevRotationY = plantGroupRef.current.rotation.y;
+      const prevRotationZ = plantGroupRef.current.rotation.z;
+
       sceneRef.current.remove(plantGroupRef.current);
-      const newPlant = createPlantModel(stageIndex, progressRef.current, type, color);
+      const newPlant = createPlantModel(stageIndex, progress, type, color);
       sceneRef.current.add(newPlant);
+
+      // Preserve previous rotation so the idle/sway animations don't snap!
+      newPlant.rotation.x = prevRotationX;
+      newPlant.rotation.y = prevRotationY;
+      newPlant.rotation.z = prevRotationZ;
+
       plantGroupRef.current = newPlant;
     }
-  }, [stageIndex, type, color]);
+  }, [stageIndex, type, color, progress]);
 
   return (
     <div 

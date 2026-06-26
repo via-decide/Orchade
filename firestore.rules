@@ -66,7 +66,8 @@ service cloud.firestore {
              data.dataSeeds is number && data.dataSeeds >= 0 &&
              data.day is number && data.day >= 1 &&
              data.orchards is list &&
-             data.upgrades is map;
+             data.upgrades is map &&
+             (!('harvestedTypes' in data) || data.harvestedTypes is list);
     }
 
     function isValidTransfer(data) {

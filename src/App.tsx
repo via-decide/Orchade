@@ -3,6 +3,7 @@ import { GameState, Plant, GlobalUpgrades, Orchard } from './types';
 import { PLANT_STAGES, INITIAL_UPGRADES, SHOP_ITEMS, getRandomWeather } from './constants';
 import PlantCard from './components/PlantCard';
 import PlantVisualizer from './components/PlantVisualizer';
+import { Encyclopedia } from './components/Encyclopedia';
 import { 
   Sprout, 
   FlaskConical, 
@@ -28,13 +29,15 @@ import {
   CloudRain,
   CloudLightning,
   Thermometer,
-  Cloud
+  Cloud,
+  BookOpen
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   auth, 
   db, 
   signInWithGoogle, 
+  signInAsGuest,
   logout, 
   handleFirestoreError, 
   OperationType 
@@ -119,6 +122,18 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
   }
 }
 
+export const SEED_TYPES = [
+  { type: 'Basic', name: 'Terran Sprout', cost: 50, color: '#4CAF50', desc: 'Standard Earth species. Extremely resilient but low research yields.' },
+  { type: 'Neon-Vine', name: 'Neon Vine', cost: 100, color: '#00E676', desc: 'Synthesized jungle creeper. Rapid expansion with bioluminescent properties.' },
+  { type: 'Quartz-Fern', name: 'Quartz Fern', cost: 150, color: '#B2EBF2', desc: 'Silicon-based crystalline flora. Exceptionally high-value mineral data.' },
+  { type: 'Shadow-Fungi', name: 'Shadow Fungi', cost: 120, color: '#4527A0', desc: 'Subterranean fungal spore. Highly resistant to pests.' },
+  { type: 'Cryo-Lily', name: 'Cryo Lily', cost: 180, color: '#81D4FA', desc: 'Cold-tempered aquatic hybrid. Absorbs surrounding thermal heat.' },
+  { type: 'Plasma-Orchid', name: 'Plasma Orchid', cost: 250, color: '#AD1457', desc: 'Supercharged stellar orchid. Hard to manage but massive yields.' },
+  { type: 'Void-Willow', name: 'Void Willow', cost: 300, color: '#212121', desc: 'Ethereal dark-wood entity. Warps surrounding sensory fields.' },
+  { type: 'Xero-Cactus', name: 'Xero Cactus', cost: 130, color: '#33691E', desc: 'Thorny arid species. Consumes virtually no hydration.' },
+  { type: 'Aether-Grass', name: 'Aether Grass', cost: 80, color: '#E0F2F1', desc: 'High-altitude gas-absorbent blade. Extremely fast lifecycles.' }
+];
+
 const App: React.FC = () => {
   const [state, setState] = useState<GameState & { globalStats: any }>({
     day: 1,
@@ -152,6 +167,7 @@ const App: React.FC = () => {
     upgrades: INITIAL_UPGRADES,
     activeTab: 'orchard',
     weather: getRandomWeather(),
+    harvestedTypes: [],
     user: null,
     isAuthReady: false,
     globalStats: null,
@@ -162,6 +178,7 @@ const App: React.FC = () => {
   const [transferAmount, setTransferAmount] = useState('');
   const [isTransferring, setIsTransferring] = useState(false);
   const [isLoginLoading, setIsLoginLoading] = useState(false);
+  const [seedingPlotIndex, setSeedingPlotIndex] = useState<number | null>(null);
   const [rankings, setRankings] = useState<{ uid: string; displayName: string; credits: number; dataSeeds: number }[]>([]);
   const [toolEffect, setToolEffect] = useState<string | null>(null);
 
@@ -178,6 +195,20 @@ const App: React.FC = () => {
     } catch (error: any) {
       addLog(`Login failed: ${error.message}`, 'danger');
       console.error('Login error:', error);
+    } finally {
+      setIsLoginLoading(false);
+    }
+  };
+
+  const handleGuestLogin = async () => {
+    setIsLoginLoading(true);
+    addLog('Establishing Guest / Sandbox Neural Link...', 'system');
+    try {
+      await signInAsGuest();
+      addLog('Guest link established successfully.', 'success');
+    } catch (error: any) {
+      addLog(`Guest connection failed: ${error.message}`, 'danger');
+      console.error('Guest login error:', error);
     } finally {
       setIsLoginLoading(false);
     }
@@ -243,6 +274,7 @@ const App: React.FC = () => {
           orchards: data.orchards ?? prev.orchards,
           upgrades: data.upgrades ?? prev.upgrades,
           weather: data.weather ?? prev.weather,
+          harvestedTypes: data.harvestedTypes ?? prev.harvestedTypes ?? [],
         }));
       } else {
         // Initialize new user document
@@ -256,6 +288,7 @@ const App: React.FC = () => {
           upgrades: INITIAL_UPGRADES,
           orchards: state.orchards,
           weather: getRandomWeather(),
+          harvestedTypes: [],
           createdAt: serverTimestamp()
         };
         setDoc(userDocRef, initialState).catch(e => handleFirestoreError(e, OperationType.WRITE, `users/${state.user!.uid}`));
@@ -489,6 +522,7 @@ const App: React.FC = () => {
         addLog('Pests eradicated. Immunity active for 3 cycles.', 'success');
       }
 
+      let harvestedTypes = prev.harvestedTypes || [];
       if (action === 'harvest') {
         if (plant.stageIndex < 4) {
           addLog('Plant is not ready for harvest.', 'warn');
@@ -501,6 +535,12 @@ const App: React.FC = () => {
         credits += reward;
         dataSeeds += dataReward;
         newPlants[prev.selectedPlantIndex!] = null;
+        
+        if (!harvestedTypes.includes(plant.type)) {
+          harvestedTypes = [...harvestedTypes, plant.type];
+          addLog(`NEW SPECIES DISCOVERED AND HARVESTED: ${plant.type}! Check the Botanical Archives.`, 'success');
+        }
+        
         addLog(`Harvest complete! Gained ${Math.floor(reward)} credits and ${dataReward} data seeds.`, 'success');
       }
 
@@ -511,8 +551,8 @@ const App: React.FC = () => {
       orchard.plants = newPlants;
       newOrchards[orchardIndex] = orchard;
       
-      const nextState = { ...prev, orchards: newOrchards, credits, dataSeeds, selectedPlantIndex: action === 'harvest' ? null : prev.selectedPlantIndex };
-      saveState({ orchards: newOrchards, credits, dataSeeds });
+      const nextState = { ...prev, orchards: newOrchards, credits, dataSeeds, harvestedTypes, selectedPlantIndex: action === 'harvest' ? null : prev.selectedPlantIndex };
+      saveState({ orchards: newOrchards, credits, dataSeeds, harvestedTypes });
       return nextState;
     });
   };
@@ -561,9 +601,9 @@ const App: React.FC = () => {
     });
   };
 
-  const buyPlot = (index: number) => {
-    if (state.credits < 50) {
-      addLog('Insufficient credits to clear plot.', 'danger');
+  const buyPlot = (index: number, plantType: string = 'Basic', cost: number = 50, color: string = '#4CAF50') => {
+    if (state.credits < cost) {
+      addLog(`Insufficient credits to cultivate ${plantType} (requires ${cost}🪙).`, 'danger');
       return;
     }
     setState(prev => {
@@ -573,7 +613,7 @@ const App: React.FC = () => {
       const newPlants = [...orchard.plants];
       newPlants[index] = {
         id: Math.random().toString(36).substr(2, 9),
-        type: 'Basic',
+        type: plantType,
         rootStrength: 0,
         water: 30,
         nutrients: 100,
@@ -585,11 +625,11 @@ const App: React.FC = () => {
       };
       orchard.plants = newPlants;
       newOrchards[orchardIndex] = orchard;
-      const nextState = { ...prev, orchards: newOrchards, credits: prev.credits - 50, selectedPlantIndex: index };
-      saveState({ orchards: newOrchards, credits: prev.credits - 50 });
+      const nextState = { ...prev, orchards: newOrchards, credits: prev.credits - cost, selectedPlantIndex: index };
+      saveState({ orchards: newOrchards, credits: prev.credits - cost });
       return nextState;
     });
-    addLog('New plot cleared and seeded. Neural link established.', 'success');
+    addLog(`New ${plantType} cultivated and seeded. Neural link established.`, 'success');
   };
 
   const unlockOrchard = (id: string) => {
@@ -771,6 +811,13 @@ const App: React.FC = () => {
             className={`flex-1 lg:flex-none p-4 rounded-xl flex items-center justify-center transition-all ${state.activeTab === 'rankings' ? 'bg-burn-red text-soil-dark' : 'bg-card-bg text-text-secondary hover:text-white'}`}
           >
             <Trophy size={24} />
+          </button>
+          <button 
+            onClick={() => setState(p => ({ ...p, activeTab: 'archives' }))}
+            className={`flex-1 lg:flex-none p-4 rounded-xl flex items-center justify-center transition-all ${state.activeTab === 'archives' ? 'bg-fuchsia-500 text-soil-dark' : 'bg-card-bg text-text-secondary hover:text-white'}`}
+            title="Botanical Archives & Encyclopedia"
+          >
+            <BookOpen size={24} />
           </button>
           <button 
             onClick={() => setState(p => ({ ...p, activeTab: 'profile' }))}
@@ -997,7 +1044,7 @@ const App: React.FC = () => {
                           plant={plant} 
                           index={i} 
                           isSelected={state.selectedPlantIndex === i}
-                          onClick={() => plant ? setState(p => ({ ...p, selectedPlantIndex: i })) : buyPlot(i)}
+                          onClick={() => plant ? setState(p => ({ ...p, selectedPlantIndex: i })) : setSeedingPlotIndex(i)}
                         />
                       ))}
                     </div>
@@ -1270,6 +1317,22 @@ const App: React.FC = () => {
                   </motion.div>
                 )}
 
+                {state.activeTab === 'archives' && (
+                  <motion.div 
+                    key="archives"
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: 20 }}
+                    className="space-y-6"
+                  >
+                    <div className="flex justify-between items-center">
+                      <h2 className="font-serif text-xl italic">Botanical Archives</h2>
+                      <span className="text-[10px] font-bold text-text-secondary uppercase tracking-widest">Flora Encyclopedia</span>
+                    </div>
+                    <Encyclopedia harvestedTypes={state.harvestedTypes || []} />
+                  </motion.div>
+                )}
+
                 {state.activeTab === 'profile' && (
                   <motion.div 
                     key="profile"
@@ -1398,6 +1461,84 @@ const App: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Seed Selection Dialog */}
+      <AnimatePresence>
+        {seedingPlotIndex !== null && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-40 flex items-center justify-center bg-soil-dark/95 backdrop-blur-md p-6"
+          >
+            <motion.div 
+              initial={{ scale: 0.9, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.9, y: 20 }}
+              className="hardware-panel max-w-2xl w-full p-6 space-y-6 border-leaf-green/30 overflow-y-auto max-h-[85vh] no-scrollbar"
+            >
+              <div className="flex justify-between items-center border-b border-bark-brown/30 pb-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-lg bg-leaf-green/10 flex items-center justify-center text-leaf-green">
+                    <Sprout size={18} />
+                  </div>
+                  <div>
+                    <h3 className="font-serif text-lg italic text-text-primary">Cultivate Specimen</h3>
+                    <p className="text-[9px] text-text-secondary uppercase tracking-widest">Select biological origin sequence</p>
+                  </div>
+                </div>
+                <button 
+                  onClick={() => setSeedingPlotIndex(null)}
+                  className="px-3 py-1 bg-black/40 hover:bg-black/60 text-text-secondary hover:text-white transition-all text-[9px] uppercase tracking-widest font-mono rounded"
+                >
+                  Close
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {SEED_TYPES.map(seed => {
+                  const canAfford = state.credits >= seed.cost;
+                  return (
+                    <button 
+                      key={seed.type}
+                      onClick={() => {
+                        if (!canAfford) {
+                          addLog(`Insufficient credits for ${seed.name}.`, 'danger');
+                          return;
+                        }
+                        buyPlot(seedingPlotIndex, seed.type, seed.cost, seed.color);
+                        setSeedingPlotIndex(null);
+                      }}
+                      className={`hardware-panel p-4 text-left font-sans flex flex-col gap-2 hover:border-leaf-green/60 group transition-all relative overflow-hidden ${
+                        !canAfford 
+                          ? 'opacity-40 cursor-not-allowed border-bark-brown/20 bg-black/10' 
+                          : 'cursor-pointer hover:bg-leaf-green/5'
+                      }`}
+                      disabled={!canAfford}
+                    >
+                      <div className="flex justify-between items-center w-full">
+                        <div className="flex items-center gap-2">
+                          <span 
+                            className="w-3.5 h-3.5 rounded-full animate-pulse shadow-[0_0_8px_currentColor]" 
+                            style={{ color: seed.color, backgroundColor: seed.color }} 
+                          />
+                          <span className="font-bold text-sm text-text-primary group-hover:text-leaf-green transition-colors">{seed.name}</span>
+                        </div>
+                        <span className="font-mono text-xs font-bold text-mineral-gold bg-black/40 px-2 py-0.5 rounded">{seed.cost} 🪙</span>
+                      </div>
+                      <p className="text-[10px] text-text-secondary leading-relaxed flex-1">{seed.desc}</p>
+                      {!canAfford && (
+                        <span className="text-[9px] text-burn-red font-mono uppercase tracking-[0.05em] mt-2 block">Requires {seed.cost} 🪙</span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Auth Overlay */}
       <AnimatePresence>
         {(!state.user && state.isAuthReady) && (
@@ -1439,6 +1580,19 @@ const App: React.FC = () => {
                       <LogIn size={20} />
                     )}
                     {isLoginLoading ? 'CONNECTING...' : 'CONNECT WITH GOOGLE'}
+                  </button>
+
+                  <button 
+                    onClick={handleGuestLogin}
+                    disabled={isLoginLoading}
+                    className="w-full flex items-center justify-center gap-3 bg-bark-brown/20 text-text-primary font-bold py-4 rounded-xl hover:bg-bark-brown/40 border border-bark-brown/40 hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50"
+                  >
+                    {isLoginLoading ? (
+                      <RefreshCw className="animate-spin" size={20} />
+                    ) : (
+                      <Sprout size={20} />
+                    )}
+                    PLAY AS GUEST / SANDBOX MODE
                   </button>
 
                   <div className="hardware-panel p-3 h-32 overflow-y-auto font-mono text-[9px] space-y-1 bg-black/60 text-left border-bark-brown/20">
