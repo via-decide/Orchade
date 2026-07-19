@@ -2,43 +2,45 @@ import { initializeApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged, User as FirebaseUser, signInAnonymously } from 'firebase/auth';
 import { getFirestore, doc, setDoc, getDoc, updateDoc, onSnapshot, collection, query, where, getDocs, addDoc, serverTimestamp, getDocFromServer, FirestoreError } from 'firebase/firestore';
 import firebaseConfig from '../firebase-applet-config.json';
+import { logger } from './lib/logger';
+import { withRetry } from './lib/retry';
 
 // Initialize Firebase
-console.log('Firebase: Initializing with config...', firebaseConfig.projectId);
+logger.info('Firebase initialization started', { projectId: firebaseConfig.projectId });
 let app;
 try {
   app = initializeApp(firebaseConfig);
-  console.log('Firebase: App initialized successfully.');
+  logger.info('Firebase app initialized successfully');
 } catch (error) {
-  console.error('Firebase: Initialization error', error);
+  logger.error('Firebase initialization error', { error });
   throw error;
 }
 export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
 export const auth = getAuth(app);
-console.log('Firebase: Auth and Firestore initialized.');
+logger.info('Firebase Auth and Firestore initialized');
 export const googleProvider = new GoogleAuthProvider();
 
 // Auth Helpers
 export const signInWithGoogle = async () => {
-  console.log('signInWithGoogle: Starting popup...');
+  logger.info('Google sign-in popup starting');
   try {
     const result = await signInWithPopup(auth, googleProvider);
-    console.log('signInWithGoogle: Popup success', result.user.uid);
+    logger.info('Google sign-in popup succeeded', { uid: result.user.uid });
     return result;
   } catch (error) {
-    console.error('signInWithGoogle: Popup error', error);
+    logger.error('Google sign-in popup failed', { error });
     throw error;
   }
 };
 
 export const signInAsGuest = async () => {
-  console.log('signInAsGuest: Starting anonymous auth...');
+  logger.info('Anonymous sign-in starting');
   try {
     const result = await signInAnonymously(auth);
-    console.log('signInAsGuest: Anonymous auth success', result.user.uid);
+    logger.info('Anonymous sign-in succeeded', { uid: result.user.uid });
     return result;
   } catch (error) {
-    console.error('signInAsGuest: Anonymous auth error', error);
+    logger.error('Anonymous sign-in failed', { error });
     throw error;
   }
 };
@@ -93,17 +95,17 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
     operationType,
     path
   }
-  console.error('Firestore Error: ', JSON.stringify(errInfo));
+  logger.error('Firestore operation failed', errInfo as unknown as Record<string, unknown>);
   throw new Error(JSON.stringify(errInfo));
 }
 
 // Connection Test
 async function testConnection() {
   try {
-    await getDocFromServer(doc(db, 'test', 'connection'));
+    await withRetry(() => getDocFromServer(doc(db, 'test', 'connection')), { attempts: 2, timeoutMs: 5000 });
   } catch (error) {
     if (error instanceof Error && error.message.includes('the client is offline')) {
-      console.error("Please check your Firebase configuration. The client is offline.");
+      logger.warn('Firebase connection test reports offline client');
     }
   }
 }
