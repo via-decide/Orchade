@@ -1,0 +1,3 @@
+# Performance Engineering
+
+Budgets: 60 FPS desktop, 30/60 selectable mobile, <8ms simulation tick average, <4ms save serialization for normal autosaves, <300MB mobile memory target, <2s initial interactive target after bundle caching, bounded save files with compression for large worlds, and no unbounded Firestore writes per action. Profiling: React profiler for renders, browser performance traces, bundle analyzer, memory snapshots, save-size reports, synthetic day-advance benchmarks, and content-scale tests at 10x/100x. Roadmap: memoize view models, virtualize large inventories, lazy-load encyclopedias/assets, batch Firestore writes, and partition simulation ticks.

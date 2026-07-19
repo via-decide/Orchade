@@ -1,28 +1,33 @@
-# Master Roadmap
+# Orchade Master Roadmap
 
-## Evidence baseline
-Orchade is a React/Vite orchard simulation in migration from a playable legacy app in `src/` to AI-native gameplay capsules in `gameplay/`. Existing systems include plant care, weather, forecasts, climate control, orchards, daily progression, upgrades, market actions, credit transfer, rankings, login, encyclopedia unlocks, an event bus, ordered simulation systems, and seed data packs for crops, items, weather, tools, buildings, quests, and NPC archetypes.
+Orchade is currently a React/Vite/Firebase orchard simulation whose runtime center is `src/App.tsx`, with domain extraction beginning in AI-readable `gameplay/*` feature capsules and JSON content under `data/*`. This bible treats the repo as entering production and prioritizes evidence from the current codebase: monolithic UI/runtime state, Firestore cloud persistence, data-definition seeds, scaffolded capsules, ADRs, and generated documentation automation.
 
-## Roadmap phases
-| Phase | Goal | Evidence | Exit criteria |
-|---|---|---|---|
-| 1. Stabilize core loop | Keep planting, tending, harvesting, upgrades, weather, and saves reliable. | `src/App.tsx`, `src/types.ts`, `src/constants.ts`. | Core loop covered by unit/integration tests and no behavior depends on duplicated constants. |
-| 2. Data-driven gameplay | Runtime consumes `data/*` catalogs. | `data/*/*.json`, `DataPack<T>`. | Crops/items/weather/quests can be added by data only. |
-| 3. Capsule extraction | Move domain logic into `gameplay/*` public APIs. | `gameplay/module-manifest.json`, capsule READMEs/TODOs. | React UI imports capsule APIs instead of owning rules. |
-| 4. Player progression expansion | Add tutorial quests, collection goals, seasonal objectives, NPC merchants, and crafting. | Existing quest, NPC, item, building, and tool definitions. | New player has clear first-session goals and long-term goals. |
-| 5. World simulation depth | Make weather, day/night, seasons, NPC simulation, wildlife, water, lighting, and terrain affect choices. | `src/simulation/worldSystems.ts`, weather data. | World state changes produce visible gameplay and presentation consequences. |
-| 6. Polish and live operations | Improve UX, visuals, audio, metrics, saves, and content operations. | Docs/ADRs/graphs, Firebase persistence, rankings/global stats. | Repeatable release process and measurable retention loops. |
+## Evidence base
+- Runtime shell: `src/App.tsx` owns app state, auth, Firestore sync, economy transfers, UI flows, and most rendering decisions.
+- Domain extraction: `gameplay/module-manifest.json` declares ten capsules and their dependencies/events.
+- Existing gameplay APIs: farming, weather, economy, world, and UI have initial facades; inventory/crafting/quests/NPC/combat are mostly scaffolded.
+- Data pipeline seed: `data/crops`, `data/items`, `data/tools`, `data/buildings`, `data/quests`, `data/npcs`, and `data/weather` exist as JSON definitions.
+- Persistence: Firebase auth and Firestore are configured; offline/cloud-save architecture is not yet separated from UI.
 
-## Prioritized suggestions
-| Suggestion | Why it improves the game | Dev effort | Technical risk | Gameplay impact | Replayability impact | Retention impact | Architecture impact |
-|---|---|---:|---:|---:|---:|---:|---:|
-| Build a first-session tutorial quest chain from the existing `first_harvest` quest. | Reduces early confusion and turns planting, tending, harvesting, and upgrades into explicit goals. | M | L | H | M | H | M |
-| Replace hard-coded seed lists with the crop catalog plus encyclopedia metadata. | Makes species additions cheaper and prevents runtime/data drift. | M | M | H | H | H | H |
-| Add daily/weekly contracts for specific crops and weather conditions. | Gives players reasons to return and changes crop priorities between sessions. | M | M | H | H | H | M |
-| Implement inventory and crafting around tools, seeds, crop yields, and workbenches. | Turns harvested outputs into decisions instead of only currencies. | L | M | H | H | H | H |
-| Add NPC merchants and relationship-gated offers. | Humanizes the orchard world and provides social progression beyond rankings. | L | M | H | H | H | H |
-| Introduce seasons and biome-specific orchard modifiers. | Makes location unlocks strategically different rather than only more plots. | L | M | H | H | H | H |
-| Add save migrations and schema validation for user documents/data packs. | Protects player progress as systems become data-driven. | M | M | M | M | H | H |
+## Executive roadmap
+| Track | Priority | Rationale | Dependencies | Complexity | Gameplay impact | Replayability | Retention | Maintainability |
+|---|---:|---|---|---|---|---|---|---|
+| Critical Foundation | P0 | Extract deterministic simulation, saves, events, schemas, and tests from the app shell. | ADRs, capsules, data schemas | High | Enables safe feature work | Medium | High | Very high |
+| Core Gameplay | P1 | Deepen farming, inventory, crafting, weather, economy, quests, NPC loops. | Foundation | High | Very high | High | High | High |
+| Simulation Expansion | P1 | Add seasons, ecology, logistics, automation, market simulation. | Core gameplay + telemetry | High | High | Very high | High | Medium |
+| World Expansion | P2 | Villages, caves, travel, landmarks, secrets, biome progression. | World/content tools | High | Very high | Very high | High | Medium |
+| Technical Excellence | P0/P1 | CI, performance budgets, save compatibility, content validation. | Foundation | Medium | Indirect | Medium | High | Very high |
+| Visual Polish | P2 | Cohesive lighting, particles, vegetation, camera, hierarchy. | Art bible + perf budgets | Medium | High | Medium | Medium | Medium |
+| Audio Polish | P2 | Adaptive music, ambience, feedback, accessibility audio. | Event bus + mixer | Medium | Medium | Medium | Medium | Medium |
+| Accessibility | P1 | Keyboard/gamepad/touch, contrast, scalable UI, error recovery. | UX inventory | Medium | High | Medium | High | High |
+| Modding | P3 | Content packs, schema validation, safe scripting, Workshop readiness. | Data-driven content | High | High | Very high | Medium | Medium |
+| LiveOps | P3 | Seasonal events, telemetry, challenges, community goals. | Analytics + stable content | High | Medium | High | Very high | Medium |
+| Experimental R&D | P4 | AI assistants, learned NPCs, advanced ecology. | Instrumentation | High | Unknown | High | Medium | Low |
+| Future Vision | P4 | Multiplayer, dedicated servers, console/mobile parity. | Server-authoritative architecture | Very high | Very high | Very high | High | Medium |
 
-## Estimate scale
-`S` = small, `M` = medium, `L` = large, `H` = high/very large impact or risk.
+## Phase gates
+1. Stabilize state contracts and save versioning.
+2. Move domain rules into capsules behind public APIs.
+3. Validate all content through schemas and automated checks.
+4. Introduce event-sourced simulation logs for replay/debug.
+5. Expand world and LiveOps only after deterministic tests exist.
