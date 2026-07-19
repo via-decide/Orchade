@@ -13,8 +13,13 @@ This capsule separates public contracts, state shape, UI adapters, and internal 
 
 ## Public API
 - `WorldState`
-- `WorldLocation`
-- `advanceWorldDay`
+- `FarmTile`
+- `CropInstance`
+- `createFarmWorld`
+- `plantCropFromInventory`
+- `simulateWorldTick`
+- `harvestCropToInventory`
+- `serializeWorldSave`
 
 ## Internal API
 Internal implementation belongs under `internal/` and must not be imported by other modules.
@@ -29,9 +34,20 @@ Internal implementation belongs under `internal/` and must not be imported by ot
 ## State ownership
 Owns only state declared in `state.ts`; cross-module data should be referenced through public APIs or events.
 
+## Current capabilities
+- Lightweight ECS entities for players, NPCs, animals, wildlife, items, decorations, and future entities.
+- Living-world ticks coordinate world weather, ecology resources, NPC routines, and economy updates.
+- Save v2 migration attaches living-world entities while preserving schema v1 farm state.
+
+- Deterministic tile-based farm grid with seasons and weather.
+- Runtime crop instances are separated from immutable crop definitions.
+- Planting consumes seed items through the inventory capsule.
+- Harvesting inserts crop yield back into inventory with overflow reporting.
+- Versioned save payloads persist world, inventory, weather, soil, crops, and clock state.
+
 ## Current limitations
-- Runtime extraction from `src/App.tsx` is intentionally incremental to avoid breaking behavior.
-- Tests are scaffolded and should be filled as code migrates.
+- Runtime extraction from `src/App.tsx` remains incremental to avoid breaking existing saves and rendering behavior.
+- Debug UI and overlays are not yet wired into the React shell.
 
 ## Future roadmap
 - Move domain logic from `src/` into `internal/`.

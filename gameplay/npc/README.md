@@ -29,7 +29,12 @@ Internal implementation belongs under `internal/` and must not be imported by ot
 ## State ownership
 Owns only state declared in `state.ts`; cross-module data should be referenced through public APIs or events.
 
-## Current limitations
+## Current capabilities
+- Villager profiles include home, job, schedule, personality, skills, relationships, needs, inventory, memory, and reputation.
+- Daily routines adapt to hour, season, and severe weather.
+- NPC simulation runs without player interaction through public capsule APIs.
+
+## Current limitations## Current limitations
 - Runtime extraction from `src/App.tsx` is intentionally incremental to avoid breaking behavior.
 - Tests are scaffolded and should be filled as code migrates.
 
