@@ -15,7 +15,8 @@
         "orchards": { "type": "array", "description": "List of orchards and their plants" },
         "harvestedTypes": { "type": "array", "description": "List of plant types successfully harvested" },
         "weather": { "type": "object", "description": "Current weather" },
-        "weatherForecast": { "type": "array", "description": "3-day weather forecast" }
+        "weatherForecast": { "type": "array", "description": "3-day weather forecast" },
+        "climateControl": { "type": "object", "description": "Active climate control state override" }
       },
       "required": ["uid", "credits", "dataSeeds", "day", "orchards"]
     },

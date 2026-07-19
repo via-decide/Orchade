@@ -60,6 +60,10 @@ export type GameState = {
   activeTab: 'orchard' | 'lab' | 'market' | 'rankings' | 'profile' | 'archives';
   weather?: Weather;
   weatherForecast?: Weather[];
+  climateControl?: {
+    targetWeatherType: WeatherType;
+    daysRemaining: number;
+  } | null;
   harvestedTypes?: string[];
   user: {
     uid: string;

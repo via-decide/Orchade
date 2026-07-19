@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { GameState, Plant, GlobalUpgrades, Orchard } from './types';
-import { PLANT_STAGES, INITIAL_UPGRADES, SHOP_ITEMS, getRandomWeather } from './constants';
+import { PLANT_STAGES, INITIAL_UPGRADES, SHOP_ITEMS, getRandomWeather, WEATHER_TYPES } from './constants';
 import PlantCard from './components/PlantCard';
 import PlantVisualizer from './components/PlantVisualizer';
 import { Encyclopedia } from './components/Encyclopedia';
@@ -168,6 +168,7 @@ const App: React.FC = () => {
     activeTab: 'orchard',
     weather: getRandomWeather(),
     weatherForecast: [getRandomWeather(), getRandomWeather(), getRandomWeather()],
+    climateControl: null,
     harvestedTypes: [],
     user: null,
     isAuthReady: false,
@@ -276,6 +277,7 @@ const App: React.FC = () => {
           upgrades: data.upgrades ?? prev.upgrades,
           weather: data.weather ?? prev.weather,
           weatherForecast: data.weatherForecast ?? prev.weatherForecast ?? [getRandomWeather(), getRandomWeather(), getRandomWeather()],
+          climateControl: data.climateControl !== undefined ? data.climateControl : prev.climateControl ?? null,
           harvestedTypes: data.harvestedTypes ?? prev.harvestedTypes ?? [],
         }));
       } else {
@@ -292,6 +294,7 @@ const App: React.FC = () => {
           orchards: state.orchards,
           weather: getRandomWeather(),
           weatherForecast: initialForecast,
+          climateControl: null,
           harvestedTypes: [],
           createdAt: serverTimestamp()
         };
@@ -469,13 +472,21 @@ const App: React.FC = () => {
         setToolEffect('genetic-scanner');
         setTimeout(() => setToolEffect(null), 1500);
         
+        // Fog halves research efficiency
+        const isFog = prev.weather?.type === 'fog';
+        const weatherMultiplier = isFog ? 0.5 : 1.0;
+        
         const baseG = Math.floor(Math.random() * 8) + 5;
-        const finalG = Math.max(1, Math.round(baseG * (plant.nutrients / 100)));
+        const finalG = Math.max(1, Math.round(baseG * (plant.nutrients / 100) * weatherMultiplier));
+        
+        // Stress gain is scaled by the weather intensity
+        const weatherIntensity = prev.weather?.intensity ?? 1.0;
+        const stressGain = Math.round(5 * weatherIntensity);
         
         plant.rootStrength += finalG;
         plant.water -= 5;
         plant.nutrients -= 10;
-        plant.stress += 5;
+        plant.stress += stressGain;
         credits += 10;
         
         // Check evolution
@@ -497,7 +508,11 @@ const App: React.FC = () => {
           addLog('Warning: Pest infestation detected!', 'danger');
         }
 
-        addLog(`Research complete: +${finalG} roots, +10 credits.`, 'success');
+        if (isFog) {
+          addLog(`Research completed under Dense Fog (Efficiency -50%): +${finalG} roots, +10 credits.`, 'warn');
+        } else {
+          addLog(`Research complete: +${finalG} roots, +10 credits.`, 'success');
+        }
       }
 
       if (action === 'water') {
@@ -567,20 +582,56 @@ const App: React.FC = () => {
         ? prev.weatherForecast 
         : [getRandomWeather(), getRandomWeather(), getRandomWeather()];
       
-      const newWeather = forecast[0];
+      let newWeather = forecast[0];
       const newForecast = [...forecast.slice(1), getRandomWeather()];
+      
+      let nextClimateControl = prev.climateControl ? { ...prev.climateControl } : null;
+      if (nextClimateControl && nextClimateControl.daysRemaining > 0) {
+        const targetType = nextClimateControl.targetWeatherType;
+        const targetWeatherTemplate = WEATHER_TYPES[targetType];
+        newWeather = {
+          ...targetWeatherTemplate,
+          name: `[Controlled] ${targetWeatherTemplate.name}`,
+          description: `Atmospheric stabilizers are locking weather patterns. ${targetWeatherTemplate.description}`
+        };
+        nextClimateControl.daysRemaining -= 1;
+        if (nextClimateControl.daysRemaining <= 0) {
+          nextClimateControl = null;
+          addLog('Climate control duration completed. Atmospheric stabilizers powering down.', 'warn');
+        } else {
+          addLog(`Controlled atmosphere active: ${nextClimateControl.daysRemaining} cycle(s) remaining.`, 'info');
+        }
+      }
       
       const newOrchards = prev.orchards.map(o => {
         if (!o.isUnlocked) return o;
         const newPlants = o.plants.map(p => {
           if (!p) return null;
           const plant = { ...p };
+          const stage = PLANT_STAGES[plant.stageIndex];
           
-          // Overnight effects
+          // Overnight weather effects
+          if (newWeather.type === 'rain') {
+            plant.water = Math.min(stage.maxWater, plant.water + 15);
+          } else if (newWeather.type === 'storm') {
+            plant.water = Math.min(stage.maxWater, plant.water + 30);
+            plant.stress = Math.min(100, plant.stress + 10);
+          } else if (newWeather.type === 'heatwave') {
+            plant.water = Math.max(0, plant.water - 20);
+            plant.nutrients = Math.max(0, plant.nutrients - 15);
+            plant.stress = Math.min(100, plant.stress + 15);
+          } else if (newWeather.type === 'fog') {
+            plant.water = Math.max(0, plant.water - 2);
+          } else if (newWeather.type === 'clear') {
+            plant.water = Math.max(0, plant.water - 10);
+            plant.stress = Math.max(0, plant.stress - 5);
+          }
+          
+          // Overnight pest effects
           if (plant.pests > 0) {
             plant.nutrients = Math.max(0, plant.nutrients - (plant.pests * 10));
             plant.stress += (plant.pests * 5);
-          } else {
+          } else if (newWeather.type !== 'heatwave' && newWeather.type !== 'storm') {
             plant.stress = Math.max(0, plant.stress - 20);
           }
 
@@ -604,9 +655,34 @@ const App: React.FC = () => {
         return { ...o, plants: newPlants };
       });
 
-      addLog(`Day ${prev.day + 1} started. Weather shifted to ${newWeather.name}.`, 'system');
-      const nextState = { ...prev, day: prev.day + 1, orchards: newOrchards, weather: newWeather, weatherForecast: newForecast };
-      saveState({ day: prev.day + 1, orchards: newOrchards, weather: newWeather, weatherForecast: newForecast });
+      // Atmospheric System Log Message
+      if (newWeather.type === 'rain') {
+        addLog(`Day ${prev.day + 1} started. Gentle Rain is replenishing specimen water levels.`, 'info');
+      } else if (newWeather.type === 'storm') {
+        addLog(`Day ${prev.day + 1} started. Severe Storm active. High specimen stress!`, 'danger');
+      } else if (newWeather.type === 'heatwave') {
+        addLog(`Day ${prev.day + 1} started. WARNING: Intense Heatwave dehydrating crops and soil!`, 'danger');
+      } else if (newWeather.type === 'fog') {
+        addLog(`Day ${prev.day + 1} started. Dense Fog shielding crops from rapid water loss.`, 'system');
+      } else {
+        addLog(`Day ${prev.day + 1} started. Atmosphere is optimal under Clear Skies.`, 'system');
+      }
+
+      const nextState = { 
+        ...prev, 
+        day: prev.day + 1, 
+        orchards: newOrchards, 
+        weather: newWeather, 
+        weatherForecast: newForecast,
+        climateControl: nextClimateControl
+      };
+      saveState({ 
+        day: prev.day + 1, 
+        orchards: newOrchards, 
+        weather: newWeather, 
+        weatherForecast: newForecast,
+        climateControl: nextClimateControl
+      });
       return nextState;
     });
   };
@@ -721,6 +797,86 @@ const App: React.FC = () => {
       return nextState;
     });
     addLog(`Applied ${item.name} to ${selectedPlant.type}.`, 'success');
+  };
+
+  const playClimateControlChime = () => {
+    try {
+      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+      if (AudioContextClass) {
+        const ctx = new AudioContextClass();
+        const now = ctx.currentTime;
+        
+        // Beautiful, sweeping futuristic major 7th chord (F4, A4, C5, E5, A5)
+        const oscs = [349.23, 440.00, 523.25, 659.25, 880.00];
+        const gainNode = ctx.createGain();
+        const filter = ctx.createBiquadFilter();
+        
+        filter.type = 'lowpass';
+        filter.frequency.setValueAtTime(200, now);
+        filter.frequency.exponentialRampToValueAtTime(3000, now + 0.6);
+        filter.Q.setValueAtTime(6, now);
+        
+        gainNode.gain.setValueAtTime(0, now);
+        gainNode.gain.linearRampToValueAtTime(0.12, now + 0.1);
+        gainNode.gain.exponentialRampToValueAtTime(0.001, now + 0.8);
+        
+        oscs.forEach((freq, idx) => {
+          const osc = ctx.createOscillator();
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(freq, now + idx * 0.05); // staggered arpeggio
+          osc.connect(filter);
+          osc.start(now + idx * 0.05);
+          osc.stop(now + 0.8);
+        });
+        
+        filter.connect(gainNode);
+        gainNode.connect(ctx.destination);
+      }
+    } catch (e) {
+      console.warn('Climate control audio chime failed:', e);
+    }
+  };
+
+  const activateClimateControl = (targetType: 'clear' | 'rain' | 'fog' | 'storm' | 'heatwave') => {
+    const cost = 120;
+    if (state.credits < cost) {
+      addLog(`Insufficient credits for atmospheric override (requires ${cost}🪙).`, 'danger');
+      return;
+    }
+    
+    // Play sci-fi climate stabilizer chime
+    playClimateControlChime();
+    
+    setState(prev => {
+      const targetWeatherTemplate = WEATHER_TYPES[targetType];
+      const activeWeather = {
+        ...targetWeatherTemplate,
+        name: `[Controlled] ${targetWeatherTemplate.name}`,
+        description: `Atmospheric stabilizers are locking weather patterns. ${targetWeatherTemplate.description}`
+      };
+      
+      const nextClimateControl = {
+        targetWeatherType: targetType,
+        daysRemaining: 3
+      };
+      
+      const nextState = {
+        ...prev,
+        credits: prev.credits - cost,
+        weather: activeWeather,
+        climateControl: nextClimateControl
+      };
+      
+      saveState({
+        credits: prev.credits - cost,
+        weather: activeWeather,
+        climateControl: nextClimateControl
+      });
+      
+      return nextState;
+    });
+    
+    addLog(`Atmospheric Stabilizer Engaged: Local ecosystem weather locked to ${WEATHER_TYPES[targetType].name} for 3 temporal cycles!`, 'success');
   };
 
   return (
@@ -1135,6 +1291,80 @@ const App: React.FC = () => {
                               <p className="text-[10px] font-bold leading-none mb-1">{item.name}</p>
                               <p className="text-[9px] text-text-secondary">{item.cost}🪙</p>
                             </div>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Atmospheric Climate Control Panel */}
+                    <div className="hardware-panel p-5 space-y-4 border-fuchsia-500/30 bg-black/30 relative overflow-hidden">
+                      {/* Ambient background glow */}
+                      <div className="absolute top-0 right-0 w-32 h-32 bg-fuchsia-500/5 rounded-full blur-3xl pointer-events-none" />
+                      
+                      <div className="flex items-center justify-between relative z-10">
+                        <div className="flex items-center gap-2 text-fuchsia-400">
+                          <Zap size={16} className="animate-pulse" />
+                          <h4 className="text-xs font-bold uppercase tracking-widest">Atmospheric Climate Control</h4>
+                        </div>
+                        {state.climateControl ? (
+                          <span className="text-[9px] bg-fuchsia-500/20 text-fuchsia-300 px-2 py-0.5 rounded-full font-mono uppercase tracking-wider font-bold animate-pulse">
+                            STABILIZERS ACTIVE
+                          </span>
+                        ) : (
+                          <span className="text-[9px] bg-bark-brown/30 text-text-secondary px-2 py-0.5 rounded-full font-mono uppercase tracking-wider">
+                            STANDBY
+                          </span>
+                        )}
+                      </div>
+
+                      <p className="text-[10px] text-text-secondary leading-relaxed">
+                        Deploy micro-orbital weather stabilization arrays. Spending <span className="text-mineral-gold font-bold">120 🪙</span> overrides the atmospheric system, shielding the orchard from severe heatwaves or storms for <span className="text-white font-bold">3 full cycles</span>.
+                      </p>
+
+                      {state.climateControl && (
+                        <div className="p-3 bg-fuchsia-950/20 border border-fuchsia-500/20 rounded-xl space-y-2 relative z-10">
+                          <div className="flex justify-between items-center text-xs">
+                            <span className="text-text-secondary">Current Core Pattern:</span>
+                            <span className="text-fuchsia-400 font-bold uppercase tracking-wider">
+                              {WEATHER_TYPES[state.climateControl.targetWeatherType].name}
+                            </span>
+                          </div>
+                          <div className="flex justify-between items-center text-[10px]">
+                            <span className="text-text-secondary">Array Lock Duration:</span>
+                            <div className="flex gap-1.5">
+                              {Array.from({ length: 3 }).map((_, i) => (
+                                <span 
+                                  key={i} 
+                                  className={`w-2.5 h-2.5 rounded-full ${
+                                    i < state.climateControl!.daysRemaining 
+                                      ? 'bg-fuchsia-500 shadow-[0_0_8px_#D946EF]' 
+                                      : 'bg-black/40 border border-white/10'
+                                  }`}
+                                />
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="grid grid-cols-3 gap-2 relative z-10">
+                        {[
+                          { type: 'clear', name: 'Clear Skies', desc: 'Mild / Stress-free', icon: Sun, color: 'hover:border-mineral-gold text-mineral-gold bg-mineral-gold/5 border-mineral-gold/10 hover:bg-mineral-gold/10' },
+                          { type: 'rain', name: 'Gentle Rain', desc: 'Hydrating (+15W)', icon: CloudRain, color: 'hover:border-water-blue text-water-blue bg-water-blue/5 border-water-blue/10 hover:bg-water-blue/10' },
+                          { type: 'fog', name: 'Dense Fog', desc: 'Protected (-2W)', icon: Cloud, color: 'hover:border-fuchsia-400 text-fuchsia-400 bg-fuchsia-500/5 border-fuchsia-500/10 hover:bg-fuchsia-500/10' }
+                        ].map(target => (
+                          <button
+                            key={target.type}
+                            onClick={() => activateClimateControl(target.type as any)}
+                            disabled={state.credits < 120}
+                            className={`flex flex-col items-center justify-center p-3 rounded-xl border text-center transition-all disabled:opacity-40 hover:scale-[1.02] active:scale-[0.98] ${target.color}`}
+                          >
+                            <target.icon size={16} className="mb-1" />
+                            <span className="text-[10px] font-bold block truncate w-full">{target.name}</span>
+                            <span className="text-[8px] opacity-75 block truncate w-full leading-none mt-0.5">{target.desc}</span>
+                            <span className="text-[9px] font-mono font-bold block mt-1 bg-black/30 px-1.5 py-0.5 rounded text-white border border-white/5">
+                              120 🪙
+                            </span>
                           </button>
                         ))}
                       </div>

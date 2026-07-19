@@ -69,7 +69,8 @@ service cloud.firestore {
              data.upgrades is map &&
              (!('harvestedTypes' in data) || data.harvestedTypes is list) &&
              (!('weather' in data) || data.weather is map) &&
-             (!('weatherForecast' in data) || data.weatherForecast is list);
+             (!('weatherForecast' in data) || data.weatherForecast is list) &&
+             (!('climateControl' in data) || data.climateControl is map || data.climateControl == null);
     }
 
     function isValidTransfer(data) {
