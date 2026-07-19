@@ -1,12 +1,8 @@
-# Game Design
+# Technical Game Design
 
-## Design pillars from evidence
-1. **Careful cultivation:** plant needs, stress, pests, and staged growth reward attentive decisions.
-2. **Sci-fi botany collection:** species names, lore, and encyclopedia unlocks frame crops as discoveries.
-3. **Weather mastery:** forecast and climate control create planning around environmental pressure.
-4. **Expansion and prestige:** orchard unlocks, upgrades, rankings, and global stats give long-term goals.
-5. **AI-native maintainability:** capsules and docs make the game easier to extend safely.
+Progression moves from plot mastery to orchard expansion, biome unlocks, tool specialization, crafting stations, village reputation, and endgame ecological restoration. Onboarding should introduce one concept per day: plant, water, weather, harvest, sell, upgrade, quest, craft, travel. Pacing alternates short care actions with medium planning arcs and long seasonal goals. Retention loops: daily forecast decisions, weekly contracts, seasonal events, collection milestones, NPC relationships, and visual orchard evolution. Reward loops: credits, data seeds, new species, tools, recipes, landmarks, achievements, and narrative reveals. Mastery comes from understanding traits, weather, market timing, automation, and ecological balance. Endgame should support optimization, restoration projects, rare genetics, community goals, and modded scenarios.
 
+Weak loops: pure currency grind, static pricing, isolated plant species, no loss recovery, and unlocks without choice. Replace with meaningful tradeoffs, forecasts, specialization paths, and player-authored orchard identity.
 ## Suggestions
 | Suggestion | Why it improves the game | Dev effort | Technical risk | Gameplay impact | Replayability impact | Retention impact | Architecture impact |
 |---|---|---:|---:|---:|---:|---:|---:|

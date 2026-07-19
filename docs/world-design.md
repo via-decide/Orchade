@@ -1,0 +1,3 @@
+# World Design
+
+Orchade should evolve from orchard screen to living world through village hubs, biome paths, caves, transport nodes, secrets, landmarks, and environmental storytelling. The first production world should contain the home orchard, highland ridge, deep valley, village market, research station, abandoned greenhouse, river crossing, and cave entrance. Biome progression should require gameplay capabilities rather than only currency: frost crops for highlands, irrigation for valley, lantern/tools for caves, reputation for village services. Landmarks should teach systems visually: wilted grove for ecology, broken pump for logistics, old market board for economy.
