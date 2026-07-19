@@ -50,6 +50,26 @@ export class SimulationScheduler {
         if (!this.systems.has(dependency)) throw new Error(`${system.name} depends on missing system ${dependency}`);
       }
     }
+    this.assertAcyclic();
+  }
+
+  dependencyGraph(): ReadonlyMap<string, readonly string[]> {
+    return new Map([...this.systems.values()].map(system => [system.name, system.dependencies ?? []]));
+  }
+
+  private assertAcyclic(): void {
+    const visiting = new Set<string>();
+    const visited = new Set<string>();
+    const visit = (name: string): void => {
+      if (visiting.has(name)) throw new Error(`Cyclic scheduler dependency detected at ${name}`);
+      if (visited.has(name)) return;
+      visiting.add(name);
+      const system = this.systems.get(name);
+      for (const dependency of system?.dependencies ?? []) visit(dependency);
+      visiting.delete(name);
+      visited.add(name);
+    };
+    this.systems.forEach(system => visit(system.name));
   }
 
   private async runTick(context: SchedulerUpdateContext): Promise<void> {

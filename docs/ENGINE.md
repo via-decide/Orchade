@@ -1,24 +1,21 @@
-# ENGINE
+# Engine Runtime
 
-Orchade engine infrastructure foundation for deterministic simulation core v1.
+The Orchade engine is centered on `EngineRuntimeKernel`, which owns the deterministic clock, scheduler, command buffer, event queue, replay recorder, profiler metrics, and seeded random stream.
 
-## Purpose
+## Runtime lifecycle
 
-This document defines how gameplay capsules run as modular systems on top of scheduler, event, AI, navigation, streaming, replay, debugging, and profiling infrastructure.
+1. Input is converted into tick-addressed commands.
+2. The fixed timestep clock emits one or more simulation steps.
+3. Commands are drained and published as events.
+4. Registered systems execute through the scheduler in deterministic phase/priority order.
+5. Queued and delayed events flush for the tick.
+6. Replay captures commands, events, random state, and checksum.
+7. Profiler metrics record tick duration.
 
-## Rules
+## Ownership
 
-- Gameplay modules register systems with the scheduler instead of direct update calls.
-- Gameplay modules communicate through events instead of mutating each other directly.
-- Simulation state must be deterministic for a given input, command stream, random seed, and save snapshot.
-- Systems expose stable public APIs, avoid circular dependencies, and remain independently testable.
+Gameplay capsules own gameplay state and public APIs. Engine modules own scheduling, communication, timing, replayability, navigation services, streaming state, and diagnostics.
 
-## Current implementation
+## Dependency rule
 
-- Scheduler phases: INPUT, COMMANDS, WORLD, WEATHER, FARMING, ECOLOGY, NPC, AI, ECONOMY, QUESTS, EVENTS, SAVE, RENDER.
-- Event bus supports synchronous, queued, delayed, replayable, filtered, and inspectable events.
-- Navigation includes grid A* with terrain costs, dynamic obstacles, and path cache invalidation.
-- AI includes memory, blackboard, perception, GOAP data shapes, planner, utility scoring, and behavior tree primitives.
-- World streaming models Loaded, Visible, Active, Sleeping, and Unloaded chunk states.
-- Replay records frames with inputs, commands, events, seeds, ticks, snapshots, and checksums.
-- Profiler exports JSON, CSV, and Markdown performance summaries.
+Gameplay modules must not call each other directly. Cross-module effects must flow through commands, scheduler systems, or engine events.

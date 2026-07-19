@@ -10,3 +10,7 @@ export * from './world/streaming/streaming';
 export * from './replay/recorder';
 export * from './replay/player';
 export * from './profiler/metrics';
+export * from './runtime/kernel';
+export * from './runtime/clock';
+export * from './random/rng';
+export * from './commands/commandBuffer';

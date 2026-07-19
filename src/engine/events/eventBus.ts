@@ -9,17 +9,18 @@ export class EngineEventBus {
   private history: EngineEvent[] = [];
   private queue: QueuedEvent[] = [];
   private sequence = 0;
+  private deadLetters: EngineEvent[] = [];
 
-  subscribe(type: EngineEventType | '*', handler: EventHandler): () => void {
+  subscribe(type: EngineEventType | '*', handler: EventHandler, priority = 50, once = false): () => void {
     const id = `sub-${++this.sequence}`;
-    this.subscriptions.set(id, { id, type, handler, enabled: true });
+    this.subscriptions.set(id, { id, type, handler, enabled: true, priority, once });
     return () => this.subscriptions.delete(id);
   }
 
   emit<T>(type: EngineEventType, payload: T, tick: number, replayable = true): EngineEvent<T> {
     const event = this.create(type, payload, tick, replayable);
     this.record(event);
-    dispatch(event, this.subscriptions.values());
+    this.dispatchSafely(event);
     return event;
   }
 
@@ -32,7 +33,7 @@ export class EngineEventBus {
   flush(tick: number): EngineEvent[] {
     const ready = this.queue.filter(event => event.deliverAtTick <= tick);
     this.queue = this.queue.filter(event => event.deliverAtTick > tick);
-    ready.forEach(event => { this.record(event); dispatch(event, this.subscriptions.values()); });
+    ready.forEach(event => { this.record(event); this.dispatchSafely(event); });
     return ready;
   }
 
@@ -43,8 +44,20 @@ export class EngineEventBus {
       && (!filter.replayableOnly || event.replayable));
   }
 
+  deadLetterQueue(): readonly EngineEvent[] { return this.deadLetters; }
+
   private create<T>(type: EngineEventType, payload: T, tick: number, replayable: boolean): EngineEvent<T> {
-    return { id: `${tick}-${++this.sequence}-${type}`, type, tick, createdAt: tick, payload, replayable };
+    const event = { id: `${tick}-${++this.sequence}-${type}`, type, tick, createdAt: tick, payload, replayable, cancelled: false, cancel() { this.cancelled = true; } };
+    return event;
+  }
+
+  private dispatchSafely(event: EngineEvent): void {
+    try {
+      const invoked = dispatch(event, this.subscriptions.values());
+      for (const id of invoked) if (this.subscriptions.get(id)?.once) this.subscriptions.delete(id);
+    } catch {
+      this.deadLetters.push(event);
+    }
   }
 
   private record(event: EngineEvent): void { this.history.push(event); if (this.history.length > 5_000) this.history.shift(); }
