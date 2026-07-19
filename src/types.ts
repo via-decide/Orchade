@@ -59,6 +59,7 @@ export type GameState = {
   upgrades: GlobalUpgrades;
   activeTab: 'orchard' | 'lab' | 'market' | 'rankings' | 'profile' | 'archives';
   weather?: Weather;
+  weatherForecast?: Weather[];
   harvestedTypes?: string[];
   user: {
     uid: string;

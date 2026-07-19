@@ -13,7 +13,9 @@
         "day": { "type": "number", "description": "Current game day" },
         "upgrades": { "type": "object", "description": "Global upgrades state" },
         "orchards": { "type": "array", "description": "List of orchards and their plants" },
-        "harvestedTypes": { "type": "array", "description": "List of plant types successfully harvested" }
+        "harvestedTypes": { "type": "array", "description": "List of plant types successfully harvested" },
+        "weather": { "type": "object", "description": "Current weather" },
+        "weatherForecast": { "type": "array", "description": "3-day weather forecast" }
       },
       "required": ["uid", "credits", "dataSeeds", "day", "orchards"]
     },

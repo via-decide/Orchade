@@ -167,6 +167,7 @@ const App: React.FC = () => {
     upgrades: INITIAL_UPGRADES,
     activeTab: 'orchard',
     weather: getRandomWeather(),
+    weatherForecast: [getRandomWeather(), getRandomWeather(), getRandomWeather()],
     harvestedTypes: [],
     user: null,
     isAuthReady: false,
@@ -274,10 +275,12 @@ const App: React.FC = () => {
           orchards: data.orchards ?? prev.orchards,
           upgrades: data.upgrades ?? prev.upgrades,
           weather: data.weather ?? prev.weather,
+          weatherForecast: data.weatherForecast ?? prev.weatherForecast ?? [getRandomWeather(), getRandomWeather(), getRandomWeather()],
           harvestedTypes: data.harvestedTypes ?? prev.harvestedTypes ?? [],
         }));
       } else {
         // Initialize new user document
+        const initialForecast = [getRandomWeather(), getRandomWeather(), getRandomWeather()];
         const initialState = {
           uid: state.user!.uid,
           displayName: state.user!.displayName,
@@ -288,6 +291,7 @@ const App: React.FC = () => {
           upgrades: INITIAL_UPGRADES,
           orchards: state.orchards,
           weather: getRandomWeather(),
+          weatherForecast: initialForecast,
           harvestedTypes: [],
           createdAt: serverTimestamp()
         };
@@ -559,7 +563,13 @@ const App: React.FC = () => {
 
   const nextDay = () => {
     setState(prev => {
-      const newWeather = getRandomWeather();
+      const forecast = prev.weatherForecast && prev.weatherForecast.length > 0 
+        ? prev.weatherForecast 
+        : [getRandomWeather(), getRandomWeather(), getRandomWeather()];
+      
+      const newWeather = forecast[0];
+      const newForecast = [...forecast.slice(1), getRandomWeather()];
+      
       const newOrchards = prev.orchards.map(o => {
         if (!o.isUnlocked) return o;
         const newPlants = o.plants.map(p => {
@@ -595,8 +605,8 @@ const App: React.FC = () => {
       });
 
       addLog(`Day ${prev.day + 1} started. Weather shifted to ${newWeather.name}.`, 'system');
-      const nextState = { ...prev, day: prev.day + 1, orchards: newOrchards, weather: newWeather };
-      saveState({ day: prev.day + 1, orchards: newOrchards, weather: newWeather });
+      const nextState = { ...prev, day: prev.day + 1, orchards: newOrchards, weather: newWeather, weatherForecast: newForecast };
+      saveState({ day: prev.day + 1, orchards: newOrchards, weather: newWeather, weatherForecast: newForecast });
       return nextState;
     });
   };
@@ -733,35 +743,87 @@ const App: React.FC = () => {
           
           {/* Weather Indicator */}
           {state.weather && (
-            <div className="flex items-center gap-3 px-4 py-1 bg-black/20 rounded-xl border border-bark-brown/30 overflow-hidden">
-              <AnimatePresence mode="wait">
-                <motion.div 
-                  key={state.weather.type}
-                  initial={{ opacity: 0, x: -10 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: 10 }}
-                  transition={{ duration: 0.3, ease: "easeOut" }}
-                  className="flex items-center gap-3"
-                >
-                  <div className={`p-2 rounded-lg ${
-                    state.weather.type === 'clear' ? 'text-mineral-gold bg-mineral-gold/10' :
-                    state.weather.type === 'rain' ? 'text-water-blue bg-water-blue/10' :
-                    state.weather.type === 'storm' ? 'text-violet-400 bg-violet-400/10' :
-                    state.weather.type === 'heatwave' ? 'text-burn-red bg-burn-red/10' :
-                    'text-text-secondary bg-text-secondary/10'
-                  }`}>
-                    {state.weather.type === 'clear' && <Sun size={20} />}
-                    {state.weather.type === 'rain' && <CloudRain size={20} />}
-                    {state.weather.type === 'storm' && <CloudLightning size={20} />}
-                    {state.weather.type === 'heatwave' && <Thermometer size={20} />}
-                    {state.weather.type === 'fog' && <Cloud size={20} />}
-                  </div>
-                  <div className="flex flex-col">
-                    <span className="text-[10px] font-bold text-text-secondary uppercase tracking-widest">Atmosphere</span>
-                    <span className="text-xs font-bold uppercase">{state.weather.name}</span>
-                  </div>
-                </motion.div>
-              </AnimatePresence>
+            <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+              {/* Current Atmosphere */}
+              <div className="flex items-center gap-3 px-4 py-1.5 bg-black/20 rounded-xl border border-bark-brown/30 overflow-hidden">
+                <AnimatePresence mode="wait">
+                  <motion.div 
+                    key={state.weather.type}
+                    initial={{ opacity: 0, x: -10 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: 10 }}
+                    transition={{ duration: 0.3, ease: "easeOut" }}
+                    className="flex items-center gap-3"
+                  >
+                    <div className={`p-1.5 rounded-lg ${
+                      state.weather.type === 'clear' ? 'text-mineral-gold bg-mineral-gold/10' :
+                      state.weather.type === 'rain' ? 'text-water-blue bg-water-blue/10' :
+                      state.weather.type === 'storm' ? 'text-violet-400 bg-violet-400/10' :
+                      state.weather.type === 'heatwave' ? 'text-burn-red bg-burn-red/10' :
+                      'text-text-secondary bg-text-secondary/10'
+                    }`}>
+                      {state.weather.type === 'clear' && <Sun size={18} />}
+                      {state.weather.type === 'rain' && <CloudRain size={18} />}
+                      {state.weather.type === 'storm' && <CloudLightning size={18} />}
+                      {state.weather.type === 'heatwave' && <Thermometer size={18} />}
+                      {state.weather.type === 'fog' && <Cloud size={18} />}
+                    </div>
+                    <div className="flex flex-col">
+                      <span className="text-[9px] font-bold text-text-secondary uppercase tracking-widest">Atmosphere</span>
+                      <span className="text-xs font-bold uppercase leading-none">{state.weather.name}</span>
+                    </div>
+                  </motion.div>
+                </AnimatePresence>
+              </div>
+
+              {/* 3-Day Forecast */}
+              <div className="flex items-center gap-2.5 px-3 py-1 bg-black/10 rounded-xl border border-bark-brown/10 relative">
+                <span className="text-[9px] font-bold text-text-secondary uppercase tracking-widest mr-1 sm:block hidden">Forecast</span>
+                <div className="flex gap-2">
+                  {(state.weatherForecast || []).map((w, index) => (
+                    <div 
+                      key={index} 
+                      className="group relative flex flex-col items-center gap-0.5 bg-black/30 hover:bg-black/50 p-1 px-2 rounded-lg border border-white/5 transition-all cursor-help"
+                    >
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[8px] font-mono text-text-secondary font-bold">D+{index+1}</span>
+                        <div className={`
+                          ${w.type === 'clear' ? 'text-mineral-gold' : ''}
+                          ${w.type === 'rain' ? 'text-water-blue' : ''}
+                          ${w.type === 'storm' ? 'text-violet-400' : ''}
+                          ${w.type === 'heatwave' ? 'text-burn-red' : ''}
+                          ${w.type === 'fog' ? 'text-text-secondary' : ''}
+                        `}>
+                          {w.type === 'clear' && <Sun size={11} />}
+                          {w.type === 'rain' && <CloudRain size={11} />}
+                          {w.type === 'storm' && <CloudLightning size={11} />}
+                          {w.type === 'heatwave' && <Thermometer size={11} />}
+                          {w.type === 'fog' && <Cloud size={11} />}
+                        </div>
+                      </div>
+                      
+                      {/* Rich strategic micro tooltip */}
+                      <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-44 p-2 bg-slate-900 border border-fuchsia-500/20 text-[10px] text-text-secondary rounded-lg opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity z-50 shadow-xl space-y-1">
+                        <div className="flex justify-between font-bold">
+                          <span className="text-text-primary uppercase font-mono">Day {state.day + index + 1}</span>
+                          <span className={`uppercase font-mono ${
+                            w.type === 'clear' ? 'text-mineral-gold' :
+                            w.type === 'rain' ? 'text-water-blue' :
+                            w.type === 'storm' ? 'text-violet-400' :
+                            w.type === 'heatwave' ? 'text-burn-red' :
+                            'text-text-secondary'
+                          }`}>{w.name}</span>
+                        </div>
+                        <p className="font-sans leading-tight text-[9px]">{w.description}</p>
+                        <div className="border-t border-white/5 pt-1 mt-1 flex justify-between font-mono text-[8px]">
+                          <span>STRESS FACTOR:</span>
+                          <span className="text-text-primary">x{w.intensity}</span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
             </div>
           )}
         </div>
