@@ -35,6 +35,10 @@ Internal implementation belongs under `internal/` and must not be imported by ot
 Owns only state declared in `state.ts`; cross-module data should be referenced through public APIs or events.
 
 ## Current capabilities
+- Lightweight ECS entities for players, NPCs, animals, wildlife, items, decorations, and future entities.
+- Living-world ticks coordinate world weather, ecology resources, NPC routines, and economy updates.
+- Save v2 migration attaches living-world entities while preserving schema v1 farm state.
+
 - Deterministic tile-based farm grid with seasons and weather.
 - Runtime crop instances are separated from immutable crop definitions.
 - Planting consumes seed items through the inventory capsule.

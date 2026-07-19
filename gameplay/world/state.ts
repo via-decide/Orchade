@@ -1,4 +1,5 @@
 import type { CropDefinition } from '../farming/api';
+import type { Entity } from './internal/ecs';
 
 export type WorldStatus = 'planned' | 'in-progress' | 'blocked' | 'complete';
 export type Season = 'spring' | 'summer' | 'autumn' | 'winter';
@@ -83,6 +84,9 @@ export type WorldState = {
   weather: WeatherState;
   tiles: FarmTile[];
   crops: Record<string, CropInstance>;
+  entities: Record<string, Entity>;
+  regions: Record<string, { id: string; name: string; biome: 'farm' | 'forest' | 'mountains' | 'river' | 'lake' | 'swamp' | 'desert' | 'caves' | 'ruins'; resources: Record<string, number>; discovered: boolean }>;
+  eventLog: { tick: number; type: string; message: string }[];
 };
 
 export const initialWorldState: WorldState = {
@@ -95,4 +99,7 @@ export const initialWorldState: WorldState = {
   weather: { current: 'sunny', intensity: 1, ticksRemaining: 8 },
   tiles: [],
   crops: {},
+  entities: {},
+  regions: { farmstead: { id: 'farmstead', name: 'Farmstead', biome: 'farm', resources: { wildSeeds: 8, forage: 12, water: 100 }, discovered: true } },
+  eventLog: [],
 };

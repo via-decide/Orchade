@@ -29,7 +29,12 @@ Internal implementation belongs under `internal/` and must not be imported by ot
 ## State ownership
 Owns only state declared in `state.ts`; cross-module data should be referenced through public APIs or events.
 
-## Current limitations
+## Current capabilities
+- Market goods track supply, demand, merchant stock, imports, exports, volatility, and dynamic prices.
+- Seasonal demand and scarcity generate shortage/surplus events deterministically.
+- Production can be recorded from gameplay loops such as harvests.
+
+## Current limitations## Current limitations
 - Runtime extraction from `src/App.tsx` is intentionally incremental to avoid breaking behavior.
 - Tests are scaffolded and should be filled as code migrates.
 
