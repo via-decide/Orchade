@@ -5,6 +5,7 @@ const manifest = JSON.parse(fs.readFileSync(path.join(root, 'gameplay/module-man
 const modules = manifest.modules;
 const ensure = p => fs.mkdirSync(path.join(root, p), {recursive:true});
 const write = (p, s) => { ensure(path.dirname(p)); fs.writeFileSync(path.join(root,p), s); };
+const writeIfMissing = (p, s) => { const full = path.join(root, p); if (!fs.existsSync(full)) write(p, s); };
 const title = s => s[0].toUpperCase()+s.slice(1);
 for (const m of modules) {
  const dir=`gameplay/${m.name}`; ensure(`${dir}/internal`); ensure(`${dir}/tests`);
@@ -16,7 +17,7 @@ for (const m of modules) {
  write(`${dir}/OWNER.md`, `# ${title(m.name)} Ownership\n\n## Responsibilities\n${m.purpose}\n\n## Owned systems\n- State in \`state.ts\`.\n- Public surface in \`public.ts\` and \`api.ts\`.\n- Tests in \`tests/\`.\n\n## Dependencies\n${m.dependencies.map(x=>`- ${x}`).join('\n') || '- None'}\n\n## Public interfaces\n${m.publicApi.map(x=>`- \`${x}\``).join('\n')}\n\n## Non-responsibilities\n- Other gameplay capsules' private implementation.\n- Global application shell orchestration unless explicitly documented by ADR.\n\n## Future expansion\n- Move stable runtime logic from \`src/\` into this capsule behind public APIs.\n`);
  write(`${dir}/state.ts`, `export type ${title(m.name)}Status = 'planned' | 'in-progress' | 'blocked' | 'complete';\n\nexport type ${title(m.name)}State = {\n  module: '${m.name}';\n  status: ${title(m.name)}Status;\n  updatedAt: string | null;\n};\n\nexport const initial${title(m.name)}State: ${title(m.name)}State = {\n  module: '${m.name}',\n  status: '${m.status}',\n  updatedAt: null,\n};\n`);
  write(`${dir}/public.ts`, `export { initial${title(m.name)}State } from './state';\nexport type { ${title(m.name)}State, ${title(m.name)}Status } from './state';\n`);
- write(`${dir}/api.ts`, `export * from './public';\n`);
+ writeIfMissing(`${dir}/api.ts`, `export * from './public';\n`);
  write(`${dir}/ui.ts`, `export type ${title(m.name)}ViewModel = {\n  title: string;\n  status: string;\n};\n\nexport const create${title(m.name)}ViewModel = (status: string): ${title(m.name)}ViewModel => ({\n  title: '${title(m.name)}',\n  status,\n});\n`);
  write(`${dir}/internal/README.md`, `# ${title(m.name)} Internal\n\nPrivate implementation for the ${m.name} capsule. Do not import files from this folder outside \`gameplay/${m.name}\`.\n`);
  write(`${dir}/tests/README.md`, `# ${title(m.name)} Tests\n\nPlace capsule-level tests here. Prefer tests that exercise \`public.ts\` and avoid relying on private internals.\n`);
