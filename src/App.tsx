@@ -1,6 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { GameState, Plant, GlobalUpgrades, Orchard } from './types';
+import { GameState, GlobalUpgrades, WeatherType } from './types';
 import { PLANT_STAGES, INITIAL_UPGRADES, SHOP_ITEMS, getRandomWeather, WEATHER_TYPES } from './constants';
+import { applyOvernightPlantLifecycle, applyPlantAction, applyUpgradePurchase, createPlant, FarmingAction } from '../gameplay/farming/api';
+import { activateClimateControlState, advanceWeatherCycle } from '../gameplay/weather/api';
+import { applyShopItem, liquidateDataSeeds } from '../gameplay/economy/api';
+import { selectOrchard, selectPlant, selectTab } from '../gameplay/ui/api';
 import PlantCard from './components/PlantCard';
 import PlantVisualizer from './components/PlantVisualizer';
 import { Encyclopedia } from './components/Encyclopedia';
@@ -450,240 +454,42 @@ const App: React.FC = () => {
   const activeOrchard = state.orchards.find(o => o.id === state.activeOrchardId)!;
   const selectedPlant = state.selectedPlantIndex !== null ? activeOrchard.plants[state.selectedPlantIndex] : null;
 
-  const handlePlantAction = (action: 'research' | 'water' | 'fertilize' | 'pesticide' | 'harvest') => {
-    if (state.selectedPlantIndex === null || !selectedPlant) return;
-
-    setState(prev => {
-      const newOrchards = [...prev.orchards];
-      const orchardIndex = newOrchards.findIndex(o => o.id === prev.activeOrchardId);
-      const orchard = { ...newOrchards[orchardIndex] };
-      const newPlants = [...orchard.plants];
-      const plant = { ...newPlants[prev.selectedPlantIndex!]! };
-      let credits = prev.credits;
-      let dataSeeds = prev.dataSeeds;
-
-      if (action === 'research') {
-        if (plant.water < 5) {
-          addLog('Insufficient water for research.', 'warn');
-          return prev;
-        }
-        
-        // Trigger visual effect
-        setToolEffect('genetic-scanner');
-        setTimeout(() => setToolEffect(null), 1500);
-        
-        // Fog halves research efficiency
-        const isFog = prev.weather?.type === 'fog';
-        const weatherMultiplier = isFog ? 0.5 : 1.0;
-        
-        const baseG = Math.floor(Math.random() * 8) + 5;
-        const finalG = Math.max(1, Math.round(baseG * (plant.nutrients / 100) * weatherMultiplier));
-        
-        // Stress gain is scaled by the weather intensity
-        const weatherIntensity = prev.weather?.intensity ?? 1.0;
-        const stressGain = Math.round(5 * weatherIntensity);
-        
-        plant.rootStrength += finalG;
-        plant.water -= 5;
-        plant.nutrients -= 10;
-        plant.stress += stressGain;
-        credits += 10;
-        
-        // Check evolution
-        let nextStage = 0;
-        for (let i = 0; i < PLANT_STAGES.length; i++) {
-          if (plant.rootStrength >= PLANT_STAGES[i].threshold) nextStage = i;
-        }
-        
-        if (nextStage > plant.stageIndex) {
-          plant.stageIndex = nextStage;
-          addLog(`Evolution! ${plant.type} reached stage: ${PLANT_STAGES[nextStage].name}`, 'success');
-          dataSeeds += 5;
-        }
-
-        // Pest chance (reduced by pestDefense upgrade)
-        const pestChance = 0.15 * (1 - (prev.upgrades.pestDefense / 100));
-        if (plant.pestImmunity === 0 && Math.random() < pestChance) {
-          plant.pests = Math.min(5, plant.pests + 1);
-          addLog('Warning: Pest infestation detected!', 'danger');
-        }
-
-        if (isFog) {
-          addLog(`Research completed under Dense Fog (Efficiency -50%): +${finalG} roots, +10 credits.`, 'warn');
-        } else {
-          addLog(`Research complete: +${finalG} roots, +10 credits.`, 'success');
-        }
-      }
-
-      if (action === 'water') {
-        setToolEffect('water');
-        setTimeout(() => setToolEffect(null), 1500);
-        const stage = PLANT_STAGES[plant.stageIndex];
-        plant.water = Math.min(stage.maxWater, plant.water + 20);
-        plant.stress = Math.max(0, plant.stress - (5 + prev.upgrades.stressResistance));
-        addLog('Hydration levels increased.', 'info');
-      }
-
-      if (action === 'fertilize') {
-        setToolEffect('fertilize');
-        setTimeout(() => setToolEffect(null), 1500);
-        plant.nutrients = Math.min(PLANT_STAGES[plant.stageIndex].maxNutrients, plant.nutrients + 30);
-        plant.stress += 10;
-        addLog('Nutrient levels boosted.', 'success');
-      }
-
-      if (action === 'pesticide') {
-        setToolEffect('pesticide');
-        setTimeout(() => setToolEffect(null), 1500);
-        plant.pests = 0;
-        plant.pestImmunity = 3;
-        plant.stress += 15;
-        addLog('Pests eradicated. Immunity active for 3 cycles.', 'success');
-      }
-
-      let harvestedTypes = prev.harvestedTypes || [];
-      if (action === 'harvest') {
-        if (plant.stageIndex < 4) {
-          addLog('Plant is not ready for harvest.', 'warn');
-          return prev;
-        }
-        setToolEffect('pruning-shears');
-        setTimeout(() => setToolEffect(null), 1500);
-        const reward = 500 + (plant.rootStrength * 0.5);
-        const dataReward = 5;
-        credits += reward;
-        dataSeeds += dataReward;
-        newPlants[prev.selectedPlantIndex!] = null;
-        
-        if (!harvestedTypes.includes(plant.type)) {
-          harvestedTypes = [...harvestedTypes, plant.type];
-          addLog(`NEW SPECIES DISCOVERED AND HARVESTED: ${plant.type}! Check the Botanical Archives.`, 'success');
-        }
-        
-        addLog(`Harvest complete! Gained ${Math.floor(reward)} credits and ${dataReward} data seeds.`, 'success');
-      }
-
-      if (action !== 'harvest') {
-        newPlants[prev.selectedPlantIndex!] = plant;
-      }
-      
-      orchard.plants = newPlants;
-      newOrchards[orchardIndex] = orchard;
-      
-      const nextState = { ...prev, orchards: newOrchards, credits, dataSeeds, harvestedTypes, selectedPlantIndex: action === 'harvest' ? null : prev.selectedPlantIndex };
-      saveState({ orchards: newOrchards, credits, dataSeeds, harvestedTypes });
-      return nextState;
+  const handlePlantAction = (action: FarmingAction) => {
+    const result = applyPlantAction(state, action);
+    result.logs.forEach(log => addLog(log.msg, log.type));
+    if (result.state === state) return;
+    if (result.effect) {
+      setToolEffect(result.effect);
+      setTimeout(() => setToolEffect(null), 1500);
+    }
+    setState(result.state as GameState & { globalStats: any });
+    saveState({
+      orchards: result.state.orchards,
+      credits: result.state.credits,
+      dataSeeds: result.state.dataSeeds,
+      harvestedTypes: result.state.harvestedTypes,
     });
   };
 
   const nextDay = () => {
-    setState(prev => {
-      const forecast = prev.weatherForecast && prev.weatherForecast.length > 0 
-        ? prev.weatherForecast 
-        : [getRandomWeather(), getRandomWeather(), getRandomWeather()];
-      
-      let newWeather = forecast[0];
-      const newForecast = [...forecast.slice(1), getRandomWeather()];
-      
-      let nextClimateControl = prev.climateControl ? { ...prev.climateControl } : null;
-      if (nextClimateControl && nextClimateControl.daysRemaining > 0) {
-        const targetType = nextClimateControl.targetWeatherType;
-        const targetWeatherTemplate = WEATHER_TYPES[targetType];
-        newWeather = {
-          ...targetWeatherTemplate,
-          name: `[Controlled] ${targetWeatherTemplate.name}`,
-          description: `Atmospheric stabilizers are locking weather patterns. ${targetWeatherTemplate.description}`
-        };
-        nextClimateControl.daysRemaining -= 1;
-        if (nextClimateControl.daysRemaining <= 0) {
-          nextClimateControl = null;
-          addLog('Climate control duration completed. Atmospheric stabilizers powering down.', 'warn');
-        } else {
-          addLog(`Controlled atmosphere active: ${nextClimateControl.daysRemaining} cycle(s) remaining.`, 'info');
-        }
-      }
-      
-      const newOrchards = prev.orchards.map(o => {
-        if (!o.isUnlocked) return o;
-        const newPlants = o.plants.map(p => {
-          if (!p) return null;
-          const plant = { ...p };
-          const stage = PLANT_STAGES[plant.stageIndex];
-          
-          // Overnight weather effects
-          if (newWeather.type === 'rain') {
-            plant.water = Math.min(stage.maxWater, plant.water + 15);
-          } else if (newWeather.type === 'storm') {
-            plant.water = Math.min(stage.maxWater, plant.water + 30);
-            plant.stress = Math.min(100, plant.stress + 10);
-          } else if (newWeather.type === 'heatwave') {
-            plant.water = Math.max(0, plant.water - 20);
-            plant.nutrients = Math.max(0, plant.nutrients - 15);
-            plant.stress = Math.min(100, plant.stress + 15);
-          } else if (newWeather.type === 'fog') {
-            plant.water = Math.max(0, plant.water - 2);
-          } else if (newWeather.type === 'clear') {
-            plant.water = Math.max(0, plant.water - 10);
-            plant.stress = Math.max(0, plant.stress - 5);
-          }
-          
-          // Overnight pest effects
-          if (plant.pests > 0) {
-            plant.nutrients = Math.max(0, plant.nutrients - (plant.pests * 10));
-            plant.stress += (plant.pests * 5);
-          } else if (newWeather.type !== 'heatwave' && newWeather.type !== 'storm') {
-            plant.stress = Math.max(0, plant.stress - 20);
-          }
-
-          if (plant.pestImmunity > 0) plant.pestImmunity--;
-          
-          // Check for crop burn
-          if (plant.stress >= 100) {
-            addLog(`CRITICAL: ${plant.type} in ${o.name} suffered crop burn!`, 'danger');
-            plant.rootStrength = Math.max(0, plant.rootStrength - 50);
-            plant.stress = 0;
-            // Recalculate stage
-            let nextStage = 0;
-            for (let i = 0; i < PLANT_STAGES.length; i++) {
-              if (plant.rootStrength >= PLANT_STAGES[i].threshold) nextStage = i;
-            }
-            plant.stageIndex = nextStage;
-          }
-
-          return plant;
-        });
-        return { ...o, plants: newPlants };
-      });
-
-      // Atmospheric System Log Message
-      if (newWeather.type === 'rain') {
-        addLog(`Day ${prev.day + 1} started. Gentle Rain is replenishing specimen water levels.`, 'info');
-      } else if (newWeather.type === 'storm') {
-        addLog(`Day ${prev.day + 1} started. Severe Storm active. High specimen stress!`, 'danger');
-      } else if (newWeather.type === 'heatwave') {
-        addLog(`Day ${prev.day + 1} started. WARNING: Intense Heatwave dehydrating crops and soil!`, 'danger');
-      } else if (newWeather.type === 'fog') {
-        addLog(`Day ${prev.day + 1} started. Dense Fog shielding crops from rapid water loss.`, 'system');
-      } else {
-        addLog(`Day ${prev.day + 1} started. Atmosphere is optimal under Clear Skies.`, 'system');
-      }
-
-      const nextState = { 
-        ...prev, 
-        day: prev.day + 1, 
-        orchards: newOrchards, 
-        weather: newWeather, 
-        weatherForecast: newForecast,
-        climateControl: nextClimateControl
-      };
-      saveState({ 
-        day: prev.day + 1, 
-        orchards: newOrchards, 
-        weather: newWeather, 
-        weatherForecast: newForecast,
-        climateControl: nextClimateControl
-      });
-      return nextState;
+    const weatherResult = advanceWeatherCycle(state);
+    const lifecycleResult = applyOvernightPlantLifecycle(state, weatherResult.weather!);
+    [...weatherResult.logs, ...lifecycleResult.logs].forEach(log => addLog(log.msg, log.type));
+    const nextState = {
+      ...state,
+      day: state.day + 1,
+      orchards: lifecycleResult.orchards,
+      weather: weatherResult.weather,
+      weatherForecast: weatherResult.weatherForecast,
+      climateControl: weatherResult.climateControl,
+    };
+    setState(nextState as GameState & { globalStats: any });
+    saveState({
+      day: nextState.day,
+      orchards: nextState.orchards,
+      weather: nextState.weather,
+      weatherForecast: nextState.weatherForecast,
+      climateControl: nextState.climateControl,
     });
   };
 
@@ -697,18 +503,7 @@ const App: React.FC = () => {
       const orchardIndex = newOrchards.findIndex(o => o.id === prev.activeOrchardId);
       const orchard = { ...newOrchards[orchardIndex] };
       const newPlants = [...orchard.plants];
-      newPlants[index] = {
-        id: Math.random().toString(36).substr(2, 9),
-        type: plantType,
-        rootStrength: 0,
-        water: 30,
-        nutrients: 100,
-        stress: 0,
-        pests: 0,
-        pestImmunity: 0,
-        stageIndex: 0,
-        isHarvestable: false,
-      };
+      newPlants[index] = createPlant(plantType, color);
       orchard.plants = newPlants;
       newOrchards[orchardIndex] = orchard;
       const nextState = { ...prev, orchards: newOrchards, credits: prev.credits - cost, selectedPlantIndex: index };
@@ -741,62 +536,19 @@ const App: React.FC = () => {
   };
 
   const buyUpgrade = (id: keyof GlobalUpgrades) => {
-    const cost = 10;
-    if (state.dataSeeds < cost) {
-      addLog('Insufficient genetic data for upgrade.', 'danger');
-      return;
-    }
-    setState(prev => {
-      const nextUpgrades = {
-        ...prev.upgrades,
-        [id]: id === 'stressResistance' 
-          ? (prev.upgrades[id] as number) + 5 
-          : (prev.upgrades[id] as number) * 0.9
-      };
-      const nextState = {
-        ...prev,
-        dataSeeds: prev.dataSeeds - cost,
-        upgrades: nextUpgrades
-      };
-      saveState({ dataSeeds: prev.dataSeeds - cost, upgrades: nextUpgrades });
-      return nextState;
-    });
-    addLog(`Upgrade acquired: ${id} enhanced.`, 'success');
+    const result = applyUpgradePurchase(state, id);
+    result.logs.forEach(log => addLog(log.msg, log.type));
+    if (result.state === state) return;
+    setState(result.state as GameState & { globalStats: any });
+    saveState({ dataSeeds: result.state.dataSeeds, upgrades: result.state.upgrades });
   };
 
   const buyItem = (item: typeof SHOP_ITEMS[0]) => {
-    if (state.credits < item.cost) {
-      addLog(`Insufficient credits for ${item.name}.`, 'danger');
-      return;
-    }
-    if (state.selectedPlantIndex === null || !selectedPlant) {
-      addLog('Select a plant to apply items.', 'warn');
-      return;
-    }
-
-    setState(prev => {
-      const newOrchards = [...prev.orchards];
-      const orchardIndex = newOrchards.findIndex(o => o.id === prev.activeOrchardId);
-      const orchard = { ...newOrchards[orchardIndex] };
-      const newPlants = [...orchard.plants];
-      const plant = { ...newPlants[prev.selectedPlantIndex!]! };
-      
-      if (item.type === 'fertilizer') {
-        plant.nutrients = Math.min(PLANT_STAGES[plant.stageIndex].maxNutrients, plant.nutrients + (item.nut || 0));
-        plant.stress += (item.stress || 0);
-      } else if (item.type === 'pesticide') {
-        plant.pests = Math.max(0, plant.pests - (item.kills || 0));
-        plant.stress += (item.stress || 0);
-      }
-
-      newPlants[prev.selectedPlantIndex!] = plant;
-      orchard.plants = newPlants;
-      newOrchards[orchardIndex] = orchard;
-      const nextState = { ...prev, orchards: newOrchards, credits: prev.credits - item.cost };
-      saveState({ orchards: newOrchards, credits: prev.credits - item.cost });
-      return nextState;
-    });
-    addLog(`Applied ${item.name} to ${selectedPlant.type}.`, 'success');
+    const result = applyShopItem(state, item);
+    result.logs.forEach(log => addLog(log.msg, log.type));
+    if (result.state === state) return;
+    setState(result.state as GameState & { globalStats: any });
+    saveState({ orchards: result.state.orchards, credits: result.state.credits });
   };
 
   const playClimateControlChime = () => {
@@ -837,46 +589,17 @@ const App: React.FC = () => {
     }
   };
 
-  const activateClimateControl = (targetType: 'clear' | 'rain' | 'fog' | 'storm' | 'heatwave') => {
-    const cost = 120;
-    if (state.credits < cost) {
-      addLog(`Insufficient credits for atmospheric override (requires ${cost}🪙).`, 'danger');
-      return;
-    }
-    
-    // Play sci-fi climate stabilizer chime
-    playClimateControlChime();
-    
-    setState(prev => {
-      const targetWeatherTemplate = WEATHER_TYPES[targetType];
-      const activeWeather = {
-        ...targetWeatherTemplate,
-        name: `[Controlled] ${targetWeatherTemplate.name}`,
-        description: `Atmospheric stabilizers are locking weather patterns. ${targetWeatherTemplate.description}`
-      };
-      
-      const nextClimateControl = {
-        targetWeatherType: targetType,
-        daysRemaining: 3
-      };
-      
-      const nextState = {
-        ...prev,
-        credits: prev.credits - cost,
-        weather: activeWeather,
-        climateControl: nextClimateControl
-      };
-      
-      saveState({
-        credits: prev.credits - cost,
-        weather: activeWeather,
-        climateControl: nextClimateControl
-      });
-      
-      return nextState;
+  const activateClimateControl = (targetType: WeatherType) => {
+    const result = activateClimateControlState(state, targetType);
+    if (result.state !== state) playClimateControlChime();
+    result.logs.forEach(log => addLog(log.msg, log.type));
+    if (result.state === state) return;
+    setState(result.state as GameState & { globalStats: any });
+    saveState({
+      credits: result.state.credits,
+      weather: result.state.weather,
+      climateControl: result.state.climateControl,
     });
-    
-    addLog(`Atmospheric Stabilizer Engaged: Local ecosystem weather locked to ${WEATHER_TYPES[targetType].name} for 3 temporal cycles!`, 'success');
   };
 
   return (
@@ -1007,38 +730,38 @@ const App: React.FC = () => {
         {/* Navigation Rail */}
         <div className="lg:col-span-1 flex flex-row lg:flex-col gap-3 md:gap-4 overflow-x-auto pb-2 lg:pb-0 scrollbar-hide">
           <button 
-            onClick={() => setState(p => ({ ...p, activeTab: 'orchard' }))}
+            onClick={() => setState(p => selectTab(p, 'orchard') as GameState & { globalStats: any })}
             className={`flex-1 lg:flex-none p-4 rounded-xl flex items-center justify-center transition-all ${state.activeTab === 'orchard' ? 'bg-leaf-green text-soil-dark' : 'bg-card-bg text-text-secondary hover:text-white'}`}
           >
             <Sprout size={24} />
           </button>
           <button 
-            onClick={() => setState(p => ({ ...p, activeTab: 'lab' }))}
+            onClick={() => setState(p => selectTab(p, 'lab') as GameState & { globalStats: any })}
             className={`flex-1 lg:flex-none p-4 rounded-xl flex items-center justify-center transition-all ${state.activeTab === 'lab' ? 'bg-water-blue text-soil-dark' : 'bg-card-bg text-text-secondary hover:text-white'}`}
           >
             <FlaskConical size={24} />
           </button>
           <button 
-            onClick={() => setState(p => ({ ...p, activeTab: 'market' }))}
+            onClick={() => setState(p => selectTab(p, 'market') as GameState & { globalStats: any })}
             className={`flex-1 lg:flex-none p-4 rounded-xl flex items-center justify-center transition-all ${state.activeTab === 'market' ? 'bg-mineral-gold text-soil-dark' : 'bg-card-bg text-text-secondary hover:text-white'}`}
           >
             <Store size={24} />
           </button>
           <button 
-            onClick={() => setState(p => ({ ...p, activeTab: 'rankings' }))}
+            onClick={() => setState(p => selectTab(p, 'rankings') as GameState & { globalStats: any })}
             className={`flex-1 lg:flex-none p-4 rounded-xl flex items-center justify-center transition-all ${state.activeTab === 'rankings' ? 'bg-burn-red text-soil-dark' : 'bg-card-bg text-text-secondary hover:text-white'}`}
           >
             <Trophy size={24} />
           </button>
           <button 
-            onClick={() => setState(p => ({ ...p, activeTab: 'archives' }))}
+            onClick={() => setState(p => selectTab(p, 'archives') as GameState & { globalStats: any })}
             className={`flex-1 lg:flex-none p-4 rounded-xl flex items-center justify-center transition-all ${state.activeTab === 'archives' ? 'bg-fuchsia-500 text-soil-dark' : 'bg-card-bg text-text-secondary hover:text-white'}`}
             title="Botanical Archives & Encyclopedia"
           >
             <BookOpen size={24} />
           </button>
           <button 
-            onClick={() => setState(p => ({ ...p, activeTab: 'profile' }))}
+            onClick={() => setState(p => selectTab(p, 'profile') as GameState & { globalStats: any })}
             className={`flex-1 lg:flex-none p-4 rounded-xl flex items-center justify-center transition-all ${state.activeTab === 'profile' ? 'bg-text-primary text-soil-dark' : 'bg-card-bg text-text-secondary hover:text-white'}`}
           >
             <User size={24} />
@@ -1067,7 +790,7 @@ const App: React.FC = () => {
                       Active Growth Phase
                     </div>
                     <button 
-                      onClick={() => setState(p => ({ ...p, selectedPlantIndex: null }))}
+                      onClick={() => setState(p => selectPlant(p, null) as GameState & { globalStats: any })}
                       className="text-text-secondary hover:text-white transition-colors"
                     >
                       <RefreshCw size={20} />
@@ -1236,7 +959,7 @@ const App: React.FC = () => {
                               key={o.id}
                               onClick={() => {
                                 if (o.isUnlocked) {
-                                  setState(prev => ({ ...prev, activeOrchardId: o.id, selectedPlantIndex: null }));
+                                  setState(prev => selectOrchard(prev, o.id) as GameState & { globalStats: any });
                                 } else {
                                   unlockOrchard(o.id);
                                 }
@@ -1262,7 +985,7 @@ const App: React.FC = () => {
                           plant={plant} 
                           index={i} 
                           isSelected={state.selectedPlantIndex === i}
-                          onClick={() => plant ? setState(p => ({ ...p, selectedPlantIndex: i })) : setSeedingPlotIndex(i)}
+                          onClick={() => plant ? setState(p => selectPlant(p, i) as GameState & { globalStats: any }) : setSeedingPlotIndex(i)}
                         />
                       ))}
                     </div>
@@ -1511,10 +1234,11 @@ const App: React.FC = () => {
                         <div className="flex gap-3">
                           <button 
                             onClick={() => {
-                              if (state.dataSeeds >= 1) {
-                                setState(p => ({ ...p, dataSeeds: p.dataSeeds - 1, credits: p.credits + 50 }));
-                                saveState({ dataSeeds: state.dataSeeds - 1, credits: state.credits + 50 });
-                                addLog('Liquidated 1 Data Seed for 50 credits.', 'success');
+                              const result = liquidateDataSeeds(state, 1);
+                              result.logs.forEach(log => addLog(log.msg, log.type));
+                              if (result.state !== state) {
+                                setState(result.state as GameState & { globalStats: any });
+                                saveState({ dataSeeds: result.state.dataSeeds, credits: result.state.credits });
                               }
                             }}
                             className="flex-1 p-3 bg-black/40 border border-leaf-green/20 rounded-lg text-[10px] font-bold hover:bg-leaf-green/10 transition-all"
@@ -1523,10 +1247,11 @@ const App: React.FC = () => {
                           </button>
                           <button 
                             onClick={() => {
-                              if (state.dataSeeds >= 10) {
-                                setState(p => ({ ...p, dataSeeds: p.dataSeeds - 10, credits: p.credits + 500 }));
-                                saveState({ dataSeeds: state.dataSeeds - 10, credits: state.credits + 500 });
-                                addLog('Liquidated 10 Data Seeds for 500 credits.', 'success');
+                              const result = liquidateDataSeeds(state, 10);
+                              result.logs.forEach(log => addLog(log.msg, log.type));
+                              if (result.state !== state) {
+                                setState(result.state as GameState & { globalStats: any });
+                                saveState({ dataSeeds: result.state.dataSeeds, credits: result.state.credits });
                               }
                             }}
                             className="flex-1 p-3 bg-black/40 border border-leaf-green/20 rounded-lg text-[10px] font-bold hover:bg-leaf-green/10 transition-all"
