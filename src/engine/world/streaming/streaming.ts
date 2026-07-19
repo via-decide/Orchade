@@ -1,0 +1,2 @@
+import type { Chunk, ChunkState } from '../chunks/chunk';
+export class WorldStreamer { private chunks = new Map<string, Chunk>(); setState(id: string, state: ChunkState): void { const chunk=this.chunks.get(id); if (chunk) chunk.state=state; } upsert(chunk: Chunk): void { this.chunks.set(chunk.id, chunk); } nearby(): Chunk[] { return [...this.chunks.values()].filter(c => c.state === 'Active' || c.state === 'Visible'); } }
