@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "entries": [
+    { "id": "rain", "temperatureDelta": -2, "humidity": 0.9, "wind": 0.3, "cropWaterDelta": 15, "movementMultiplier": 0.95, "visibility": 0.8, "lighting": "overcast", "audio": "rain_loop" },
+    { "id": "storm", "temperatureDelta": -4, "humidity": 1, "wind": 0.9, "cropWaterDelta": 25, "movementMultiplier": 0.8, "visibility": 0.55, "lighting": "lightning", "audio": "storm_loop" },
+    { "id": "fog", "temperatureDelta": -1, "humidity": 0.85, "wind": 0.1, "cropWaterDelta": 5, "movementMultiplier": 0.9, "visibility": 0.35, "lighting": "diffuse", "audio": "fog_ambience" }
+  ]
+}

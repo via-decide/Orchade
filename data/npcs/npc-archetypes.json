@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "entries": [
+    { "id": "villager", "uses": ["schedule", "needs", "goals", "memory", "relationships", "tasks"] },
+    { "id": "animal", "uses": ["schedule", "needs", "goals", "memory", "tasks"] },
+    { "id": "merchant", "uses": ["schedule", "needs", "goals", "memory", "relationships", "tasks", "merchant_inventory"] }
+  ]
+}
