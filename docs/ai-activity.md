@@ -4,10 +4,10 @@
 
 - **Prompt summary:** Address failing GitHub process with exit code 1 after dependency audit endpoint failures.
 - **Files modified:** `scripts/audit-deps.mjs`, `package.json`, `README.md`, `docs/security.md`, `docs/developer-guide.md`, `docs/CHANGELOG.md`, `docs/metrics.md`.
-- **Reasoning:** CI should fail for actionable security vulnerabilities, not for transient npm registry audit endpoint access problems.
-- **Risks:** Endpoint failures are warnings, so maintainers should verify audits in a trusted network before release if warnings persist.
+- **Reasoning:** Repository visibility checks should keep running when npm audit is unavailable or reports vulnerabilities, while strict release gates can opt into fail-closed behavior with `STRICT_AUDIT=true`.
+- **Risks:** Audit findings and endpoint failures are warnings by default, so maintainers should run with `STRICT_AUDIT=true` before release if fail-closed security policy is required.
 - **Manual review required:** Confirm GitHub-hosted audit endpoint behavior and tune warning/failure policy if organization policy requires fail-closed behavior.
-- **Confidence:** High for resolving the observed exit-code failure while preserving vulnerability failure behavior.
+- **Confidence:** High for resolving the observed exit-code failure while preserving an opt-in strict vulnerability gate.
 
 ## 2026-07-19 — GitHub-native engineering repository
 

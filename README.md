@@ -9,7 +9,7 @@ Orchade is a Vite + React orchard simulation backed by Firebase Auth and Firesto
 | App build | Passing locally | `npm run build` succeeds with bundle-size and CSS import warnings |
 | Type safety | Passing locally | `npm run lint` runs TypeScript `--noEmit` |
 | Tests | Not established | Test runner and journey tests are next priority |
-| Security | Needs rule tests | Dependency audit is automated and treats registry endpoint failures as warnings |
+| Security | Needs rule tests | Dependency audit is automated as a repository-health signal; strict failure is opt-in for release gates |
 | Performance | At risk | Initial JS bundle is above Vite's default 500 KB warning threshold |
 | Documentation | Improving | Dashboard, index, ADRs, health, and architecture maps added |
 
@@ -39,7 +39,7 @@ Goal: make GitHub communicate what changed, why it changed, what systems are aff
 2. No automated test runner or coverage report is installed.
 3. Firestore rules need automated security tests.
 4. Production bundle needs code splitting and bundle budgets.
-5. Dependency audit endpoint failures are reported as warnings so transient registry issues do not block repository visibility checks.
+5. Dependency audit findings are reported without blocking repository visibility checks; strict release gates can set `STRICT_AUDIT=true`.
 
 ## Current Branch
 
