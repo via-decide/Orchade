@@ -89,6 +89,40 @@ This inventory summarizes the repository's current and potential mechanics. Stat
 |---|---|---|---|---|---|---|---|---|---|---|
 | Potential | `gameplay/npc/README.md` owns NPC identity, schedules, dialogue hooks, relationships, and `NPC_UPDATED`; `data/npcs/npc-archetypes.json` defines villager, animal, and merchant archetypes. | Runtime NPC state, spawn locations, schedules, relationship values, interaction UI, persistence, animation, quest/trade integration. | Add named botanists, merchants, animals, helpers, rival growers, memory-driven relationships, and schedule-based discovery. | Medium | Large | High | High | High | High | High |
 
+## AI Systems
+
+This section captures the current AI surface area implied by the data packs, gameplay capsules, and simulation registry. It is a planning baseline rather than a description of complete runtime behavior.
+
+### Current capability by actor type
+
+| Actor type | Current capability | Repository evidence | Primary gaps |
+|---|---|---|---|
+| NPC AI | Planned capsule state only. The NPC capsule declares ownership of identity, schedules, dialogue hooks, and relationships, exposes `NpcState`/`NpcProfile`/`findNpc` as intended contracts, and currently initializes as `planned`. The simulation registry includes an `npc-ai` gameplay system that marks schedules, needs, goals, memory, relationships, and tasks as intended flags during updates. | `gameplay/npc/README.md`; `gameplay/npc/state.ts`; `src/simulation/platformSystems.ts`; `data/npcs/npc-archetypes.json` | No live NPC entities, named profiles, locations, schedule ticks, need decay, goal selection, relationship values, interaction UI, dialogue renderer, persistence, or quest/trade integration. |
+| Animal AI | Conceptual only. The NPC archetype data includes an `animal` archetype with schedule, needs, goals, memory, and tasks, and the world simulation plan lists `wildlife` as a world system, but animals are not live entities yet. | `data/npcs/npc-archetypes.json`; `docs/world-simulation.md`; `src/simulation/worldSystems.ts` | No species catalog, habitat rules, spawn budget, movement/pathfinding, crop interactions, taming/repelling, pollination/pest effects, predator/prey behavior, or observation rewards. |
+| Enemy AI | Future combat surface only. The combat capsule owns future encounters, damage resolution, and battle-facing state, with `COMBAT_STARTED`/`COMBAT_ENDED` events documented by the capsule. Its state also initializes as `planned`, so enemy behavior is not implemented. | `gameplay/combat/README.md`; `gameplay/combat/state.ts`; `docs/game-systems.md` | No enemy archetypes, faction/hostility model, perception, aggro, target selection, combat movement, attack patterns, encounter spawning, rewards, defeat rules, or combat UI. |
+
+### Shared AI needs
+
+| Need | Current state | Recommended next steps |
+|---|---|---|
+| Pathfinding | Not implemented. The movement section already identifies missing player collision/pathfinding, and `developerToolsSystem` reserves debug visibility for player collision and pathfinding. AI actors also lack positions, navigation meshes, traversal costs, and blocked-tile handling. | Introduce a shared navigation contract for grid or scene-node movement; add terrain/weather traversal costs; expose route preview/debug overlays; then let NPCs, animals, enemies, and merchants consume the same public pathfinding API. |
+| Schedules | Data-backed intent exists for villagers, animals, and merchants through archetype `uses`, and the NPC capsule names schedules as core ownership. No day-phase or schedule runner exists yet. | Add schedule templates keyed by archetype and location; tick them from day/night or world phase events; support fallback behaviors when a destination is unavailable. |
+| Relationships | Villagers and merchants include relationships in their archetype uses, and the NPC capsule owns relationship state. Runtime values and modifiers are missing. | Add relationship maps keyed by NPC ID and player/faction IDs; update them from gifts, quests, trades, dialogue choices, crop deliveries, and negative events; expose relationship checks to dialogue, pricing, services, and village events. |
+| Memory | All three NPC archetypes include memory. The `npc-ai` platform system also advertises memory as part of intended AI behavior. No memory records, decay, or query API exists. | Start with bounded memories for recent player actions, gifts, trades, weather events, help requests, combat outcomes, and village incidents; add expiration/importance scoring so decision-making and dialogue can query concise context. |
+| Decision-making | Archetypes include needs, goals, and tasks, but there is no utility scorer, behavior tree, or planner. | Implement a small utility selector that scores needs, goals, schedule obligations, relationship pressure, threat state, and available tasks; keep decisions deterministic from simulation context and data-pack inputs. |
+| Dialogue hooks | The NPC capsule lists dialogue hooks, and the dialogue system inventory notes only a quest dialogue key exists today. No dialogue content pack or renderer is present. | Define dialogue hook IDs for greeting, schedule interruption, relationship threshold, quest state, weather, crop delivery, shop open/closed, combat aftermath, and village events; route hook selection through NPC memory and relationship checks. |
+| Merchant behavior | The merchant archetype includes `merchant_inventory` plus schedules, relationships, needs, goals, memory, and tasks, while trading is only partial. | Add merchant profiles with shop hours, route schedules, inventory tables, restock cadence, buy/sell policy, relationship discounts, regional specialties, and memory-driven reactions to player trade history. |
+| Village behavior | Villagers and merchants exist as archetypes, but villages remain conceptual with no map, service registry, reputation, or events. | Build village records with locations, services, resident NPC IDs, shop stalls, bulletin boards, festivals, reputation, and daily routines; aggregate resident memories and relationship changes into village-level events and service availability. |
+
+### Implementation sequence
+
+1. Define shared AI data schemas for archetypes, profiles, schedules, memories, relationships, shops, and village services.
+2. Add minimal runtime state for positioned AI actors, current task, current schedule slot, relationship map, and bounded memory log.
+3. Implement deterministic schedule ticking from day/night or world phase events before adding complex decision-making.
+4. Add a shared pathfinding API with debug output, then wire NPC/animal/enemy movement to it.
+5. Layer utility-based decision-making on top of schedules, needs, goals, memory, relationships, and threats.
+6. Connect dialogue hooks, merchant inventories, quest signals, village events, and combat encounters through public capsule APIs and events.
+
 ## Dialogue
 
 | Current state | Repository evidence | Missing features | Expansion ideas | Priority | Development effort | Technical risk | Gameplay impact | Replayability impact | Retention impact | Architecture impact |
