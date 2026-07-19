@@ -1,13 +1,40 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="forest">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>My Google AI Studio App</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#07130f" />
+    <title>Orchade Runtime</title>
   </head>
   <body>
-    <div id="root"></div>
+    <main id="game-root" class="game-root" aria-label="Orchade game runtime">
+      <section id="loading-screen" class="runtime-layer loading-screen" aria-live="polite" aria-label="Engine boot sequence">
+        <div class="loading-card">
+          <p class="eyebrow">Orchade Engine</p>
+          <h1>Booting Simulation Runtime</h1>
+          <div class="boot-meta"><span data-runtime-version>v0.0.0</span><span data-runtime-seed>seed: pending</span><span data-elapsed>0.0s</span></div>
+          <div class="progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span data-progress-bar></span></div>
+          <strong data-subsystem>Browser Ready</strong>
+          <dl id="loading-diagnostics" class="diagnostic-grid" aria-label="Loading diagnostics"></dl>
+        </div>
+      </section>
+      <section id="game-viewport" class="runtime-layer game-viewport" tabindex="0" aria-label="Game viewport owns rendering and input">
+        <canvas id="render-canvas" aria-label="Orchade simulation renderer"></canvas>
+        <div class="viewport-letterbox top" aria-hidden="true"></div><div class="viewport-letterbox bottom" aria-hidden="true"></div>
+      </section>
+      <section id="hud" class="runtime-layer hud" aria-label="Game HUD"><div class="hud-top" data-hud-top></div><div class="hud-left" data-hud-left></div><div class="hud-center" data-hud-center></div><div class="hud-right" data-hud-right></div><div class="hud-bottom" data-hud-bottom></div></section>
+      <section id="debug-overlay" class="runtime-layer debug-overlay" aria-label="Debug overlay" hidden></section>
+      <section id="modal-layer" class="runtime-layer modal-layer" aria-label="Modal windows" aria-live="polite"></section>
+      <section id="notification-layer" class="runtime-layer notification-layer" aria-label="Notifications" aria-live="polite"></section>
+      <section id="tooltip-layer" class="runtime-layer tooltip-layer" aria-label="Tooltips"></section>
+      <section id="context-menu-layer" class="runtime-layer context-menu-layer" aria-label="Context menus"></section>
+      <section id="developer-console" class="runtime-layer developer-console" aria-label="Developer dashboard" hidden></section>
+      <section id="performance-overlay" class="runtime-layer performance-overlay" aria-label="Performance overlay"></section>
+      <section id="audio-layer" class="runtime-layer audio-layer" aria-label="Audio mixer controls"></section>
+      <section id="accessibility-layer" class="runtime-layer accessibility-layer" aria-label="Accessibility controls and subtitles"></section>
+      <section id="mobile-controls" class="runtime-layer mobile-controls" aria-label="Touch controls"></section>
+      <div id="root" class="react-game-ui" aria-label="React game interface"></div>
+    </main>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
-
