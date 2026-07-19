@@ -33,4 +33,4 @@ A local `.git/hooks/pre-commit` hook runs `npm run lint`. CI remains the source 
 
 - If Firebase reads fail offline, verify Firebase project config and Firestore database ID.
 - If builds warn about chunk size, inspect `docs/performance.md` and split lazy features.
-- If `npm audit` fails, upgrade or replace the vulnerable package before release.
+- If `npm run audit:deps` reports vulnerabilities, upgrade or replace the vulnerable package before release; endpoint failures are reported as warnings.

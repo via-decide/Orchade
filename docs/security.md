@@ -5,7 +5,7 @@
 - Firebase client configuration is public by design, but environment-specific setup needs validation and documentation.
 - Firestore rules are a critical control plane and require scenario tests.
 - Browser-exposed API keys must not authorize privileged operations.
-- Dependency auditing is now available through `npm run audit:deps` and CI.
+- `npm run audit:deps` now fails on moderate/high/critical vulnerabilities while warning on registry endpoint failures.
 
 ## Required Follow-Up
 

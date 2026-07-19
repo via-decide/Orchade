@@ -11,7 +11,7 @@
     "lint": "tsc --noEmit",
     "format": "npx prettier --check .",
     "format:write": "npx prettier --write .",
-    "audit:deps": "npm audit --omit=dev --audit-level=moderate",
+    "audit:deps": "node scripts/audit-deps.mjs",
     "repo:health": "node scripts/repository-health.mjs",
     "validate": "npm run lint && npm run build && npm run audit:deps && npm run repo:health && npm run repo:stats && npm run docs:check && npm run dead-code:check && npm run assets:check",
     "hooks:install": "node scripts/install-hooks.mjs",
