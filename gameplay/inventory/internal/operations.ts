@@ -96,3 +96,17 @@ export const equipStack = (state: InventoryState, containerId: string, stackId: 
   if (!slot) return state;
   return { ...state, equipment: { ...state.equipment, [slot as EquipmentSlot]: stackId }, updatedAt: new Date().toISOString() };
 };
+
+export const removeItem = (state: InventoryState, containerId: string, itemId: string, quantity: number): { state: InventoryState; removed: number } => {
+  const container = containerId === state.backpack.id ? cloneContainer(state.backpack) : cloneContainer(state.storage[containerId]);
+  if (!container || quantity <= 0) return { state, removed: 0 };
+  let remaining = quantity;
+  for (const stack of container.stacks) {
+    if (stack.itemId !== itemId || remaining === 0) continue;
+    const removed = Math.min(remaining, stack.quantity);
+    stack.quantity -= removed;
+    remaining -= removed;
+  }
+  container.stacks = container.stacks.filter(stack => stack.quantity > 0);
+  return { state: replaceContainer(state, container), removed: quantity - remaining };
+};
