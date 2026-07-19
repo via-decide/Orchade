@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "categories": ["equipment", "resources", "tools", "seeds", "food", "quest_items", "containers"],
+  "entries": [
+    { "id": "terran_leaf", "name": "Terran Leaf", "category": "resources", "weight": 0.1, "maxStack": 99, "sortGroup": "crop-yield" },
+    { "id": "terran_sprout_seed", "name": "Terran Sprout Seed", "category": "seeds", "weight": 0.05, "maxStack": 99, "quickSlotAllowed": true },
+    { "id": "field_hoe", "name": "Field Hoe", "category": "tools", "weight": 2.5, "maxStack": 1, "hotbarAllowed": true }
+  ]
+}

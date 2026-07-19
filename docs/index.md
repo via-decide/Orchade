@@ -4,6 +4,7 @@
 - [Repository Health](./repository-health.md)
 - [Repository Metrics](./metrics.md)
 - [Events](./events.md)
+- [ORCHADE v2 Gameplay Architecture](./gameplay/architecture-v2.md)
 - [ADR](./adr/)
 - [Graphs](./graphs/)
 

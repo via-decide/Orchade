@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "entries": [
+    {
+      "id": "terran_sprout",
+      "displayName": "Terran Sprout",
+      "seasons": ["spring", "summer", "autumn"],
+      "growthStages": [
+        { "id": "seed", "days": 1, "sprite": "crops/terran_sprout_seed" },
+        { "id": "sprout", "days": 2, "sprite": "crops/terran_sprout_sprout" },
+        { "id": "mature", "days": 3, "sprite": "crops/terran_sprout_mature" }
+      ],
+      "water": { "min": 20, "max": 70 },
+      "nutrients": ["nitrogen", "phosphorus"],
+      "harvest": { "itemId": "terran_leaf", "minYield": 2, "maxYield": 5 },
+      "diseases": ["root_rot", "spore_blight"],
+      "fertilizerEffects": { "compost": 1.1, "synthetic": 1.25, "organic": 1.2 }
+    }
+  ]
+}

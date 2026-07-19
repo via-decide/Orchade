@@ -1,0 +1,6 @@
+{
+  "schemaVersion": 1,
+  "entries": [
+    { "id": "first_harvest", "objectives": [{ "type": "harvest", "target": "terran_sprout", "count": 1 }], "dialogue": "quest.first_harvest", "rewards": [{ "itemId": "terran_sprout_seed", "count": 3 }], "dependencies": [], "triggers": ["CROP_HARVESTED"], "conditions": [], "failureStates": [], "repeatable": false }
+  ]
+}
