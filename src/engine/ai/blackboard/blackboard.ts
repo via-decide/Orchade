@@ -1,0 +1,1 @@
+export class Blackboard { private values = new Map<string, unknown>(); get<T>(key: string): T | undefined { return this.values.get(key) as T; } set(key: string, value: unknown): void { this.values.set(key, value); } }

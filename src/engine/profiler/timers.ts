@@ -1,0 +1,1 @@
+export function time<T>(name: string, fn: () => T): { name: string; durationMs: number; value: T } { const start=performance.now(); const value=fn(); return { name, durationMs: performance.now()-start, value }; }
