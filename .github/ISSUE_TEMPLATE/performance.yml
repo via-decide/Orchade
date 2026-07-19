@@ -1,0 +1,14 @@
+name: Performance
+description: Track measurable performance work
+labels: [Performance]
+body:
+  - type: textarea
+    id: metric
+    attributes: { label: Metric, description: What will be measured? }
+    validations: { required: true }
+  - type: textarea
+    id: baseline
+    attributes: { label: Baseline }
+  - type: textarea
+    id: target
+    attributes: { label: Target improvement }

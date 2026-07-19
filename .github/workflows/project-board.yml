@@ -1,0 +1,13 @@
+name: Project Board Automation Placeholder
+
+on:
+  issues:
+    types: [opened, labeled, closed, reopened]
+  pull_request:
+    types: [opened, ready_for_review, closed]
+
+jobs:
+  document-project-flow:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Project board columns and automation rules are documented in docs/project-board.md. Add project IDs to enable mutation."

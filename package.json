@@ -1,5 +1,5 @@
 {
-  "name": "react-example",
+  "name": "orchade",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -8,7 +8,18 @@
     "build": "vite build",
     "preview": "vite preview",
     "clean": "rm -rf dist",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "format": "npx prettier --check .",
+    "format:write": "npx prettier --write .",
+    "audit:deps": "node scripts/audit-deps.mjs",
+    "repo:health": "node scripts/repository-health.mjs",
+    "validate": "npm run lint && npm run build && npm run audit:deps && npm run repo:health && npm run repo:stats && npm run docs:check && npm run dead-code:check && npm run assets:check",
+    "hooks:install": "node scripts/install-hooks.mjs",
+    "repo:stats": "node scripts/repo-stats.mjs",
+    "docs:check": "node scripts/check-markdown.mjs && node scripts/check-links.mjs",
+    "docs:generate": "node scripts/generate-docs.mjs",
+    "dead-code:check": "node scripts/check-dead-code.mjs",
+    "assets:check": "node scripts/check-unused-assets.mjs"
   },
   "dependencies": {
     "@google/genai": "^1.29.0",
