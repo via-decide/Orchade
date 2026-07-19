@@ -5,6 +5,7 @@ import { ReplayRecorder } from '../replay/recorder';
 import { checksum } from '../replay/checksum';
 import { DeterministicRandom, hashSeed } from '../random/rng';
 import { SimulationScheduler } from '../scheduler/scheduler';
+import { SimulationWorld } from '../world/state/worldState';
 import { SimulationClock } from './clock';
 
 export type RuntimeHooks = {
@@ -27,11 +28,13 @@ export class EngineRuntimeKernel {
   readonly metrics = new Metrics();
   readonly clock: SimulationClock;
   readonly random: DeterministicRandom;
+  readonly world: SimulationWorld;
   private paused = false;
 
   constructor(private options: EngineRuntimeOptions) {
     this.clock = new SimulationClock(options.fixedDeltaMs);
     this.random = new DeterministicRandom(hashSeed(options.seed));
+    this.world = new SimulationWorld();
   }
 
   enqueueCommand<T>(command: SimulationCommand<T>): void {
@@ -59,11 +62,12 @@ export class EngineRuntimeKernel {
     const commands = this.commands.drain(tick);
     commands.forEach(command => this.events.queueEvent('CommandIssued', command, tick));
     const eventsBefore = this.events.inspect({ sinceTick: tick });
-    await this.scheduler.tick({ deltaMs, seed: this.options.seed, flags: {} });
+    await this.scheduler.tick({ deltaMs, seed: this.options.seed, flags: {}, world: this.world, events: this.events, random: this.random, commands: this.commands });
     const flushed = this.events.flush(tick);
     const events = [...eventsBefore, ...flushed];
-    const frameChecksum = checksum({ tick, commands, events, rng: this.random.snapshot() });
-    this.replay.record({ tick, input: [], commands, events, randomSeed: String(this.random.snapshot()), checksum: frameChecksum });
+    const worldSnapshot = this.world.snapshot();
+    const frameChecksum = checksum({ tick, commands, events, rng: this.random.snapshot(), world: worldSnapshot });
+    this.replay.record({ tick, input: [], commands, events, randomSeed: String(this.random.snapshot()), checksum: frameChecksum }, worldSnapshot);
     this.metrics.record({ name: 'tick.durationMs', value: performance.now() - started });
     this.options.hooks?.afterTick?.(tick);
   }

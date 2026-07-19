@@ -19,3 +19,7 @@ Gameplay capsules own gameplay state and public APIs. Engine modules own schedul
 ## Dependency rule
 
 Gameplay modules must not call each other directly. Cross-module effects must flow through commands, scheduler systems, or engine events.
+
+## Shared simulation state
+
+The runtime owns `SimulationWorld`, which contains the entity registry and streaming service. Systems receive the world through scheduler context so NPCs, animals, crops, items, buildings, projectiles, vehicles, and future gameplay objects can share one deterministic state model instead of maintaining isolated collections.

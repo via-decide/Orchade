@@ -1,15 +1,36 @@
 import type { GridPoint } from './grid';
 import { NavigationGrid } from './grid';
-const key = (p: GridPoint) => `${p.x},${p.y}`;
-const h = (a: GridPoint, b: GridPoint) => Math.abs(a.x-b.x)+Math.abs(a.y-b.y);
+import { PriorityQueue } from './priorityQueue';
+
+const key = (point: GridPoint) => `${point.x},${point.y}`;
+const heuristic = (left: GridPoint, right: GridPoint) => Math.abs(left.x - right.x) + Math.abs(left.y - right.y);
+
 export function findAStarPath(grid: NavigationGrid, start: GridPoint, goal: GridPoint): GridPoint[] {
-  const open = new Set([key(start)]), came = new Map<string, GridPoint>(), g = new Map([[key(start), 0]]), points = new Map([[key(start), start]]);
-  while (open.size) {
-    const currentKey = [...open].sort((a,b)=>(g.get(a)??Infinity)+h(points.get(a)!,goal)-(g.get(b)??Infinity)-h(points.get(b)!,goal))[0];
-    const current = points.get(currentKey)!; if (currentKey === key(goal)) return reconstruct(came, current);
-    open.delete(currentKey);
-    for (const next of grid.neighbors(current)) { const nk=key(next), cost=(g.get(currentKey)??0)+(grid.cell(next)?.cost??1); points.set(nk,next); if (cost < (g.get(nk)??Infinity)) { came.set(nk,current); g.set(nk,cost); open.add(nk); } }
+  const frontier = new PriorityQueue<GridPoint>();
+  const cameFrom = new Map<string, GridPoint>();
+  const costs = new Map<string, number>([[key(start), 0]]);
+  frontier.push(start, 0);
+
+  while (frontier.size) {
+    const current = frontier.pop()!;
+    if (key(current) === key(goal)) return reconstruct(cameFrom, current);
+    for (const next of grid.neighbors(current)) {
+      const nextCost = (costs.get(key(current)) ?? 0) + (grid.cell(next)?.cost ?? 1);
+      if (nextCost >= (costs.get(key(next)) ?? Infinity)) continue;
+      costs.set(key(next), nextCost);
+      cameFrom.set(key(next), current);
+      frontier.push(next, nextCost + heuristic(next, goal));
+    }
   }
+
   return [];
 }
-function reconstruct(came: Map<string, GridPoint>, current: GridPoint): GridPoint[] { const path=[current]; while(came.has(key(current))){ current=came.get(key(current))!; path.unshift(current);} return path; }
+
+function reconstruct(cameFrom: Map<string, GridPoint>, current: GridPoint): GridPoint[] {
+  const path = [current];
+  while (cameFrom.has(key(current))) {
+    current = cameFrom.get(key(current))!;
+    path.unshift(current);
+  }
+  return path;
+}
