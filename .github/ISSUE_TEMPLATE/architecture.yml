@@ -1,0 +1,17 @@
+name: Architecture
+description: Propose or review architectural direction
+labels: [Architecture]
+body:
+  - type: textarea
+    id: problem
+    attributes: { label: Problem }
+    validations: { required: true }
+  - type: textarea
+    id: decision
+    attributes: { label: Proposed decision }
+  - type: textarea
+    id: alternatives
+    attributes: { label: Alternatives considered }
+  - type: textarea
+    id: tradeoffs
+    attributes: { label: Tradeoffs }

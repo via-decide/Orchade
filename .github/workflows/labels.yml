@@ -1,0 +1,40 @@
+name: Sync Labels
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - .github/labels.yml
+
+jobs:
+  sync-labels:
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const labels = fs.readFileSync('.github/labels.yml', 'utf8')
+              .split('\n- name: ')
+              .filter(Boolean)
+              .map((chunk) => {
+                const normalized = chunk.startsWith('name: ') ? chunk.slice(6) : chunk;
+                const lines = normalized.split('\n');
+                return {
+                  name: lines[0].trim(),
+                  color: lines.find((line) => line.trim().startsWith('color:')).split(':')[1].trim(),
+                  description: lines.find((line) => line.trim().startsWith('description:')).split(':').slice(1).join(':').trim(),
+                };
+              });
+            for (const label of labels) {
+              try {
+                await github.rest.issues.updateLabel({ ...context.repo, name: label.name, color: label.color, description: label.description });
+              } catch (error) {
+                if (error.status === 404) await github.rest.issues.createLabel({ ...context.repo, ...label });
+                else throw error;
+              }
+            }

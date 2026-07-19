@@ -6,7 +6,7 @@ on:
     branches: [main, master]
 
 jobs:
-  validate:
+  lint:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -16,10 +16,42 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run lint
+
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
       - run: npm run build
-      - run: npm run audit:deps
-      - run: npm run repo:health
+
+  repository-visibility:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Dependency audit
+        run: npm run audit:deps
+      - name: Dead code detection
+        run: npm run dead-code:check
+      - name: Unused asset detection
+        run: npm run assets:check
+      - name: Markdown validation
+        run: npm run docs:check
+      - name: Repository statistics
+        run: npm run repo:stats
+      - name: Documentation generation
+        run: npm run docs:generate
       - uses: actions/upload-artifact@v4
         with:
-          name: repository-health
-          path: docs/repository-health.md
+          name: repository-dashboard-artifacts
+          path: |
+            docs/repository-health.md
+            docs/metrics.md

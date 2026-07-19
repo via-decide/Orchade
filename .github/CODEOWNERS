@@ -1,0 +1,14 @@
+# Folder ownership is intentionally role-based until named maintainers are assigned.
+/src/lib/ @engine-owners
+/src/App.tsx @gameplay-owners
+/src/constants.ts @gameplay-owners
+/src/types.ts @gameplay-owners
+/src/components/ @ui-owners
+/src/index.css @ui-owners
+/docs/ @docs-owners
+/.github/ @infrastructure-owners
+/scripts/ @infrastructure-owners
+/public/ @assets-owners
+*.png @assets-owners
+*.jpg @assets-owners
+*.svg @assets-owners
