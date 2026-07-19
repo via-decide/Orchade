@@ -151,3 +151,59 @@ This inventory summarizes the repository's current and potential mechanics. Stat
 | Route mechanics through typed events. | The repository already describes capsule events; using them consistently will unlock quests, achievements, telemetry, and automation without coupling UI handlers together. | Critical | Medium | Medium | High | High | High | High |
 | Split live UI handlers from domain reducers. | Farming/weather/economy extraction has started; continuing it lowers risk and makes balancing mechanics testable. | High | Medium | Medium | Medium | Medium | High | High |
 | Build data-pack validation. | Many systems rely on `data/*`; schema checks will prevent broken content as mechanics expand. | High | Medium | Low | Medium | Medium | High | High |
+
+## Progression Design Layers
+
+The progression model should turn the current orchard loop into a set of connected long-term goals. Each layer below is designed to map directly to existing state types, constants, and data packs so progression can start as lightweight milestones before becoming a fully data-driven system.
+
+### XP and level systems
+
+Player XP should be awarded from actions already represented by `GameState`: advancing days, harvesting plants, earning credits, spending Data Seeds, unlocking orchards, and surviving weather pressure. A first implementation can add `playerLevel`, `currentXp`, and `lifetimeXp` to `GameState`, then use `day`, `credits`, `dataSeeds`, `orchards`, `harvestedTypes`, and `weather` as XP event inputs. `PLANT_STAGES` provides a natural growth XP ladder because each stage threshold marks a higher-care milestone, while `WEATHER_TYPES` can apply bonus XP for successfully maintaining plants during storms, heatwaves, and fog.
+
+### Skill trees
+
+Skill trees should specialize the broad `GlobalUpgrades` model into named branches. Farming skills can improve `waterEfficiency` and `nutrientRetention`; resilience skills can improve `stressResistance`; biosecurity skills can improve `pestDefense`; climate skills can reduce the cost or cooldown of `climateControl`. The current `INITIAL_UPGRADES` object is the baseline rank-zero tree state, and future nodes can unlock when the player reaches level thresholds, spends Data Seeds, harvests specific crop IDs, or owns specific item categories from `item-definitions.json` such as `tools`, `seeds`, and `resources`.
+
+### Research and technology unlocks
+
+Research should use `dataSeeds` as the core research currency and the Lab tab as its primary surface. Technology tiers can unlock new weather manipulation options from `WEATHER_TYPES`, new upgrade ranks in `GlobalUpgrades`, extra orchard slots from `Orchard.unlockCost`, and future crop definitions from `crop-definitions.json`. Each crop entry already contains water needs, nutrients, diseases, fertilizer effects, harvest outputs, and seasonal affinity, so research can expose advanced seed traits, disease counters, fertilizer recipes, or climate-control recipes without inventing a separate content source.
+
+### Crop mastery
+
+Crop mastery should track repeated success with each crop `id` in `crop-definitions.json`. The existing `harvestedTypes` array can represent discovery completion, while a future `cropMastery` map can count harvest quantity, best yield, low-stress harvests, pest-free harvests, and seasonal harvests. The Terran Sprout definition can seed the first mastery track: learn its water range, exploit its compost/synthetic/organic fertilizer modifiers, manage its root-rot and spore-blight risks, and ship its `terran_leaf` harvest item. Mastery rewards should include cosmetic archive badges, XP, Data Seeds, seed discounts, or small species-specific care bonuses.
+
+### Tool mastery
+
+Tool mastery should start from the `tools` category in `item-definitions.json`, currently represented by `field_hoe`. A lightweight implementation can track uses per tool ID and award mastery ranks that reduce action friction, improve planting outcomes, or unlock tool-specific perks. Tool mastery should eventually connect to crafting progression by requiring upgraded tools or tool ranks for advanced recipes, larger orchard maintenance, greenhouse construction, and automation interactions.
+
+### Building progression
+
+Building progression should extend the current orchard unlock model before a full placement system exists. `Orchard.isUnlocked` and `Orchard.unlockCost` already define expansion gates, and building unlocks can piggyback on those gates to introduce workbenches, storage, weather shields, irrigation, and lab modules. Once building definitions are expanded, each building should define prerequisites such as player level, research tier, item costs, required harvested crop types, or owned orchard count.
+
+### Crafting progression
+
+Crafting progression should use `item-definitions.json` as the output and ingredient vocabulary. The current categories give a clear recipe taxonomy: tools, seeds, resources, food, quest items, equipment, and containers. Crop harvest outputs such as `terran_leaf` can become early ingredients, while shop-care concepts from `SHOP_ITEMS` can become craftable fertilizer and pesticide recipes. Crafting levels should unlock batch sizes, recipe families, station access, quality bonuses, and reduced waste.
+
+### Economy scaling
+
+Economy progression should scale around `credits`, `dataSeeds`, shop costs, crop yields, and orchard expansion costs. Early progression can reward small credit payouts for harvests and require credits for `SHOP_ITEMS`; midgame can add crop-yield arbitrage, Data Seed exchange, and orchard unlock planning; late game can use prestige and LiveOps ladders to absorb surplus currency. Crop definitions already expose `minYield` and `maxYield`, while item definitions expose stack sizes and categories, giving the economy concrete levers for price, bulk sale, storage pressure, and market demand.
+
+### Story progression
+
+Story progression should be milestone-driven and should read from current discovery signals instead of requiring a separate story engine at first. The player can advance story chapters by reaching days survived, harvesting new crop types in `harvestedTypes`, unlocking orchards, earning Data Seeds, mastering weather events, and filling the archives. Crop lore can attach to crop IDs, item lore can attach to item IDs, and the Profile/Archives tabs can surface chapter rewards and encyclopedia entries.
+
+### Achievements
+
+Achievements should be an event-driven layer over existing state. Initial achievement triggers can include first harvest, first `terran_leaf`, first use of every `SHOP_ITEMS` care item, first unlocked orchard, first climate-control success, harvesting under each `WeatherType`, reaching each `PLANT_STAGES` threshold, and collecting each item category. Achievement rewards should be conservative: archive badges, profile cosmetics, small XP grants, or Data Seeds, with larger mechanical rewards reserved for research and skill trees.
+
+### Prestige and new-game-plus
+
+Prestige should unlock after major collection and economy milestones, such as all crop types discovered, all orchards unlocked, high player level, or archive completion. A new-game-plus reset can preserve account-level discoveries, achievements, crop mastery badges, and selected skill-tree nodes while resetting day, credits, planted orchards, and moment-to-moment plant state. Data Seeds are the best current prestige currency because they already sit outside simple credits and imply research/meta progression.
+
+### Collection completion
+
+Collection completion should combine crop IDs, harvest item IDs, seed IDs, tool IDs, weather encounters, achievements, and archive entries. `harvestedTypes` is the current crop collection seed, `crop-definitions.json` supplies the canonical crop list, and `item-definitions.json` supplies resource, seed, and tool collection categories. Collection UI should show discovered, owned, mastered, and perfected states separately so completionists can pursue both breadth and mastery depth.
+
+### Seasonal and LiveOps progression
+
+Seasonal progression should use crop seasons from `crop-definitions.json`, weather from `WEATHER_TYPES`, and economy goals from credits/Data Seeds to create time-boxed ladders without invalidating permanent progression. A season can ask players to harvest crops in supported seasons, complete weather challenges, craft limited recipes, earn leaderboard points, or fill event collection pages. LiveOps rewards should mostly be cosmetics, archive stamps, profile titles, and convenience bonuses so permanent power remains tied to stable systems such as XP, research, crop mastery, tools, buildings, and crafting.
