@@ -1,0 +1,14 @@
+{
+  "modules": [
+    {"name":"inventory","purpose":"Owns item, equipment, and inventory persistence contracts.","status":"planned","dependencies":["farming","crafting","economy"],"publicApi":["InventoryItem","InventoryState","createEmptyInventory"],"events":["INVENTORY_CHANGED"]},
+    {"name":"farming","purpose":"Owns orchard plant lifecycle, growth state, harvest readiness, and farm actions.","status":"in-progress","dependencies":["weather","world","ui"],"publicApi":["FarmingState","PlantSummary","selectHarvestablePlants"],"events":["PLANT_WATERED","PLANT_HARVESTED","FARMING_STATE_CHANGED"]},
+    {"name":"combat","purpose":"Owns future combat encounters, damage resolution, and battle-facing state.","status":"planned","dependencies":["inventory","world"],"publicApi":["CombatState","createCombatState"],"events":["COMBAT_STARTED","COMBAT_ENDED"]},
+    {"name":"crafting","purpose":"Owns recipes, crafting validation, and item production rules.","status":"planned","dependencies":["inventory","economy"],"publicApi":["CraftingRecipe","CraftingState","canCraftRecipe"],"events":["CRAFTING_COMPLETED"]},
+    {"name":"quests","purpose":"Owns quest definitions, progress tracking, rewards contracts, and quest lifecycle.","status":"planned","dependencies":["inventory","farming","npc"],"publicApi":["QuestState","QuestProgress","updateQuestProgress"],"events":["QUEST_PROGRESS"]},
+    {"name":"npc","purpose":"Owns NPC identity, dialogue hooks, schedules, and relationship state.","status":"planned","dependencies":["quests","world"],"publicApi":["NpcState","NpcProfile","findNpc"],"events":["NPC_UPDATED"]},
+    {"name":"weather","purpose":"Owns weather types, forecasts, climate modifiers, and weather event contracts.","status":"in-progress","dependencies":["world"],"publicApi":["WeatherState","WeatherKind","describeWeather"],"events":["WEATHER_UPDATED"]},
+    {"name":"economy","purpose":"Owns currencies, pricing rules, shop contracts, and economy telemetry.","status":"in-progress","dependencies":["inventory","farming"],"publicApi":["EconomyState","PriceQuote","quotePrice"],"events":["ECONOMY_CHANGED"]},
+    {"name":"ui","purpose":"Owns gameplay-facing presentation contracts, tabs, and view model boundaries.","status":"in-progress","dependencies":["farming","inventory","economy","weather"],"publicApi":["GameplayTab","UiState","setActiveTab"],"events":["UI_TAB_CHANGED"]},
+    {"name":"world","purpose":"Owns orchards, locations, scene state, and world progression boundaries.","status":"in-progress","dependencies":["weather"],"publicApi":["WorldState","WorldLocation","advanceWorldDay"],"events":["PLAYER_MOVED","WORLD_UPDATED"]}
+  ]
+}
