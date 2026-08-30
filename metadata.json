@@ -1,5 +1,8 @@
 {
-  "name": "Orchard: Growth Milestone Engine",
-  "description": "A multi-layered ecosystem simulation where you manage resources, research genetic traits, and grow a thriving digital orchard.",
-  "requestFramePermissions": []
+  "name": "Orchade: Homestead Agronomic & Orchard Engine",
+  "description": "A multi-layered agronomic and ecosystem simulation featuring research-grounded per-crop growth lifecycles, resource management, and zone planning.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
 }

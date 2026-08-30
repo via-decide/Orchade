@@ -1,20 +1,218 @@
 {
-  "schemaVersion": 1,
-  "entries": [
-    {
-      "id": "terran_sprout",
-      "displayName": "Terran Sprout",
-      "seasons": ["spring", "summer", "autumn"],
+  "$schema": "./crop-definitions.schema.json",
+  "version": "1.0.0",
+  "crops": {
+    "tomato": {
+      "id": "tomato",
+      "displayName": "Tomato",
+      "scientificName": "Solanum lycopersicum",
+      "seasons": ["spring", "summer"],
+      "isPerennial": false,
+      "_source": "University extension crop production guides (vegetable cultivars)",
       "growthStages": [
-        { "id": "seed", "days": 1, "sprite": "crops/terran_sprout_seed" },
-        { "id": "sprout", "days": 2, "sprite": "crops/terran_sprout_sprout" },
-        { "id": "mature", "days": 3, "sprite": "crops/terran_sprout_mature" }
+        { "id": "seed", "name": "Seed", "days": 7, "color": "#6d4c41", "icon": "🌰" },
+        { "id": "seedling", "name": "Seedling", "days": 14, "color": "#81c784", "icon": "🌱" },
+        { "id": "vegetative", "name": "Vegetative", "days": 21, "color": "#43a047", "icon": "🌿" },
+        { "id": "flowering", "name": "Flowering", "days": 14, "color": "#fdd835", "icon": "🌼" },
+        { "id": "fruiting", "name": "Fruiting", "days": 20, "color": "#e53935", "icon": "🍅" }
       ],
-      "water": { "min": 20, "max": 70 },
+      "water": { "min": 40, "max": 85 },
+      "nutrients": ["nitrogen", "potassium"],
+      "harvest": {
+        "itemId": "tomato_fruit",
+        "displayName": "Fresh Tomatoes",
+        "minYield": 4,
+        "maxYield": 10
+      },
+      "_yieldNote": "Researched yield: 4-10 marketable fruit units per plant flush depending on indeterminate vigor",
+      "diseases": ["early_blight", "late_blight", "fusarium_wilt"],
+      "fertilizerEffects": {
+        "compost": 1.1,
+        "synthetic": 1.2,
+        "organic": 1.15
+      },
+      "_fertilizerNote": "High potassium and nitrogen responsiveness; synthetic gives strongest fast-acting growth surge",
+      "spacing": {
+        "sqft": 5.8,
+        "label": "5.8 sq ft/plant",
+        "note": "Sourced: 20in in-row (midpoint 18-24in) x 42in row spacing (midpoint 36-48in). Multiple consistent sources."
+      }
+    },
+    "lettuce": {
+      "id": "lettuce",
+      "displayName": "Lettuce",
+      "scientificName": "Lactuca sativa",
+      "seasons": ["spring", "autumn"],
+      "isPerennial": false,
+      "_source": "University of Maryland Extension Commercial Vegetable Production Guide",
+      "growthStages": [
+        { "id": "seed", "name": "Seed", "days": 5, "color": "#6d4c41", "icon": "🌰" },
+        { "id": "seedling", "name": "Seedling", "days": 10, "color": "#a5d6a7", "icon": "🌱" },
+        { "id": "leafing", "name": "Leafing", "days": 15, "color": "#66bb6a", "icon": "🥬" },
+        { "id": "heading", "name": "Heading", "days": 20, "color": "#2e7d32", "icon": "🥗" }
+      ],
+      "water": { "min": 30, "max": 60 },
+      "nutrients": ["nitrogen"],
+      "harvest": {
+        "itemId": "lettuce_head",
+        "displayName": "Crisp Lettuce Heads",
+        "minYield": 1,
+        "maxYield": 1
+      },
+      "_yieldNote": "Researched yield: Single harvest head per plant instance",
+      "diseases": ["downy_mildew", "bottom_rot", "damping_off"],
+      "fertilizerEffects": {
+        "compost": 1.15,
+        "synthetic": 1.15,
+        "organic": 1.2
+      },
+      "_fertilizerNote": "Leafy green responding heavily to high nitrogen and slow-release organic amendments",
+      "spacing": {
+        "sqft": 1.25,
+        "label": "1.25 sq ft/plant",
+        "note": "Sourced: 10in in-row (UMD Extension 8-12in) x 18in row spacing."
+      }
+    },
+    "potato": {
+      "id": "potato",
+      "displayName": "Potato",
+      "scientificName": "Solanum tuberosum",
+      "seasons": ["spring", "summer"],
+      "isPerennial": false,
+      "_source": "Pacific Northwest Extension PNW 545 potato staging & production handbook",
+      "growthStages": [
+        { "id": "sprout", "name": "Sprout", "days": 14, "color": "#795548", "icon": "🥔" },
+        { "id": "vegetative", "name": "Vegetative", "days": 21, "color": "#4caf50", "icon": "🌿" },
+        { "id": "tuber_init", "name": "Tuber Init", "days": 20, "color": "#388e3c", "icon": "🌱" },
+        { "id": "tuber_bulking", "name": "Tuber Bulking", "days": 35, "color": "#2e7d32", "icon": "🪴" },
+        { "id": "maturation", "name": "Maturation", "days": 20, "color": "#8d6e63", "icon": "🥔" }
+      ],
+      "water": { "min": 45, "max": 90 },
+      "nutrients": ["nitrogen", "phosphorus", "potassium"],
+      "harvest": {
+        "itemId": "potato_tuber",
+        "displayName": "Harvest Potatoes",
+        "minYield": 5,
+        "maxYield": 12
+      },
+      "_yieldNote": "Researched yield: 5-12 harvestable tubers per seed potato hill",
+      "diseases": ["late_blight", "soft_rot", "pink_rot", "rhizoctonia"],
+      "fertilizerEffects": {
+        "compost": 1.1,
+        "synthetic": 1.25,
+        "organic": 1.15
+      },
+      "_fertilizerNote": "Heavy feeder across N-P-K during tuber bulking phase",
+      "spacing": {
+        "sqft": 2.5,
+        "label": "2.5 sq ft/plant",
+        "note": "Sourced: 12in in-row (consistent across 3 sources) x 30in row spacing."
+      }
+    },
+    "wheat": {
+      "id": "wheat",
+      "displayName": "Wheat (spring)",
+      "scientificName": "Triticum aestivum",
+      "seasons": ["spring", "summer"],
+      "isPerennial": false,
+      "_source": "Feekes and Zadoks agronomic cereal scale guidelines",
+      "growthStages": [
+        { "id": "germination", "name": "Germination", "days": 10, "color": "#8d6e63", "icon": "🌾" },
+        { "id": "tillering", "name": "Tillering", "days": 25, "color": "#81c784", "icon": "🌱" },
+        { "id": "jointing_booting", "name": "Jointing & Booting", "days": 30, "color": "#4caf50", "icon": "🌿" },
+        { "id": "heading_flowering", "name": "Heading & Bloom", "days": 20, "color": "#c0ca33", "icon": "🌾" },
+        { "id": "grain_fill", "name": "Grain Fill", "days": 35, "color": "#fbc02d", "icon": "🍞" }
+      ],
+      "water": { "min": 20, "max": 55 },
       "nutrients": ["nitrogen", "phosphorus"],
-      "harvest": { "itemId": "terran_leaf", "minYield": 2, "maxYield": 5 },
-      "diseases": ["root_rot", "spore_blight"],
-      "fertilizerEffects": { "compost": 1.1, "synthetic": 1.25, "organic": 1.2 }
+      "harvest": {
+        "itemId": "wheat_grain",
+        "displayName": "Wheat Grain Bundles",
+        "minYield": 8,
+        "maxYield": 20
+      },
+      "_yieldNote": "Researched yield: 8-20 yield bundles per micro-plot density",
+      "diseases": ["stem_rust", "powdery_mildew"],
+      "fertilizerEffects": {
+        "compost": 1.05,
+        "synthetic": 1.2,
+        "organic": 1.1
+      },
+      "_fertilizerNote": "Tillering requires early nitrogen; grain fill utilizes phosphorus mobilization",
+      "spacing": {
+        "sqft": 0.05,
+        "label": "20 seeds/sq ft",
+        "note": "CATEGORY DIFFERENCE, not a plant spacing: wheat is drilled/broadcast. ~20 seeds/sqft is the weakest-sourced figure here — verify against a dedicated seeding-rate source if precision matters."
+      }
+    },
+    "apple": {
+      "id": "apple",
+      "displayName": "Apple (dwarf rootstock)",
+      "scientificName": "Malus domestica",
+      "seasons": ["spring", "summer", "autumn"],
+      "isPerennial": true,
+      "_source": "Cornell University Cooperative Extension Tree Fruit Specialist Guidelines (M.9 / B.9 rootstocks)",
+      "growthStages": [
+        { "id": "sapling", "name": "Year 1: Sapling", "days": 365, "color": "#5d4037", "icon": "🌲" },
+        { "id": "young_tree", "name": "Year 2: Young Tree", "days": 365, "color": "#33691e", "icon": "🌳" },
+        { "id": "first_bearing", "name": "Year 3+: Bearing Tree", "days": 365, "color": "#1b5e20", "icon": "🍎" }
+      ],
+      "water": { "min": 15, "max": 50 },
+      "nutrients": ["potassium", "calcium"],
+      "harvest": {
+        "itemId": "apple_fruit",
+        "displayName": "Bushels of Apples",
+        "minYield": 20,
+        "maxYield": 60
+      },
+      "_yieldNote": "Researched yield: 20-60 lbs / bushels per mature dwarf tree annually",
+      "diseases": ["apple_scab", "fire_blight", "powdery_mildew"],
+      "fertilizerEffects": {
+        "compost": 1.15,
+        "synthetic": 1.1,
+        "organic": 1.2
+      },
+      "_fertilizerNote": "Perennial root uptake favors organic soil health, calcium for cell wall integrity, potassium for fruit size",
+      "spacing": {
+        "sqft": 81,
+        "label": "81 sq ft/tree",
+        "note": "Sourced: 9ft midpoint of the well-documented 8-10ft dwarf-rootstock spacing range."
+      }
+    },
+    "basil": {
+      "id": "basil",
+      "displayName": "Basil",
+      "scientificName": "Ocimum basilicum",
+      "seasons": ["spring", "summer"],
+      "isPerennial": false,
+      "_source": "Rutgers University Herb and Specialty Crop Production Extension",
+      "growthStages": [
+        { "id": "seed", "name": "Seed", "days": 7, "color": "#6d4c41", "icon": "🌰" },
+        { "id": "seedling", "name": "Seedling", "days": 14, "color": "#a5d6a7", "icon": "🌱" },
+        { "id": "vegetative", "name": "Vegetative", "days": 15, "color": "#4caf50", "icon": "🌿" },
+        { "id": "mature", "name": "Mature Bush", "days": 14, "color": "#2e7d32", "icon": "🍃" }
+      ],
+      "water": { "min": 35, "max": 65 },
+      "nutrients": ["nitrogen"],
+      "harvest": {
+        "itemId": "basil_leaf",
+        "displayName": "Aromatic Basil Leaves",
+        "minYield": 3,
+        "maxYield": 8
+      },
+      "_yieldNote": "Researched yield: 3-8 harvest cuttings per bush",
+      "diseases": ["downy_mildew", "fusarium_wilt"],
+      "fertilizerEffects": {
+        "compost": 1.15,
+        "synthetic": 1.1,
+        "organic": 1.2
+      },
+      "_fertilizerNote": "Responds to consistent organic nitrogen without forcing premature flower bolting",
+      "spacing": {
+        "sqft": 0.97,
+        "label": "0.97 sq ft/plant",
+        "note": "General-knowledge estimate (10in x 14in), not cross-checked against a dedicated study — lowest-confidence figure alongside wheat."
+      }
     }
-  ]
+  }
 }

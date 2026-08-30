@@ -1,7 +1,7 @@
 import React from 'react';
 import { Plant } from '../types';
-import { PLANT_STAGES } from '../constants';
-import { Bug, Droplets, Flame, Sprout, Zap } from 'lucide-react';
+import { getPlantStages } from '../constants';
+import { Bug, Flame, Sprout } from 'lucide-react';
 
 interface PlantCardProps {
   plant: Plant | null;
@@ -10,7 +10,7 @@ interface PlantCardProps {
   onClick: () => void;
 }
 
-const PlantCard: React.FC<PlantCardProps> = ({ plant, index, isSelected, onClick }) => {
+const PlantCard: React.FC<PlantCardProps> = ({ plant, isSelected, onClick }) => {
   if (!plant) {
     return (
       <button
@@ -26,9 +26,12 @@ const PlantCard: React.FC<PlantCardProps> = ({ plant, index, isSelected, onClick
     );
   }
 
-  const stage = PLANT_STAGES[plant.stageIndex];
-  const waterPct = (plant.water / stage.maxWater) * 100;
-  const nutrientPct = (plant.nutrients / stage.maxNutrients) * 100;
+  const stages = getPlantStages(plant.cropId);
+  const stage = stages[plant.stageIndex] || stages[0];
+  const maxWater = stage.maxWater || 100;
+  const maxNutrients = stage.maxNutrients || 100;
+  const waterPct = Math.min(100, (plant.water / maxWater) * 100);
+  const nutrientPct = Math.min(100, (plant.nutrients / maxNutrients) * 100);
   const isBurning = plant.stress > 90;
   const hasPests = plant.pests > 0;
 

@@ -1,4 +1,16 @@
 import { PlantStage, Weather, WeatherType } from './types';
+export {
+  CROP_DEFINITIONS,
+  GENERIC_PLANT_STAGES,
+  getCropDefinition,
+  getPlantStages,
+  getTotalCycleDays,
+  resolveStageIndex,
+  getCurrentStage,
+  createNewPlant,
+  applyHarvest
+} from '../gameplay/farming/api';
+import { GENERIC_PLANT_STAGES } from '../gameplay/farming/api';
 
 export const WEATHER_TYPES: Record<WeatherType, Weather> = {
   clear: { type: 'clear', name: 'Clear Skies', description: 'Optimal growth conditions.', intensity: 1 },
@@ -14,13 +26,16 @@ export const getRandomWeather = (): Weather => {
   return WEATHER_TYPES[type];
 };
 
-export const PLANT_STAGES: PlantStage[] = [
-  { threshold: 0, name: 'Dormant Seed', color: '#5D4037', maxWater: 30, maxNutrients: 100 },
-  { threshold: 25, name: 'Sprout', color: '#388E3C', maxWater: 50, maxNutrients: 100 },
-  { threshold: 80, name: 'Sapling', color: '#43A047', maxWater: 80, maxNutrients: 120 },
-  { threshold: 180, name: 'Young Tree', color: '#2E7D32', maxWater: 120, maxNutrients: 150 },
-  { threshold: 400, name: 'Mature Tree', color: '#1B5E20', maxWater: 200, maxNutrients: 200 },
-];
+/**
+ * Hardcoded generic 5-stage plant stage definitions preserved as baseline fallback.
+ */
+export const PLANT_STAGES: PlantStage[] = GENERIC_PLANT_STAGES.map(s => ({
+  threshold: s.threshold,
+  name: s.name,
+  color: s.color,
+  maxWater: s.maxWater,
+  maxNutrients: s.maxNutrients
+}));
 
 export const INITIAL_UPGRADES = {
   waterEfficiency: 1.0,

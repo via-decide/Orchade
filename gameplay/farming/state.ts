@@ -1,13 +1,26 @@
-export type FarmingStatus = 'planned' | 'in-progress' | 'blocked' | 'complete';
+/**
+ * @license
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
-export type FarmingState = {
-  module: 'farming';
-  status: FarmingStatus;
-  updatedAt: string | null;
-};
+export interface FarmingPlant {
+  id: string;
+  type: string;
+  cropId?: string;
+  rootStrength: number;
+  water: number;
+  nutrients: number;
+  stress: number;
+  pests: number;
+  pestImmunity: number;
+  stageIndex: number;
+  isHarvestable: boolean;
+  color?: string;
+}
 
-export const initialFarmingState: FarmingState = {
-  module: 'farming',
-  status: 'in-progress',
-  updatedAt: null,
-};
+export interface FarmingUpgradeState {
+  waterEfficiency: number;
+  nutrientRetention: number;
+  stressResistance: number;
+  pestDefense: number;
+}

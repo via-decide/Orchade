@@ -14,6 +14,7 @@ export type PlantStage = {
 export type Plant = {
   id: string;
   type: string;
+  cropId?: string;
   rootStrength: number;
   water: number;
   nutrients: number;
@@ -69,6 +70,7 @@ export type GameState = {
     uid: string;
     displayName: string | null;
     email: string | null;
+    isGuest?: boolean;
   } | null;
   isAuthReady: boolean;
 };

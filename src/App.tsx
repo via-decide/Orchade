@@ -1,10 +1,18 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { GameState, GlobalUpgrades, WeatherType } from './types';
-import { PLANT_STAGES, INITIAL_UPGRADES, SHOP_ITEMS, getRandomWeather, WEATHER_TYPES } from './constants';
-import { applyOvernightPlantLifecycle, applyPlantAction, applyUpgradePurchase, createPlant, FarmingAction } from '../gameplay/farming/api';
-import { activateClimateControlState, advanceWeatherCycle } from '../gameplay/weather/api';
-import { applyShopItem, liquidateDataSeeds } from '../gameplay/economy/api';
-import { selectOrchard, selectPlant, selectTab } from '../gameplay/ui/api';
+import { GameState, Plant, GlobalUpgrades, Orchard } from './types';
+import { 
+  PLANT_STAGES, 
+  INITIAL_UPGRADES, 
+  SHOP_ITEMS, 
+  getRandomWeather, 
+  WEATHER_TYPES,
+  getPlantStages,
+  getCropDefinition,
+  getTotalCycleDays,
+  resolveStageIndex,
+  createNewPlant,
+  applyHarvest
+} from './constants';
 import PlantCard from './components/PlantCard';
 import PlantVisualizer from './components/PlantVisualizer';
 import { Encyclopedia } from './components/Encyclopedia';
@@ -127,15 +135,18 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
 }
 
 export const SEED_TYPES = [
-  { type: 'Basic', name: 'Terran Sprout', cost: 50, color: '#4CAF50', desc: 'Standard Earth species. Extremely resilient but low research yields.' },
-  { type: 'Neon-Vine', name: 'Neon Vine', cost: 100, color: '#00E676', desc: 'Synthesized jungle creeper. Rapid expansion with bioluminescent properties.' },
-  { type: 'Quartz-Fern', name: 'Quartz Fern', cost: 150, color: '#B2EBF2', desc: 'Silicon-based crystalline flora. Exceptionally high-value mineral data.' },
-  { type: 'Shadow-Fungi', name: 'Shadow Fungi', cost: 120, color: '#4527A0', desc: 'Subterranean fungal spore. Highly resistant to pests.' },
-  { type: 'Cryo-Lily', name: 'Cryo Lily', cost: 180, color: '#81D4FA', desc: 'Cold-tempered aquatic hybrid. Absorbs surrounding thermal heat.' },
-  { type: 'Plasma-Orchid', name: 'Plasma Orchid', cost: 250, color: '#AD1457', desc: 'Supercharged stellar orchid. Hard to manage but massive yields.' },
-  { type: 'Void-Willow', name: 'Void Willow', cost: 300, color: '#212121', desc: 'Ethereal dark-wood entity. Warps surrounding sensory fields.' },
-  { type: 'Xero-Cactus', name: 'Xero Cactus', cost: 130, color: '#33691E', desc: 'Thorny arid species. Consumes virtually no hydration.' },
-  { type: 'Aether-Grass', name: 'Aether Grass', cost: 80, color: '#E0F2F1', desc: 'High-altitude gas-absorbent blade. Extremely fast lifecycles.' }
+  { type: 'Tomato', name: 'Solanum Tomato', cropId: 'tomato', cost: 40, color: '#E53935', desc: 'Researched Solanaceae annual. 5-stage fruiting cycle (76 ref days). Yields 15-35 units.' },
+  { type: 'Lettuce', name: 'Crisp Lettuce', cropId: 'lettuce', cost: 25, color: '#43A047', desc: 'Fast cool-season Asteraceae (45 ref days). Shallow root system with high moisture requirement.' },
+  { type: 'Potato', name: 'Earth Potato', cropId: 'potato', cost: 45, color: '#8D6E63', desc: 'Tuber-forming Solanaceae (95 ref days). Moderate water needs with high potassium demand.' },
+  { type: 'Wheat', name: 'Grain Wheat', cropId: 'wheat', cost: 35, color: '#FDD835', desc: 'Poaceae staple grain (100 ref days). 5-stage cycle culminating in golden grain ripening.' },
+  { type: 'Apple Tree', name: 'Orchard Apple', cropId: 'apple', cost: 120, color: '#E91E63', desc: 'Perennial Rosaceae tree (160 ref days). Maintains established tree structure across harvest seasons.' },
+  { type: 'Basil', name: 'Sweet Basil', cropId: 'basil', cost: 20, color: '#00B0FF', desc: 'Aromatic Lamiaceae herb (45 ref days). Rapid vegetative harvesting and continuous herb production.' },
+  { type: 'Basic', name: 'Terran Sprout', cropId: 'terran_sprout', cost: 50, color: '#4CAF50', desc: 'Standard pioneer species. Extremely resilient with balanced agronomic baselines.' },
+  { type: 'Neon-Vine', name: 'Neon Vine', cropId: 'terran_sprout', cost: 100, color: '#00E676', desc: 'Synthesized jungle creeper. Rapid expansion with bioluminescent properties.' },
+  { type: 'Quartz-Fern', name: 'Quartz Fern', cropId: 'potato', cost: 150, color: '#B2EBF2', desc: 'Silicon-based crystalline flora. Exceptionally high-value mineral data.' },
+  { type: 'Shadow-Fungi', name: 'Shadow Fungi', cropId: 'basil', cost: 120, color: '#4527A0', desc: 'Subterranean fungal spore. Highly resistant to pests.' },
+  { type: 'Cryo-Lily', name: 'Cryo Lily', cropId: 'lettuce', cost: 180, color: '#81D4FA', desc: 'Cold-tempered aquatic hybrid. Absorbs surrounding thermal heat.' },
+  { type: 'Plasma-Orchid', name: 'Plasma Orchid', cropId: 'tomato', cost: 250, color: '#AD1457', desc: 'Supercharged stellar orchid. Hard to manage but massive yields.' }
 ];
 
 const App: React.FC = () => {
@@ -196,6 +207,7 @@ const App: React.FC = () => {
     setIsLoginLoading(true);
     addLog('Initiating Google Login...', 'system');
     try {
+      localStorage.removeItem('orchard_guest_active');
       await signInWithGoogle();
       addLog('Login popup completed.', 'system');
     } catch (error: any) {
@@ -211,12 +223,75 @@ const App: React.FC = () => {
     addLog('Establishing Guest / Sandbox Neural Link...', 'system');
     try {
       await signInAsGuest();
-      addLog('Guest link established successfully.', 'success');
+      localStorage.removeItem('orchard_guest_active');
+      addLog('Guest link established via Firebase Auth.', 'success');
     } catch (error: any) {
-      addLog(`Guest connection failed: ${error.message}`, 'danger');
-      console.error('Guest login error:', error);
+      console.warn('Anonymous auth unavailable on Firebase project, launching Local Sandbox Mode:', error?.message);
+      // Seamless fallback to Local Sandbox Guest mode without error blocking
+      const guestUid = localStorage.getItem('orchard_guest_uid') || `guest_${Math.random().toString(36).substring(2, 10)}`;
+      localStorage.setItem('orchard_guest_uid', guestUid);
+      localStorage.setItem('orchard_guest_active', 'true');
+      
+      const savedGuestData = localStorage.getItem('orchard_guest_state');
+      if (savedGuestData) {
+        try {
+          const parsed = JSON.parse(savedGuestData);
+          setState(prev => ({
+            ...prev,
+            ...parsed,
+            user: {
+              uid: guestUid,
+              displayName: 'Guest Researcher (Sandbox)',
+              email: null,
+              isGuest: true,
+            },
+            isAuthReady: true,
+          }));
+        } catch (e) {
+          console.error('Failed to parse local guest state:', e);
+          setState(prev => ({
+            ...prev,
+            user: {
+              uid: guestUid,
+              displayName: 'Guest Researcher (Sandbox)',
+              email: null,
+              isGuest: true,
+            },
+            isAuthReady: true,
+          }));
+        }
+      } else {
+        setState(prev => ({
+          ...prev,
+          user: {
+            uid: guestUid,
+            displayName: 'Guest Researcher (Sandbox)',
+            email: null,
+            isGuest: true,
+          },
+          isAuthReady: true,
+        }));
+      }
+      addLog('Local Sandbox Neural Link activated (Offline / Guest Mode).', 'success');
     } finally {
       setIsLoginLoading(false);
+    }
+  };
+
+  const handleLogout = async () => {
+    localStorage.removeItem('orchard_guest_active');
+    if (state.user?.isGuest) {
+      setState(prev => ({ ...prev, user: null }));
+      addLog('Guest sandbox session disconnected.', 'system');
+      return;
+    }
+    try {
+      await logout();
+      setState(prev => ({ ...prev, user: null }));
+      addLog('Logged out of Bio-Genetic database.', 'system');
+    } catch (err: any) {
+      console.error('Logout error:', err);
+      setState(prev => ({ ...prev, user: null }));
     }
   };
 
@@ -240,6 +315,7 @@ const App: React.FC = () => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       console.log('App: Auth state changed', user ? user.uid : 'No user');
       if (user) {
+        localStorage.removeItem('orchard_guest_active');
         addLog(`Auth state changed: User ${user.uid} detected.`, 'system');
         addLog('System Note: If you experience redirects to GitHub, your Gemini API quota may be exhausted. Please deploy the app for a stable experience.', 'system');
         setState(prev => ({
@@ -248,12 +324,39 @@ const App: React.FC = () => {
             uid: user.uid,
             displayName: user.displayName,
             email: user.email,
+            isGuest: false,
           },
           isAuthReady: true
         }));
       } else {
-        addLog('Auth state changed: No user detected.', 'system');
-        setState(prev => ({ ...prev, user: null, isAuthReady: true }));
+        const isGuestActive = localStorage.getItem('orchard_guest_active') === 'true';
+        if (isGuestActive) {
+          const guestUid = localStorage.getItem('orchard_guest_uid') || `guest_${Math.random().toString(36).substring(2, 10)}`;
+          const savedGuestData = localStorage.getItem('orchard_guest_state');
+          let guestState = {};
+          if (savedGuestData) {
+            try {
+              guestState = JSON.parse(savedGuestData);
+            } catch (e) {
+              console.warn('Failed parsing guest state:', e);
+            }
+          }
+          addLog('Restoring active Local Sandbox Guest session...', 'system');
+          setState(prev => ({
+            ...prev,
+            ...guestState,
+            user: {
+              uid: guestUid,
+              displayName: 'Guest Researcher (Sandbox)',
+              email: null,
+              isGuest: true,
+            },
+            isAuthReady: true,
+          }));
+        } else {
+          addLog('Auth state changed: No user detected.', 'system');
+          setState(prev => ({ ...prev, user: null, isAuthReady: true }));
+        }
       }
     }, (error) => {
       console.error('App: Auth state error', error);
@@ -266,6 +369,31 @@ const App: React.FC = () => {
   // Firestore Sync
   useEffect(() => {
     if (!state.user?.uid) return;
+
+    // Handle Local Guest Mode
+    if (state.user.isGuest || state.user.uid.startsWith('guest_')) {
+      const savedGuestData = localStorage.getItem('orchard_guest_state');
+      if (savedGuestData) {
+        try {
+          const data = JSON.parse(savedGuestData);
+          setState(prev => ({
+            ...prev,
+            day: data.day ?? prev.day,
+            credits: data.credits ?? prev.credits,
+            dataSeeds: data.dataSeeds ?? prev.dataSeeds,
+            orchards: data.orchards ?? prev.orchards,
+            upgrades: data.upgrades ?? prev.upgrades,
+            weather: data.weather ?? prev.weather,
+            weatherForecast: data.weatherForecast ?? prev.weatherForecast ?? [getRandomWeather(), getRandomWeather(), getRandomWeather()],
+            climateControl: data.climateControl !== undefined ? data.climateControl : prev.climateControl ?? null,
+            harvestedTypes: data.harvestedTypes ?? prev.harvestedTypes ?? [],
+          }));
+        } catch (e) {
+          console.warn('Error reading guest state:', e);
+        }
+      }
+      return;
+    }
 
     const userDocRef = doc(db, 'users', state.user.uid);
     const unsubscribe = onSnapshot(userDocRef, (snapshot) => {
@@ -307,11 +435,22 @@ const App: React.FC = () => {
     }, (error) => handleFirestoreError(error, OperationType.GET, `users/${state.user!.uid}`));
 
     return () => unsubscribe();
-  }, [state.user?.uid]);
+  }, [state.user?.uid, state.user?.isGuest]);
 
   // Rankings & Global Stats Sync
   useEffect(() => {
     if (state.activeTab !== 'rankings') return;
+
+    // If local guest mode or no active Firebase user token, show local leaderboard
+    if (state.user?.isGuest || state.user?.uid?.startsWith('guest_') || !auth.currentUser) {
+      setRankings([
+        { uid: 'top_1', displayName: 'Dr. Vance (Chief Geneticist)', credits: 14500, dataSeeds: 42 },
+        { uid: 'top_2', displayName: 'AeroBotanics Unit-7', credits: 9800, dataSeeds: 28 },
+        { uid: 'top_3', displayName: 'BioFlora Sector 4 Lead', credits: 6200, dataSeeds: 15 },
+        { uid: state.user?.uid || 'guest', displayName: state.user?.displayName || 'Guest Researcher (You)', credits: state.credits, dataSeeds: state.dataSeeds },
+      ].sort((a, b) => (b.credits + b.dataSeeds * 10) - (a.credits + a.dataSeeds * 10)));
+      return;
+    }
 
     const usersRef = collection(db, 'users');
     const q = query(usersRef, orderBy('credits', 'desc'), limit(10));
@@ -328,59 +467,118 @@ const App: React.FC = () => {
         .slice(0, 10);
       
       setRankings(topUsers);
-    }, (error) => handleFirestoreError(error, OperationType.GET, 'users_rankings'));
+    }, (error) => {
+      console.warn('Rankings query failed (falling back):', error);
+      setRankings([
+        { uid: 'top_1', displayName: 'Dr. Vance (Chief Geneticist)', credits: 14500, dataSeeds: 42 },
+        { uid: 'top_2', displayName: 'AeroBotanics Unit-7', credits: 9800, dataSeeds: 28 },
+        { uid: 'top_3', displayName: 'BioFlora Sector 4 Lead', credits: 6200, dataSeeds: 15 },
+        { uid: state.user?.uid || 'guest', displayName: state.user?.displayName || 'Guest Researcher (You)', credits: state.credits, dataSeeds: state.dataSeeds },
+      ].sort((a, b) => (b.credits + b.dataSeeds * 10) - (a.credits + a.dataSeeds * 10)));
+    });
 
     const unsubStats = onSnapshot(doc(db, 'system', 'global_stats'), (snapshot) => {
       if (snapshot.exists()) {
         setState(prev => ({ ...prev, globalStats: snapshot.data() }));
       }
-    }, (error) => handleFirestoreError(error, OperationType.GET, 'system/global_stats'));
+    }, (error) => {
+      console.warn('Global stats query failed:', error);
+    });
 
     return () => {
       unsubRankings();
       unsubStats();
     };
-  }, [state.activeTab]);
+  }, [state.activeTab, state.user?.isGuest, state.credits, state.dataSeeds]);
 
   // Daily Reward Logic
   useEffect(() => {
     if (!state.user?.uid || !state.isAuthReady) return;
 
+    if (state.user.isGuest || state.user.uid.startsWith('guest_')) {
+      const lastReward = localStorage.getItem('orchard_guest_last_reward');
+      const today = new Date().toDateString();
+      if (lastReward !== today) {
+        localStorage.setItem('orchard_guest_last_reward', today);
+        setState(prev => {
+          const nextCredits = prev.credits + 100;
+          try {
+            const saved = localStorage.getItem('orchard_guest_state');
+            const parsed = saved ? JSON.parse(saved) : {};
+            localStorage.setItem('orchard_guest_state', JSON.stringify({ ...parsed, credits: nextCredits }));
+          } catch (e) {
+            console.warn('Error updating guest daily reward in storage:', e);
+          }
+          return { ...prev, credits: nextCredits };
+        });
+        addLog('Daily Login Reward (Guest Sandbox): +100 credits!', 'success');
+      }
+      return;
+    }
+
     const checkDailyReward = async () => {
-      const userRef = doc(db, 'users', state.user!.uid);
-      const userDoc = await getDocs(query(collection(db, 'users'), where('uid', '==', state.user!.uid), limit(1)));
-      
-      if (!userDoc.empty) {
-        const userData = userDoc.docs[0].data();
-        const lastReward = userData.lastDailyReward?.toDate();
-        const now = new Date();
+      try {
+        const userRef = doc(db, 'users', state.user!.uid);
+        const userDoc = await getDocs(query(collection(db, 'users'), where('uid', '==', state.user!.uid), limit(1)));
         
-        if (!lastReward || lastReward.toDateString() !== now.toDateString()) {
-          const reward = 100;
-          const batch = writeBatch(db);
+        if (!userDoc.empty) {
+          const userData = userDoc.docs[0].data();
+          const lastReward = userData.lastDailyReward?.toDate();
+          const now = new Date();
           
-          batch.update(userDoc.docs[0].ref, {
-            credits: increment(reward),
-            lastDailyReward: serverTimestamp()
-          });
+          if (!lastReward || lastReward.toDateString() !== now.toDateString()) {
+            const reward = 100;
+            const batch = writeBatch(db);
+            
+            batch.update(userDoc.docs[0].ref, {
+              credits: increment(reward),
+              lastDailyReward: serverTimestamp()
+            });
 
-          const statsRef = doc(db, 'system', 'global_stats');
-          batch.set(statsRef, {
-            totalCredits: increment(reward),
-            totalUsers: increment(lastReward ? 0 : 1)
-          }, { merge: true });
+            const statsRef = doc(db, 'system', 'global_stats');
+            batch.set(statsRef, {
+              totalCredits: increment(reward),
+              totalUsers: increment(lastReward ? 0 : 1)
+            }, { merge: true });
 
-          await batch.commit();
-          addLog(`Daily Login Reward: +${reward} credits!`, 'success');
+            await batch.commit();
+            addLog(`Daily Login Reward: +${reward} credits!`, 'success');
+          }
         }
+      } catch (err) {
+        console.warn('Daily reward check error:', err);
       }
     };
 
     checkDailyReward();
-  }, [state.user?.uid, state.isAuthReady, addLog]);
+  }, [state.user?.uid, state.user?.isGuest, state.isAuthReady, addLog]);
 
   const saveState = async (updates: Partial<GameState>) => {
     if (!state.user?.uid) return;
+
+    if (state.user.isGuest || state.user.uid.startsWith('guest_')) {
+      try {
+        setState(current => {
+          const merged = {
+            day: updates.day ?? current.day,
+            credits: updates.credits ?? current.credits,
+            dataSeeds: updates.dataSeeds ?? current.dataSeeds,
+            orchards: updates.orchards ?? current.orchards,
+            upgrades: updates.upgrades ?? current.upgrades,
+            weather: updates.weather ?? current.weather,
+            weatherForecast: updates.weatherForecast ?? current.weatherForecast,
+            climateControl: updates.climateControl !== undefined ? updates.climateControl : current.climateControl,
+            harvestedTypes: updates.harvestedTypes ?? current.harvestedTypes,
+          };
+          localStorage.setItem('orchard_guest_state', JSON.stringify(merged));
+          return current;
+        });
+      } catch (e) {
+        console.warn('Failed to save guest state to localStorage:', e);
+      }
+      return;
+    }
+
     const userDocRef = doc(db, 'users', state.user.uid);
     try {
       await updateDoc(userDocRef, updates);
@@ -391,6 +589,12 @@ const App: React.FC = () => {
 
   const handleTransferCredits = async () => {
     if (!state.user?.uid || !transferTarget || !transferAmount) return;
+    
+    if (state.user.isGuest || state.user.uid.startsWith('guest_')) {
+      addLog('Inter-specimen transfers require a persistent Google Neural Link (Sign in with Google).', 'warn');
+      return;
+    }
+
     const amount = parseInt(transferAmount);
     if (isNaN(amount) || amount <= 0) {
       addLog('Invalid transfer amount.', 'danger');
@@ -454,46 +658,260 @@ const App: React.FC = () => {
   const activeOrchard = state.orchards.find(o => o.id === state.activeOrchardId)!;
   const selectedPlant = state.selectedPlantIndex !== null ? activeOrchard.plants[state.selectedPlantIndex] : null;
 
-  const handlePlantAction = (action: FarmingAction) => {
-    const result = applyPlantAction(state, action);
-    result.logs.forEach(log => addLog(log.msg, log.type));
-    if (result.state === state) return;
-    if (result.effect) {
-      setToolEffect(result.effect);
-      setTimeout(() => setToolEffect(null), 1500);
-    }
-    setState(result.state as GameState & { globalStats: any });
-    saveState({
-      orchards: result.state.orchards,
-      credits: result.state.credits,
-      dataSeeds: result.state.dataSeeds,
-      harvestedTypes: result.state.harvestedTypes,
+  const handlePlantAction = (action: 'research' | 'water' | 'fertilize' | 'pesticide' | 'harvest') => {
+    if (state.selectedPlantIndex === null || !selectedPlant) return;
+
+    setState(prev => {
+      const newOrchards = [...prev.orchards];
+      const orchardIndex = newOrchards.findIndex(o => o.id === prev.activeOrchardId);
+      const orchard = { ...newOrchards[orchardIndex] };
+      const newPlants = [...orchard.plants];
+      const plant = { ...newPlants[prev.selectedPlantIndex!]! };
+      let credits = prev.credits;
+      let dataSeeds = prev.dataSeeds;
+
+      if (action === 'research') {
+        if (plant.water < 5) {
+          addLog('Insufficient water for research.', 'warn');
+          return prev;
+        }
+        
+        // Trigger visual effect
+        setToolEffect('genetic-scanner');
+        setTimeout(() => setToolEffect(null), 1500);
+        
+        // Fog halves research efficiency
+        const isFog = prev.weather?.type === 'fog';
+        const weatherMultiplier = isFog ? 0.5 : 1.0;
+        
+        const baseG = Math.floor(Math.random() * 8) + 5;
+        const finalG = Math.max(1, Math.round(baseG * (plant.nutrients / 100) * weatherMultiplier));
+        
+        // Stress gain is scaled by the weather intensity
+        const weatherIntensity = prev.weather?.intensity ?? 1.0;
+        const stressGain = Math.round(5 * weatherIntensity);
+        
+        plant.rootStrength += finalG;
+        plant.water -= 5;
+        plant.nutrients -= 10;
+        plant.stress += stressGain;
+        credits += 10;
+        
+        // Check evolution
+        const stages = getPlantStages(plant.cropId);
+        const nextStage = resolveStageIndex(plant.cropId, plant.rootStrength);
+        
+        if (nextStage > plant.stageIndex) {
+          plant.stageIndex = nextStage;
+          addLog(`Evolution! ${plant.type} reached stage: ${stages[nextStage]?.name ?? 'Advanced'}`, 'success');
+          dataSeeds += 5;
+        }
+
+        // Pest chance (reduced by pestDefense upgrade)
+        const pestChance = 0.15 * (1 - (prev.upgrades.pestDefense / 100));
+        if (plant.pestImmunity === 0 && Math.random() < pestChance) {
+          plant.pests = Math.min(5, plant.pests + 1);
+          addLog('Warning: Pest infestation detected!', 'danger');
+        }
+
+        if (isFog) {
+          addLog(`Research completed under Dense Fog (Efficiency -50%): +${finalG} roots, +10 credits.`, 'warn');
+        } else {
+          addLog(`Research complete: +${finalG} roots, +10 credits.`, 'success');
+        }
+      }
+
+      if (action === 'water') {
+        setToolEffect('water');
+        setTimeout(() => setToolEffect(null), 1500);
+        const stages = getPlantStages(plant.cropId);
+        const stage = stages[plant.stageIndex] || stages[0];
+        plant.water = Math.min(stage.maxWater || 100, plant.water + 20);
+        plant.stress = Math.max(0, plant.stress - (5 + prev.upgrades.stressResistance));
+        addLog('Hydration levels increased.', 'info');
+      }
+
+      if (action === 'fertilize') {
+        setToolEffect('fertilize');
+        setTimeout(() => setToolEffect(null), 1500);
+        const stages = getPlantStages(plant.cropId);
+        const stage = stages[plant.stageIndex] || stages[0];
+        plant.nutrients = Math.min(stage.maxNutrients || 100, plant.nutrients + 30);
+        plant.stress += 10;
+        addLog('Nutrient levels boosted.', 'success');
+      }
+
+      if (action === 'pesticide') {
+        setToolEffect('pesticide');
+        setTimeout(() => setToolEffect(null), 1500);
+        plant.pests = 0;
+        plant.pestImmunity = 3;
+        plant.stress += 15;
+        addLog('Pests eradicated. Immunity active for 3 cycles.', 'success');
+      }
+
+      let harvestedTypes = prev.harvestedTypes || [];
+      let isHarvestCleared = false;
+      if (action === 'harvest') {
+        const stages = getPlantStages(plant.cropId);
+        const maxStageIndex = stages.length - 1;
+        if (plant.stageIndex < maxStageIndex) {
+          addLog(`Plant is not ready for harvest (Stage ${plant.stageIndex}/${maxStageIndex}: ${stages[plant.stageIndex]?.name}).`, 'warn');
+          return prev;
+        }
+        setToolEffect('pruning-shears');
+        setTimeout(() => setToolEffect(null), 1500);
+        
+        const harvestResult = applyHarvest(plant);
+        credits += harvestResult.reward;
+        const dataReward = 5;
+        dataSeeds += dataReward;
+        
+        const cropDef = getCropDefinition(plant.cropId);
+        if (cropDef?.isPerennial) {
+          newPlants[prev.selectedPlantIndex!] = harvestResult.resetPlant;
+          addLog(`Perennial Harvest: Collected ${harvestResult.yieldCount} ${cropDef.harvest.displayName}. Tree remains established. (+${harvestResult.reward} credits, +${dataReward} data seeds)`, 'success');
+        } else {
+          newPlants[prev.selectedPlantIndex!] = null;
+          isHarvestCleared = true;
+          addLog(`Harvest Complete! Collected ${harvestResult.yieldCount} unit(s) of ${plant.type}. (+${harvestResult.reward} credits, +${dataReward} data seeds)`, 'success');
+        }
+        
+        if (!harvestedTypes.includes(plant.type)) {
+          harvestedTypes = [...harvestedTypes, plant.type];
+          addLog(`NEW SPECIES DISCOVERED AND HARVESTED: ${plant.type}! Check the Botanical Archives.`, 'success');
+        }
+      }
+
+      if (action !== 'harvest' && !isHarvestCleared) {
+        newPlants[prev.selectedPlantIndex!] = plant;
+      }
+      
+      orchard.plants = newPlants;
+      newOrchards[orchardIndex] = orchard;
+      
+      const nextState = { 
+        ...prev, 
+        orchards: newOrchards, 
+        credits, 
+        dataSeeds, 
+        harvestedTypes, 
+        selectedPlantIndex: isHarvestCleared ? null : prev.selectedPlantIndex 
+      };
+      saveState({ orchards: newOrchards, credits, dataSeeds, harvestedTypes });
+      return nextState;
     });
   };
 
   const nextDay = () => {
-    const weatherResult = advanceWeatherCycle(state);
-    const lifecycleResult = applyOvernightPlantLifecycle(state, weatherResult.weather!);
-    [...weatherResult.logs, ...lifecycleResult.logs].forEach(log => addLog(log.msg, log.type));
-    const nextState = {
-      ...state,
-      day: state.day + 1,
-      orchards: lifecycleResult.orchards,
-      weather: weatherResult.weather,
-      weatherForecast: weatherResult.weatherForecast,
-      climateControl: weatherResult.climateControl,
-    };
-    setState(nextState as GameState & { globalStats: any });
-    saveState({
-      day: nextState.day,
-      orchards: nextState.orchards,
-      weather: nextState.weather,
-      weatherForecast: nextState.weatherForecast,
-      climateControl: nextState.climateControl,
+    setState(prev => {
+      const forecast = prev.weatherForecast && prev.weatherForecast.length > 0 
+        ? prev.weatherForecast 
+        : [getRandomWeather(), getRandomWeather(), getRandomWeather()];
+      
+      let newWeather = forecast[0];
+      const newForecast = [...forecast.slice(1), getRandomWeather()];
+      
+      let nextClimateControl = prev.climateControl ? { ...prev.climateControl } : null;
+      if (nextClimateControl && nextClimateControl.daysRemaining > 0) {
+        const targetType = nextClimateControl.targetWeatherType;
+        const targetWeatherTemplate = WEATHER_TYPES[targetType];
+        newWeather = {
+          ...targetWeatherTemplate,
+          name: `[Controlled] ${targetWeatherTemplate.name}`,
+          description: `Atmospheric stabilizers are locking weather patterns. ${targetWeatherTemplate.description}`
+        };
+        nextClimateControl.daysRemaining -= 1;
+        if (nextClimateControl.daysRemaining <= 0) {
+          nextClimateControl = null;
+          addLog('Climate control duration completed. Atmospheric stabilizers powering down.', 'warn');
+        } else {
+          addLog(`Controlled atmosphere active: ${nextClimateControl.daysRemaining} cycle(s) remaining.`, 'info');
+        }
+      }
+      
+      const newOrchards = prev.orchards.map(o => {
+        if (!o.isUnlocked) return o;
+        const newPlants = o.plants.map(p => {
+          if (!p) return null;
+          const plant = { ...p };
+          const stages = getPlantStages(plant.cropId);
+          const stage = stages[plant.stageIndex] || stages[0];
+          
+          // Overnight weather effects
+          if (newWeather.type === 'rain') {
+            plant.water = Math.min(stage.maxWater || 100, plant.water + 15);
+          } else if (newWeather.type === 'storm') {
+            plant.water = Math.min(stage.maxWater || 100, plant.water + 30);
+            plant.stress = Math.min(100, plant.stress + 10);
+          } else if (newWeather.type === 'heatwave') {
+            plant.water = Math.max(0, plant.water - 20);
+            plant.nutrients = Math.max(0, plant.nutrients - 15);
+            plant.stress = Math.min(100, plant.stress + 15);
+          } else if (newWeather.type === 'fog') {
+            plant.water = Math.max(0, plant.water - 2);
+          } else if (newWeather.type === 'clear') {
+            plant.water = Math.max(0, plant.water - 10);
+            plant.stress = Math.max(0, plant.stress - 5);
+          }
+          
+          // Overnight pest effects
+          if (plant.pests > 0) {
+            plant.nutrients = Math.max(0, plant.nutrients - (plant.pests * 10));
+            plant.stress += (plant.pests * 5);
+          } else if (newWeather.type !== 'heatwave' && newWeather.type !== 'storm') {
+            plant.stress = Math.max(0, plant.stress - 20);
+          }
+
+          if (plant.pestImmunity > 0) plant.pestImmunity--;
+          
+          // Check for crop burn
+          if (plant.stress >= 100) {
+            addLog(`CRITICAL: ${plant.type} in ${o.name} suffered crop burn!`, 'danger');
+            plant.rootStrength = Math.max(0, plant.rootStrength - 50);
+            plant.stress = 0;
+            // Recalculate stage dynamically
+            plant.stageIndex = resolveStageIndex(plant.cropId, plant.rootStrength);
+          }
+
+          return plant;
+        });
+        return { ...o, plants: newPlants };
+      });
+
+      // Atmospheric System Log Message
+      if (newWeather.type === 'rain') {
+        addLog(`Day ${prev.day + 1} started. Gentle Rain is replenishing specimen water levels.`, 'info');
+      } else if (newWeather.type === 'storm') {
+        addLog(`Day ${prev.day + 1} started. Severe Storm active. High specimen stress!`, 'danger');
+      } else if (newWeather.type === 'heatwave') {
+        addLog(`Day ${prev.day + 1} started. WARNING: Intense Heatwave dehydrating crops and soil!`, 'danger');
+      } else if (newWeather.type === 'fog') {
+        addLog(`Day ${prev.day + 1} started. Dense Fog shielding crops from rapid water loss.`, 'system');
+      } else {
+        addLog(`Day ${prev.day + 1} started. Atmosphere is optimal under Clear Skies.`, 'system');
+      }
+
+      const nextState = { 
+        ...prev, 
+        day: prev.day + 1, 
+        orchards: newOrchards, 
+        weather: newWeather, 
+        weatherForecast: newForecast,
+        climateControl: nextClimateControl
+      };
+      saveState({ 
+        day: prev.day + 1, 
+        orchards: newOrchards, 
+        weather: newWeather, 
+        weatherForecast: newForecast,
+        climateControl: nextClimateControl
+      });
+      return nextState;
     });
   };
 
-  const buyPlot = (index: number, plantType: string = 'Basic', cost: number = 50, color: string = '#4CAF50') => {
+  const buyPlot = (index: number, plantType: string = 'Basic', cost: number = 50, color: string = '#4CAF50', cropId?: string) => {
     if (state.credits < cost) {
       addLog(`Insufficient credits to cultivate ${plantType} (requires ${cost}🪙).`, 'danger');
       return;
@@ -503,7 +921,11 @@ const App: React.FC = () => {
       const orchardIndex = newOrchards.findIndex(o => o.id === prev.activeOrchardId);
       const orchard = { ...newOrchards[orchardIndex] };
       const newPlants = [...orchard.plants];
-      newPlants[index] = createPlant(plantType, color);
+      
+      const newPlantInstance = createNewPlant(cropId, Math.random().toString(36).substr(2, 9), plantType);
+      newPlantInstance.color = color;
+      newPlants[index] = newPlantInstance;
+      
       orchard.plants = newPlants;
       newOrchards[orchardIndex] = orchard;
       const nextState = { ...prev, orchards: newOrchards, credits: prev.credits - cost, selectedPlantIndex: index };
@@ -536,19 +958,64 @@ const App: React.FC = () => {
   };
 
   const buyUpgrade = (id: keyof GlobalUpgrades) => {
-    const result = applyUpgradePurchase(state, id);
-    result.logs.forEach(log => addLog(log.msg, log.type));
-    if (result.state === state) return;
-    setState(result.state as GameState & { globalStats: any });
-    saveState({ dataSeeds: result.state.dataSeeds, upgrades: result.state.upgrades });
+    const cost = 10;
+    if (state.dataSeeds < cost) {
+      addLog('Insufficient genetic data for upgrade.', 'danger');
+      return;
+    }
+    setState(prev => {
+      const nextUpgrades = {
+        ...prev.upgrades,
+        [id]: id === 'stressResistance' 
+          ? (prev.upgrades[id] as number) + 5 
+          : (prev.upgrades[id] as number) * 0.9
+      };
+      const nextState = {
+        ...prev,
+        dataSeeds: prev.dataSeeds - cost,
+        upgrades: nextUpgrades
+      };
+      saveState({ dataSeeds: prev.dataSeeds - cost, upgrades: nextUpgrades });
+      return nextState;
+    });
+    addLog(`Upgrade acquired: ${id} enhanced.`, 'success');
   };
 
   const buyItem = (item: typeof SHOP_ITEMS[0]) => {
-    const result = applyShopItem(state, item);
-    result.logs.forEach(log => addLog(log.msg, log.type));
-    if (result.state === state) return;
-    setState(result.state as GameState & { globalStats: any });
-    saveState({ orchards: result.state.orchards, credits: result.state.credits });
+    if (state.credits < item.cost) {
+      addLog(`Insufficient credits for ${item.name}.`, 'danger');
+      return;
+    }
+    if (state.selectedPlantIndex === null || !selectedPlant) {
+      addLog('Select a plant to apply items.', 'warn');
+      return;
+    }
+
+    setState(prev => {
+      const newOrchards = [...prev.orchards];
+      const orchardIndex = newOrchards.findIndex(o => o.id === prev.activeOrchardId);
+      const orchard = { ...newOrchards[orchardIndex] };
+      const newPlants = [...orchard.plants];
+      const plant = { ...newPlants[prev.selectedPlantIndex!]! };
+      
+      if (item.type === 'fertilizer') {
+        const stages = getPlantStages(plant.cropId);
+        const stage = stages[plant.stageIndex] || stages[0];
+        plant.nutrients = Math.min(stage.maxNutrients || 100, plant.nutrients + (item.nut || 0));
+        plant.stress += (item.stress || 0);
+      } else if (item.type === 'pesticide') {
+        plant.pests = Math.max(0, plant.pests - (item.kills || 0));
+        plant.stress += (item.stress || 0);
+      }
+
+      newPlants[prev.selectedPlantIndex!] = plant;
+      orchard.plants = newPlants;
+      newOrchards[orchardIndex] = orchard;
+      const nextState = { ...prev, orchards: newOrchards, credits: prev.credits - item.cost };
+      saveState({ orchards: newOrchards, credits: prev.credits - item.cost });
+      return nextState;
+    });
+    addLog(`Applied ${item.name} to ${selectedPlant.type}.`, 'success');
   };
 
   const playClimateControlChime = () => {
@@ -589,17 +1056,46 @@ const App: React.FC = () => {
     }
   };
 
-  const activateClimateControl = (targetType: WeatherType) => {
-    const result = activateClimateControlState(state, targetType);
-    if (result.state !== state) playClimateControlChime();
-    result.logs.forEach(log => addLog(log.msg, log.type));
-    if (result.state === state) return;
-    setState(result.state as GameState & { globalStats: any });
-    saveState({
-      credits: result.state.credits,
-      weather: result.state.weather,
-      climateControl: result.state.climateControl,
+  const activateClimateControl = (targetType: 'clear' | 'rain' | 'fog' | 'storm' | 'heatwave') => {
+    const cost = 120;
+    if (state.credits < cost) {
+      addLog(`Insufficient credits for atmospheric override (requires ${cost}🪙).`, 'danger');
+      return;
+    }
+    
+    // Play sci-fi climate stabilizer chime
+    playClimateControlChime();
+    
+    setState(prev => {
+      const targetWeatherTemplate = WEATHER_TYPES[targetType];
+      const activeWeather = {
+        ...targetWeatherTemplate,
+        name: `[Controlled] ${targetWeatherTemplate.name}`,
+        description: `Atmospheric stabilizers are locking weather patterns. ${targetWeatherTemplate.description}`
+      };
+      
+      const nextClimateControl = {
+        targetWeatherType: targetType,
+        daysRemaining: 3
+      };
+      
+      const nextState = {
+        ...prev,
+        credits: prev.credits - cost,
+        weather: activeWeather,
+        climateControl: nextClimateControl
+      };
+      
+      saveState({
+        credits: prev.credits - cost,
+        weather: activeWeather,
+        climateControl: nextClimateControl
+      });
+      
+      return nextState;
     });
+    
+    addLog(`Atmospheric Stabilizer Engaged: Local ecosystem weather locked to ${WEATHER_TYPES[targetType].name} for 3 temporal cycles!`, 'success');
   };
 
   return (
@@ -709,7 +1205,7 @@ const App: React.FC = () => {
         <div className="flex items-center gap-3 w-full md:w-auto">
           {state.user && (
             <button 
-              onClick={logout}
+              onClick={handleLogout}
               className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-burn-red/10 hover:bg-burn-red/20 px-4 py-2 rounded-lg border border-burn-red/30 transition-all text-[10px] font-bold text-burn-red uppercase tracking-widest"
             >
               <LogOut size={14} />
@@ -730,38 +1226,38 @@ const App: React.FC = () => {
         {/* Navigation Rail */}
         <div className="lg:col-span-1 flex flex-row lg:flex-col gap-3 md:gap-4 overflow-x-auto pb-2 lg:pb-0 scrollbar-hide">
           <button 
-            onClick={() => setState(p => selectTab(p, 'orchard') as GameState & { globalStats: any })}
+            onClick={() => setState(p => ({ ...p, activeTab: 'orchard' }))}
             className={`flex-1 lg:flex-none p-4 rounded-xl flex items-center justify-center transition-all ${state.activeTab === 'orchard' ? 'bg-leaf-green text-soil-dark' : 'bg-card-bg text-text-secondary hover:text-white'}`}
           >
             <Sprout size={24} />
           </button>
           <button 
-            onClick={() => setState(p => selectTab(p, 'lab') as GameState & { globalStats: any })}
+            onClick={() => setState(p => ({ ...p, activeTab: 'lab' }))}
             className={`flex-1 lg:flex-none p-4 rounded-xl flex items-center justify-center transition-all ${state.activeTab === 'lab' ? 'bg-water-blue text-soil-dark' : 'bg-card-bg text-text-secondary hover:text-white'}`}
           >
             <FlaskConical size={24} />
           </button>
           <button 
-            onClick={() => setState(p => selectTab(p, 'market') as GameState & { globalStats: any })}
+            onClick={() => setState(p => ({ ...p, activeTab: 'market' }))}
             className={`flex-1 lg:flex-none p-4 rounded-xl flex items-center justify-center transition-all ${state.activeTab === 'market' ? 'bg-mineral-gold text-soil-dark' : 'bg-card-bg text-text-secondary hover:text-white'}`}
           >
             <Store size={24} />
           </button>
           <button 
-            onClick={() => setState(p => selectTab(p, 'rankings') as GameState & { globalStats: any })}
+            onClick={() => setState(p => ({ ...p, activeTab: 'rankings' }))}
             className={`flex-1 lg:flex-none p-4 rounded-xl flex items-center justify-center transition-all ${state.activeTab === 'rankings' ? 'bg-burn-red text-soil-dark' : 'bg-card-bg text-text-secondary hover:text-white'}`}
           >
             <Trophy size={24} />
           </button>
           <button 
-            onClick={() => setState(p => selectTab(p, 'archives') as GameState & { globalStats: any })}
+            onClick={() => setState(p => ({ ...p, activeTab: 'archives' }))}
             className={`flex-1 lg:flex-none p-4 rounded-xl flex items-center justify-center transition-all ${state.activeTab === 'archives' ? 'bg-fuchsia-500 text-soil-dark' : 'bg-card-bg text-text-secondary hover:text-white'}`}
             title="Botanical Archives & Encyclopedia"
           >
             <BookOpen size={24} />
           </button>
           <button 
-            onClick={() => setState(p => selectTab(p, 'profile') as GameState & { globalStats: any })}
+            onClick={() => setState(p => ({ ...p, activeTab: 'profile' }))}
             className={`flex-1 lg:flex-none p-4 rounded-xl flex items-center justify-center transition-all ${state.activeTab === 'profile' ? 'bg-text-primary text-soil-dark' : 'bg-card-bg text-text-secondary hover:text-white'}`}
           >
             <User size={24} />
@@ -780,143 +1276,163 @@ const App: React.FC = () => {
                 exit={{ opacity: 0, y: -20 }}
                 className="hardware-panel p-6 md:p-8 space-y-8"
               >
-                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-bark-brown pb-6">
-                  <div>
-                    <h3 className="text-2xl md:text-3xl font-bold font-serif italic">{PLANT_STAGES[selectedPlant.stageIndex].name}</h3>
-                    <p className="text-xs text-text-secondary font-mono tracking-wider">TELEMETRY ID: {selectedPlant.id}</p>
-                  </div>
-                  <div className="flex items-center gap-4">
-                    <div className="px-4 py-1.5 rounded-full bg-leaf-green/10 border border-leaf-green/30 text-leaf-green text-[10px] font-bold uppercase tracking-widest">
-                      Active Growth Phase
+                {(() => {
+                  const stages = getPlantStages(selectedPlant.cropId);
+                  const currentStage = stages[selectedPlant.stageIndex] || stages[0];
+                  const totalCycleDays = getTotalCycleDays(selectedPlant.cropId);
+                  const cropDef = getCropDefinition(selectedPlant.cropId);
+                  const currentThreshold = currentStage.threshold;
+                  const nextThreshold = stages[selectedPlant.stageIndex + 1]?.threshold || (currentThreshold + (currentStage.days || 100));
+                  const progress = Math.min(1, Math.max(0, (selectedPlant.rootStrength - currentThreshold) / Math.max(1, nextThreshold - currentThreshold)));
+
+                  return (
+                    <div className="space-y-8">
+                      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-bark-brown pb-6">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-xl">{currentStage.icon || '🌱'}</span>
+                            <h3 className="text-2xl md:text-3xl font-bold font-serif italic">{currentStage.name}</h3>
+                          </div>
+                          <p className="text-xs text-text-secondary font-mono tracking-wider mt-1">
+                            {selectedPlant.type.toUpperCase()} • ID: {selectedPlant.id}
+                            {cropDef?.isPerennial ? ' • [PERENNIAL ORCHARD SPECIES]' : ''}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-4">
+                          <div className="px-4 py-1.5 rounded-full bg-leaf-green/10 border border-leaf-green/30 text-leaf-green text-[10px] font-bold uppercase tracking-widest">
+                            Stage {selectedPlant.stageIndex + 1} of {stages.length}
+                          </div>
+                          <button 
+                            onClick={() => setState(p => ({ ...p, selectedPlantIndex: null }))}
+                            className="text-text-secondary hover:text-white transition-colors"
+                          >
+                            <RefreshCw size={20} />
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="flex flex-col gap-8">
+                        <div className="h-[400px] md:h-[500px] bg-[#0a0a0a] rounded-3xl dashed-border relative overflow-hidden group">
+                          <PlantVisualizer 
+                            stageIndex={selectedPlant.stageIndex} 
+                            progress={progress}
+                            type={selectedPlant.type}
+                            color={selectedPlant.color || currentStage.color}
+                            hasPests={selectedPlant.pests > 0}
+                            isBurning={selectedPlant.stress > 90}
+                            stress={selectedPlant.stress}
+                            weather={state.weather?.type}
+                            toolEffect={toolEffect}
+                          />
+                          <div className="absolute inset-0 pointer-events-none bg-gradient-to-t from-black/40 to-transparent" />
+                        </div>
+
+                        {/* Agronomic Benchmark Reference */}
+                        <div className="bg-soil-dark/60 border border-bark-brown/40 rounded-xl p-3 flex flex-wrap items-center justify-between gap-2 text-xs font-mono">
+                          <span className="text-text-secondary">
+                            RESEARCH BENCHMARK: <span className="text-mineral-gold">~{currentStage.days}d</span> stage ref / <span className="text-leaf-green">~{totalCycleDays}d</span> total cycle
+                          </span>
+                          <span className="text-text-secondary text-[11px]">
+                            {cropDef?.spacing?.label ? `Spacing: ${cropDef.spacing.label}` : 'Standard grid plot'}
+                          </span>
+                        </div>
+
+                        <div className="space-y-8">
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+                            <div className="space-y-3">
+                              <div className="flex justify-between text-[10px] font-bold uppercase tracking-widest text-text-secondary">
+                                <span>Hydration</span>
+                                <span className="text-water-blue">{selectedPlant.water} / {currentStage.maxWater || 100}</span>
+                              </div>
+                              <div className="h-2.5 w-full bg-black/40 rounded-full overflow-hidden">
+                                <div 
+                                  className="h-full bg-water-blue transition-all duration-1000 ease-out" 
+                                  style={{ width: `${Math.min(100, (selectedPlant.water / (currentStage.maxWater || 100)) * 100)}%` }}
+                                />
+                              </div>
+                            </div>
+                            <div className="space-y-3">
+                              <div className="flex justify-between text-[10px] font-bold uppercase tracking-widest text-text-secondary">
+                                <span>Nutrients</span>
+                                <span className="text-mineral-gold">{Math.round(selectedPlant.nutrients)}%</span>
+                              </div>
+                              <div className="h-2.5 w-full bg-black/40 rounded-full overflow-hidden">
+                                <div 
+                                  className="h-full bg-mineral-gold transition-all duration-1000 ease-out" 
+                                  style={{ width: `${Math.min(100, (selectedPlant.nutrients / (currentStage.maxNutrients || 100)) * 100)}%` }}
+                                />
+                              </div>
+                            </div>
+                            <div className="space-y-3">
+                              <div className="flex justify-between text-[10px] font-bold uppercase tracking-widest text-text-secondary">
+                                <span>Stress</span>
+                                <span className="text-burn-red">{selectedPlant.stress}%</span>
+                              </div>
+                              <div className="h-2.5 w-full bg-black/40 rounded-full overflow-hidden">
+                                <div 
+                                  className="h-full bg-burn-red transition-all duration-1000 ease-out" 
+                                  style={{ width: `${selectedPlant.stress}%` }}
+                                />
+                              </div>
+                            </div>
+                            <div className="space-y-3">
+                              <div className="flex justify-between text-[10px] font-bold uppercase tracking-widest text-text-secondary">
+                                <span>Tend Points</span>
+                                <span className="text-leaf-green">{selectedPlant.rootStrength} / {nextThreshold}</span>
+                              </div>
+                              <div className="h-2.5 w-full bg-black/40 rounded-full overflow-hidden">
+                                <div 
+                                  className="h-full bg-leaf-green transition-all duration-1000 ease-out" 
+                                  style={{ width: `${Math.min(100, (selectedPlant.rootStrength / Math.max(1, nextThreshold)) * 100)}%` }}
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 max-w-5xl mx-auto w-full">
+                          <button 
+                            onClick={() => handlePlantAction('research')}
+                            disabled={selectedPlant.water < 5}
+                            className="flex items-center justify-center gap-3 bg-leaf-green text-soil-dark font-bold py-4 rounded-2xl hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 shadow-lg shadow-leaf-green/10"
+                          >
+                            <Zap size={20} />
+                            RESEARCH
+                          </button>
+                          <button 
+                            onClick={() => handlePlantAction('water')}
+                            className="flex items-center justify-center gap-3 bg-water-blue text-soil-dark font-bold py-4 rounded-2xl hover:scale-[1.02] active:scale-[0.98] transition-all shadow-lg shadow-water-blue/10"
+                          >
+                            <Droplets size={20} />
+                            HYDRATE
+                          </button>
+                          <button 
+                            onClick={() => handlePlantAction('fertilize')}
+                            className="flex items-center justify-center gap-3 bg-mineral-gold text-soil-dark font-bold py-4 rounded-2xl hover:scale-[1.02] active:scale-[0.98] transition-all shadow-lg shadow-mineral-gold/10"
+                          >
+                            <ArrowUpCircle size={20} />
+                            BOOST
+                          </button>
+                          <button 
+                            onClick={() => handlePlantAction('pesticide')}
+                            className="flex items-center justify-center gap-3 bg-burn-red text-soil-dark font-bold py-4 rounded-2xl hover:scale-[1.02] active:scale-[0.98] transition-all shadow-lg shadow-burn-red/10"
+                          >
+                            <Bug size={20} />
+                            DEFEND
+                          </button>
+                          <button 
+                            onClick={() => handlePlantAction('harvest')}
+                            disabled={selectedPlant.stageIndex < (stages.length - 1)}
+                            className="flex items-center justify-center gap-3 bg-white text-soil-dark font-bold py-4 rounded-2xl hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 shadow-lg shadow-white/10"
+                          >
+                            <Database size={20} />
+                            HARVEST
+                          </button>
+                        </div>
+                      </div>
                     </div>
-                    <button 
-                      onClick={() => setState(p => selectPlant(p, null) as GameState & { globalStats: any })}
-                      className="text-text-secondary hover:text-white transition-colors"
-                    >
-                      <RefreshCw size={20} />
-                    </button>
-                  </div>
-                </div>
-
-                <div className="flex flex-col gap-8">
-                  <div className="h-[400px] md:h-[500px] bg-[#0a0a0a] rounded-3xl dashed-border relative overflow-hidden group">
-                    {(() => {
-                      const currentThreshold = PLANT_STAGES[selectedPlant.stageIndex].threshold;
-                      const nextThreshold = PLANT_STAGES[selectedPlant.stageIndex + 1]?.threshold || (currentThreshold * 2);
-                      const progress = Math.min(1, Math.max(0, (selectedPlant.rootStrength - currentThreshold) / (nextThreshold - currentThreshold)));
-                      
-                      console.log(`Specimen ${selectedPlant.id} Telemetry - Stage: ${selectedPlant.stageIndex}, Progress: ${progress.toFixed(4)}`);
-
-                      return (
-                        <PlantVisualizer 
-                          stageIndex={selectedPlant.stageIndex} 
-                          progress={progress}
-                          type={selectedPlant.type}
-                          color={selectedPlant.color}
-                          hasPests={selectedPlant.pests > 0}
-                          isBurning={selectedPlant.stress > 90}
-                          stress={selectedPlant.stress}
-                          weather={state.weather?.type}
-                          toolEffect={toolEffect}
-                        />
-                      );
-                    })()}
-                    <div className="absolute inset-0 pointer-events-none bg-gradient-to-t from-black/40 to-transparent" />
-                  </div>
-
-                  <div className="space-y-8">
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-                      <div className="space-y-3">
-                        <div className="flex justify-between text-[10px] font-bold uppercase tracking-widest text-text-secondary">
-                          <span>Hydration</span>
-                          <span className="text-water-blue">{selectedPlant.water} / {PLANT_STAGES[selectedPlant.stageIndex].maxWater}</span>
-                        </div>
-                        <div className="h-2.5 w-full bg-black/40 rounded-full overflow-hidden">
-                          <div 
-                            className="h-full bg-water-blue transition-all duration-1000 ease-out" 
-                            style={{ width: `${(selectedPlant.water / PLANT_STAGES[selectedPlant.stageIndex].maxWater) * 100}%` }}
-                          />
-                        </div>
-                      </div>
-                      <div className="space-y-3">
-                        <div className="flex justify-between text-[10px] font-bold uppercase tracking-widest text-text-secondary">
-                          <span>Nutrients</span>
-                          <span className="text-mineral-gold">{Math.round(selectedPlant.nutrients)}%</span>
-                        </div>
-                        <div className="h-2.5 w-full bg-black/40 rounded-full overflow-hidden">
-                          <div 
-                            className="h-full bg-mineral-gold transition-all duration-1000 ease-out" 
-                            style={{ width: `${(selectedPlant.nutrients / PLANT_STAGES[selectedPlant.stageIndex].maxNutrients) * 100}%` }}
-                          />
-                        </div>
-                      </div>
-                      <div className="space-y-3">
-                        <div className="flex justify-between text-[10px] font-bold uppercase tracking-widest text-text-secondary">
-                          <span>Stress</span>
-                          <span className="text-burn-red">{selectedPlant.stress}%</span>
-                        </div>
-                        <div className="h-2.5 w-full bg-black/40 rounded-full overflow-hidden">
-                          <div 
-                            className="h-full bg-burn-red transition-all duration-1000 ease-out" 
-                            style={{ width: `${selectedPlant.stress}%` }}
-                          />
-                        </div>
-                      </div>
-                      <div className="space-y-3">
-                        <div className="flex justify-between text-[10px] font-bold uppercase tracking-widest text-text-secondary">
-                          <span>Root XP</span>
-                          <span className="text-leaf-green">{selectedPlant.rootStrength}</span>
-                        </div>
-                        <div className="h-2.5 w-full bg-black/40 rounded-full overflow-hidden">
-                          <div 
-                            className="h-full bg-leaf-green transition-all duration-1000 ease-out" 
-                            style={{ width: `${(selectedPlant.rootStrength / (PLANT_STAGES[selectedPlant.stageIndex + 1]?.threshold || 1000)) * 100}%` }}
-                          />
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 max-w-5xl mx-auto w-full">
-                      <button 
-                        onClick={() => handlePlantAction('research')}
-                        disabled={selectedPlant.water < 5}
-                        className="flex items-center justify-center gap-3 bg-leaf-green text-soil-dark font-bold py-4 rounded-2xl hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 shadow-lg shadow-leaf-green/10"
-                      >
-                        <Zap size={20} />
-                        RESEARCH
-                      </button>
-                      <button 
-                        onClick={() => handlePlantAction('water')}
-                        className="flex items-center justify-center gap-3 bg-water-blue text-soil-dark font-bold py-4 rounded-2xl hover:scale-[1.02] active:scale-[0.98] transition-all shadow-lg shadow-water-blue/10"
-                      >
-                        <Droplets size={20} />
-                        HYDRATE
-                      </button>
-                      <button 
-                        onClick={() => handlePlantAction('fertilize')}
-                        className="flex items-center justify-center gap-3 bg-mineral-gold text-soil-dark font-bold py-4 rounded-2xl hover:scale-[1.02] active:scale-[0.98] transition-all shadow-lg shadow-mineral-gold/10"
-                      >
-                        <ArrowUpCircle size={20} />
-                        BOOST
-                      </button>
-                      <button 
-                        onClick={() => handlePlantAction('pesticide')}
-                        className="flex items-center justify-center gap-3 bg-burn-red text-soil-dark font-bold py-4 rounded-2xl hover:scale-[1.02] active:scale-[0.98] transition-all shadow-lg shadow-burn-red/10"
-                      >
-                        <Bug size={20} />
-                        DEFEND
-                      </button>
-                      <button 
-                        onClick={() => handlePlantAction('harvest')}
-                        disabled={selectedPlant.stageIndex < 4}
-                        className="flex items-center justify-center gap-3 bg-white text-soil-dark font-bold py-4 rounded-2xl hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 shadow-lg shadow-white/10"
-                      >
-                        <Database size={20} />
-                        HARVEST
-                      </button>
-                    </div>
-                  </div>
-                </div>
+                  );
+                })()}
               </motion.div>
             ) : (
               <motion.div 
@@ -959,7 +1475,7 @@ const App: React.FC = () => {
                               key={o.id}
                               onClick={() => {
                                 if (o.isUnlocked) {
-                                  setState(prev => selectOrchard(prev, o.id) as GameState & { globalStats: any });
+                                  setState(prev => ({ ...prev, activeOrchardId: o.id, selectedPlantIndex: null }));
                                 } else {
                                   unlockOrchard(o.id);
                                 }
@@ -985,7 +1501,7 @@ const App: React.FC = () => {
                           plant={plant} 
                           index={i} 
                           isSelected={state.selectedPlantIndex === i}
-                          onClick={() => plant ? setState(p => selectPlant(p, i) as GameState & { globalStats: any }) : setSeedingPlotIndex(i)}
+                          onClick={() => plant ? setState(p => ({ ...p, selectedPlantIndex: i })) : setSeedingPlotIndex(i)}
                         />
                       ))}
                     </div>
@@ -1234,11 +1750,10 @@ const App: React.FC = () => {
                         <div className="flex gap-3">
                           <button 
                             onClick={() => {
-                              const result = liquidateDataSeeds(state, 1);
-                              result.logs.forEach(log => addLog(log.msg, log.type));
-                              if (result.state !== state) {
-                                setState(result.state as GameState & { globalStats: any });
-                                saveState({ dataSeeds: result.state.dataSeeds, credits: result.state.credits });
+                              if (state.dataSeeds >= 1) {
+                                setState(p => ({ ...p, dataSeeds: p.dataSeeds - 1, credits: p.credits + 50 }));
+                                saveState({ dataSeeds: state.dataSeeds - 1, credits: state.credits + 50 });
+                                addLog('Liquidated 1 Data Seed for 50 credits.', 'success');
                               }
                             }}
                             className="flex-1 p-3 bg-black/40 border border-leaf-green/20 rounded-lg text-[10px] font-bold hover:bg-leaf-green/10 transition-all"
@@ -1247,11 +1762,10 @@ const App: React.FC = () => {
                           </button>
                           <button 
                             onClick={() => {
-                              const result = liquidateDataSeeds(state, 10);
-                              result.logs.forEach(log => addLog(log.msg, log.type));
-                              if (result.state !== state) {
-                                setState(result.state as GameState & { globalStats: any });
-                                saveState({ dataSeeds: result.state.dataSeeds, credits: result.state.credits });
+                              if (state.dataSeeds >= 10) {
+                                setState(p => ({ ...p, dataSeeds: p.dataSeeds - 10, credits: p.credits + 500 }));
+                                saveState({ dataSeeds: state.dataSeeds - 10, credits: state.credits + 500 });
+                                addLog('Liquidated 10 Data Seeds for 500 credits.', 'success');
                               }
                             }}
                             className="flex-1 p-3 bg-black/40 border border-leaf-green/20 rounded-lg text-[10px] font-bold hover:bg-leaf-green/10 transition-all"
@@ -1523,7 +2037,7 @@ const App: React.FC = () => {
                           addLog(`Insufficient credits for ${seed.name}.`, 'danger');
                           return;
                         }
-                        buyPlot(seedingPlotIndex, seed.type, seed.cost, seed.color);
+                        buyPlot(seedingPlotIndex, seed.type, seed.cost, seed.color, seed.cropId);
                         setSeedingPlotIndex(null);
                       }}
                       className={`hardware-panel p-4 text-left font-sans flex flex-col gap-2 hover:border-leaf-green/60 group transition-all relative overflow-hidden ${
