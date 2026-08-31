@@ -1,0 +1,51 @@
+name: Temporary dependency refresh - typescript
+
+on:
+  push:
+    branches:
+      - deps/typescript-7.0.2-refresh
+
+permissions:
+  contents: write
+
+jobs:
+  refresh-and-validate:
+    if: ${{ !contains(github.event.head_commit.message, '[deps-refresh-complete]') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: deps/typescript-7.0.2-refresh
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Refresh lockfile and validate
+        shell: bash
+        run: |
+          set +e
+          npm install --package-lock-only --ignore-scripts
+          lock_status=$?
+          test_status=0
+          lint_status=0
+          build_status=0
+          if [ "$lock_status" -eq 0 ]; then
+            npm ci
+            ci_status=$?
+            if [ "$ci_status" -eq 0 ]; then
+              npm test || test_status=$?
+              npm run lint || lint_status=$?
+              npm run build || build_status=$?
+            else
+              test_status=$ci_status
+            fi
+          fi
+          rm -f .github/workflows/tmp-refresh-typescript.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add package-lock.json package.json .github/workflows/tmp-refresh-typescript.yml
+          git commit -m "build(deps-dev): refresh typescript lockfile [deps-refresh-complete]" || true
+          git push origin HEAD:deps/typescript-7.0.2-refresh
+          if [ "$lock_status" -ne 0 ] || [ "$test_status" -ne 0 ] || [ "$lint_status" -ne 0 ] || [ "$build_status" -ne 0 ]; then
+            exit 1
+          fi
