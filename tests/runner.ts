@@ -8,6 +8,7 @@ import { runFarmLoopTests } from '../gameplay/world/tests/farm-loop.test';
 import { runDeterminismTests } from './determinism.test';
 import { runHomesteadSimulationTests } from './homesteadSimulation.test';
 import { runProject001Tests } from './project001.test';
+import { runProgressionContractTests } from './progressionContracts.test';
 
 console.log('🧪 Starting Orchade Test Runner...\n');
 
@@ -26,8 +27,11 @@ console.log(`[Homestead Simulation] Passed: ${homesteadResults.passed}, Failed: 
 const project001Results = runProject001Tests();
 console.log(`[Project 001] Passed: ${project001Results.passed}, Failed: ${project001Results.failed}`);
 
-const totalPassed = cropResults.passed + farmLoopResults.passed + determinismResults.passed + homesteadResults.passed + project001Results.passed;
-const totalFailed = cropResults.failed + farmLoopResults.failed + determinismResults.failed + homesteadResults.failed + project001Results.failed;
+const progressionResults = runProgressionContractTests();
+console.log(`[Progression Contracts] Passed: ${progressionResults.passed}, Failed: ${progressionResults.failed}`);
+
+const totalPassed = cropResults.passed + farmLoopResults.passed + determinismResults.passed + homesteadResults.passed + project001Results.passed + progressionResults.passed;
+const totalFailed = cropResults.failed + farmLoopResults.failed + determinismResults.failed + homesteadResults.failed + project001Results.failed + progressionResults.failed;
 
 console.log(`\n========================================`);
 console.log(`Total Passed: ${totalPassed} | Total Failed: ${totalFailed}`);
