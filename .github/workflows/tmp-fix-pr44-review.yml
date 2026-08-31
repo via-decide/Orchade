@@ -1,0 +1,78 @@
+name: Temporary fix PR44 review findings
+
+on:
+  push:
+    branches:
+      - feat/typed-physical-prerequisites-season-enforcement
+
+permissions:
+  contents: write
+
+jobs:
+  fix-and-validate:
+    if: ${{ !contains(github.event.head_commit.message, '[pr44-review-fixed]') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/typed-physical-prerequisites-season-enforcement
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Apply focused review fixes
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          public = Path('gameplay/prerequisites/public.ts')
+          text = public.read_text()
+          old = "  | 'RESOURCE_MISSING'\n  | 'COMPONENT_MISSING'"
+          new = "  | 'RESOURCE_MISSING'\n  | 'INSUFFICIENT_RESOURCE'\n  | 'COMPONENT_MISSING'"
+          assert old in text
+          public.write_text(text.replace(old, new, 1))
+
+          evaluator = Path('gameplay/prerequisites/internal/evaluator.ts')
+          text = evaluator.read_text()
+          old = "    return evaluateMeasurement(prerequisite, measurement, 'OBSERVABLE_MISSING', 'RESOURCE_MISSING');"
+          new = "    return evaluateMeasurement(prerequisite, measurement, 'OBSERVABLE_MISSING', 'INSUFFICIENT_RESOURCE');"
+          assert old in text
+          evaluator.write_text(text.replace(old, new, 1))
+
+          simulation = Path('gameplay/world/internal/simulation.ts')
+          text = simulation.read_text()
+          old = "  const definitionId = seedItemId.endsWith('-seed') ? seedItemId.slice(0, -5) : seedItemId;\n  const definition = getCropDefinition(definitionId);"
+          new = "  const definitionId = seedItemId.endsWith('-seed')\n    ? seedItemId.slice(0, -5)\n    : seedItemId.endsWith('_seed')\n      ? seedItemId.slice(0, -5)\n      : seedItemId;\n  const definition = getCropDefinition(definitionId);\n  const isLegacyGenericSeed = seedItemId === 'terran_sprout_seed';"
+          assert old in text
+          text = text.replace(old, new, 1)
+          old = "  const canonicalSeasons = definition?.seasons.filter(isPhysicalSeason);\n  const seasonEligibility = evaluatePhysicalPrerequisites([\n    {\n      prerequisiteId: `crop:${definitionId}:season`,\n      type: 'SEASON_VALID',\n      subjectId: definitionId,\n      allowedSeasons: definition && canonicalSeasons?.length === definition.seasons.length ? canonicalSeasons : undefined,\n    },\n  ], { season: world.clock.season });"
+          new = "  const canonicalSeasons = definition?.seasons.filter(isPhysicalSeason);\n  const seasonEligibility: EligibilityResult = isLegacyGenericSeed\n    ? { eligible: true, checks: [] }\n    : evaluatePhysicalPrerequisites([\n        {\n          prerequisiteId: `crop:${definitionId}:season`,\n          type: 'SEASON_VALID',\n          subjectId: definitionId,\n          allowedSeasons: definition && canonicalSeasons?.length === definition.seasons.length ? canonicalSeasons : undefined,\n        },\n      ], { season: world.clock.season });"
+          assert old in text
+          simulation.write_text(text.replace(old, new, 1))
+
+          tests = Path('tests/prerequisiteContracts.test.ts')
+          text = tests.read_text()
+          anchor = "  assert(resourceAvailable.eligible, 'Known sufficient physical resource inventory should satisfy RESOURCE_AVAILABLE.');\n"
+          insert = anchor + "\n  const resourceInsufficient = evaluatePhysicalPrerequisites([\n    { prerequisiteId: 'stored-water-short', type: 'RESOURCE_AVAILABLE', resourceId: 'water:stored', minimum: 2000, unit: 'L' },\n  ], baseFacts);\n  assert(resourceInsufficient.checks[0]?.reasonCode === 'INSUFFICIENT_RESOURCE', 'Known quantitative resource shortfalls must be distinct from missing resources.');\n"
+          assert anchor in text
+          text = text.replace(anchor, insert, 1)
+          anchor = "  assert(JSON.stringify(unknownCrop.inventory) === unknownBefore && unknownCrop.world === springWorld, 'Unknown crop rejection must not consume inventory or mutate the world.');\n"
+          insert = anchor + "\n  const legacySeedInventory = {\n    ...initialInventoryState,\n    backpack: {\n      ...initialInventoryState.backpack,\n      stacks: [{ stackId: 'terran-sprout-seed-stack', itemId: 'terran_sprout_seed', quantity: 1 }],\n    },\n  };\n  const legacyGeneric = plantCropFromInventory(winterWorld, legacySeedInventory, 'tile-0-0', 'terran_sprout_seed');\n  assert(legacyGeneric.eligibility?.eligible === true && legacyGeneric.eligibility.checks.length === 0, 'Canonical legacy Terran Sprout seed must retain the generic non-crop planting path without invented season data.');\n  assert(Boolean(legacyGeneric.crop) && legacyGeneric.crop?.definitionId === 'terran_sprout', 'Legacy underscore seed ids must resolve to the existing generic definition id format.');\n"
+          assert anchor in text
+          tests.write_text(text.replace(anchor, insert, 1))
+          PY
+
+          rm .github/workflows/tmp-fix-pr44-review.yml
+          npm ci
+          git diff --check
+          npm test
+          npm run lint
+          npm run build
+
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add gameplay/prerequisites/public.ts gameplay/prerequisites/internal/evaluator.ts gameplay/world/internal/simulation.ts tests/prerequisiteContracts.test.ts .github/workflows/tmp-fix-pr44-review.yml
+          git commit -m 'Fix prerequisite review regressions [pr44-review-fixed]'
+          git push origin HEAD:feat/typed-physical-prerequisites-season-enforcement
