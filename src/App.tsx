@@ -188,6 +188,7 @@ const App: React.FC = () => {
     weatherForecast: [getRandomWeather(), getRandomWeather(), getRandomWeather()],
     climateControl: null,
     harvestedTypes: [],
+    harvestInventory: {},
     user: null,
     isAuthReady: false,
     globalStats: null,
@@ -390,6 +391,7 @@ const App: React.FC = () => {
             weatherForecast: data.weatherForecast ?? prev.weatherForecast ?? [getRandomWeather(), getRandomWeather(), getRandomWeather()],
             climateControl: data.climateControl !== undefined ? data.climateControl : prev.climateControl ?? null,
             harvestedTypes: data.harvestedTypes ?? prev.harvestedTypes ?? [],
+            harvestInventory: data.harvestInventory ?? prev.harvestInventory ?? {},
           }));
         } catch (e) {
           console.warn('Error reading guest state:', e);
@@ -431,9 +433,13 @@ const App: React.FC = () => {
           weatherForecast: initialForecast,
           climateControl: null,
           harvestedTypes: [],
+          harvestInventory: {},
           createdAt: serverTimestamp()
         };
-        setDoc(userDocRef, initialState).catch(e => handleFirestoreError(e, OperationType.WRITE, `users/${state.user!.uid}`));
+        const batch = writeBatch(db);
+        batch.set(userDocRef, initialState);
+        batch.set(doc(db, 'system', 'global_stats'), { totalUsers: increment(1) }, { merge: true });
+        batch.commit().catch(e => handleFirestoreError(e, OperationType.WRITE, `users/${state.user!.uid}`));
       }
     }, (error) => handleFirestoreError(error, OperationType.GET, `users/${state.user!.uid}`));
 
@@ -494,68 +500,6 @@ const App: React.FC = () => {
     };
   }, [state.activeTab, state.user?.isGuest, state.credits, state.dataSeeds]);
 
-  // Daily Reward Logic
-  useEffect(() => {
-    if (!state.user?.uid || !state.isAuthReady) return;
-
-    if (state.user.isGuest || state.user.uid.startsWith('guest_')) {
-      const lastReward = localStorage.getItem('orchard_guest_last_reward');
-      const today = new Date().toDateString();
-      if (lastReward !== today) {
-        localStorage.setItem('orchard_guest_last_reward', today);
-        setState(prev => {
-          const nextCredits = prev.credits + 100;
-          try {
-            const saved = localStorage.getItem('orchard_guest_state');
-            const parsed = saved ? JSON.parse(saved) : {};
-            localStorage.setItem('orchard_guest_state', JSON.stringify({ ...parsed, credits: nextCredits }));
-          } catch (e) {
-            console.warn('Error updating guest daily reward in storage:', e);
-          }
-          return { ...prev, credits: nextCredits };
-        });
-        addLog('Daily Login Reward (Guest Sandbox): +100 credits!', 'success');
-      }
-      return;
-    }
-
-    const checkDailyReward = async () => {
-      try {
-        const userRef = doc(db, 'users', state.user!.uid);
-        const userDoc = await getDocs(query(collection(db, 'users'), where('uid', '==', state.user!.uid), limit(1)));
-        
-        if (!userDoc.empty) {
-          const userData = userDoc.docs[0].data();
-          const lastReward = userData.lastDailyReward?.toDate();
-          const now = new Date();
-          
-          if (!lastReward || lastReward.toDateString() !== now.toDateString()) {
-            const reward = 100;
-            const batch = writeBatch(db);
-            
-            batch.update(userDoc.docs[0].ref, {
-              credits: increment(reward),
-              lastDailyReward: serverTimestamp()
-            });
-
-            const statsRef = doc(db, 'system', 'global_stats');
-            batch.set(statsRef, {
-              totalCredits: increment(reward),
-              totalUsers: increment(lastReward ? 0 : 1)
-            }, { merge: true });
-
-            await batch.commit();
-            addLog(`Daily Login Reward: +${reward} credits!`, 'success');
-          }
-        }
-      } catch (err) {
-        console.warn('Daily reward check error:', err);
-      }
-    };
-
-    checkDailyReward();
-  }, [state.user?.uid, state.user?.isGuest, state.isAuthReady, addLog]);
-
   const saveState = async (updates: Partial<GameState>) => {
     if (!state.user?.uid) return;
 
@@ -572,6 +516,7 @@ const App: React.FC = () => {
             weatherForecast: updates.weatherForecast ?? current.weatherForecast,
             climateControl: updates.climateControl !== undefined ? updates.climateControl : current.climateControl,
             harvestedTypes: updates.harvestedTypes ?? current.harvestedTypes,
+            harvestInventory: updates.harvestInventory ?? current.harvestInventory,
           };
           localStorage.setItem('orchard_guest_state', JSON.stringify(merged));
           return current;
@@ -698,8 +643,6 @@ const App: React.FC = () => {
         plant.water -= 5;
         plant.nutrients -= 10;
         plant.stress += stressGain;
-        credits += 10;
-        
         // Check evolution
         const stages = getPlantStages(plant.cropId);
         const nextStage = resolveStageIndex(plant.cropId, plant.rootStrength);
@@ -707,7 +650,6 @@ const App: React.FC = () => {
         if (nextStage > plant.stageIndex) {
           plant.stageIndex = nextStage;
           addLog(`Evolution! ${plant.type} reached stage: ${stages[nextStage]?.name ?? 'Advanced'}`, 'success');
-          dataSeeds += 5;
         }
 
         // Pest chance (reduced by pestDefense upgrade)
@@ -718,9 +660,9 @@ const App: React.FC = () => {
         }
 
         if (isFog) {
-          addLog(`Research completed under Dense Fog (Efficiency -50%): +${finalG} roots, +10 credits.`, 'warn');
+          addLog(`Research completed under Dense Fog (Efficiency -50%): root strength +${finalG}.`, 'warn');
         } else {
-          addLog(`Research complete: +${finalG} roots, +10 credits.`, 'success');
+          addLog(`Research complete: root strength +${finalG}.`, 'success');
         }
       }
 
@@ -754,6 +696,7 @@ const App: React.FC = () => {
       }
 
       let harvestedTypes = prev.harvestedTypes || [];
+      const harvestInventory = { ...(prev.harvestInventory ?? {}) };
       let isHarvestCleared = false;
       if (action === 'harvest') {
         const stages = getPlantStages(plant.cropId);
@@ -766,18 +709,16 @@ const App: React.FC = () => {
         setTimeout(() => setToolEffect(null), 1500);
         
         const harvestResult = applyHarvest(plant);
-        credits += harvestResult.reward;
-        const dataReward = 5;
-        dataSeeds += dataReward;
-        
         const cropDef = getCropDefinition(plant.cropId);
+        const outputId = cropDef?.harvest.itemId ?? plant.cropId ?? plant.type;
+        harvestInventory[outputId] = (harvestInventory[outputId] ?? 0) + harvestResult.yieldCount;
         if (cropDef?.isPerennial) {
           newPlants[prev.selectedPlantIndex!] = harvestResult.resetPlant;
-          addLog(`Perennial Harvest: Collected ${harvestResult.yieldCount} ${cropDef.harvest.displayName}. Tree remains established. (+${harvestResult.reward} credits, +${dataReward} data seeds)`, 'success');
+          addLog(`Perennial Harvest: Collected ${harvestResult.yieldCount} ${cropDef.harvest.displayName}. Tree remains established.`, 'success');
         } else {
           newPlants[prev.selectedPlantIndex!] = null;
           isHarvestCleared = true;
-          addLog(`Harvest Complete! Collected ${harvestResult.yieldCount} unit(s) of ${plant.type}. (+${harvestResult.reward} credits, +${dataReward} data seeds)`, 'success');
+          addLog(`Harvest Complete! Collected ${harvestResult.yieldCount} unit(s) of ${plant.type}.`, 'success');
         }
         
         if (!harvestedTypes.includes(plant.type)) {
@@ -798,10 +739,11 @@ const App: React.FC = () => {
         orchards: newOrchards, 
         credits, 
         dataSeeds, 
-        harvestedTypes, 
+        harvestedTypes,
+        harvestInventory,
         selectedPlantIndex: isHarvestCleared ? null : prev.selectedPlantIndex 
       };
-      saveState({ orchards: newOrchards, credits, dataSeeds, harvestedTypes });
+      saveState({ orchards: newOrchards, credits, dataSeeds, harvestedTypes, harvestInventory });
       return nextState;
     });
   };
@@ -2009,11 +1951,11 @@ const App: React.FC = () => {
                           </div>
                           <div className="space-y-1">
                             <p className="text-text-primary font-bold">HARVESTING</p>
-                            <p className="text-text-secondary">Only <span className="text-burn-red">FRUITING</span> plants can be harvested. Harvesting yields high credit rewards and valuable Data Seeds.</p>
+                            <p className="text-text-secondary">Only <span className="text-burn-red">FRUITING</span> plants can be harvested. Harvesting produces physical crop output without awarding score currency.</p>
                           </div>
                           <div className="space-y-1">
                             <p className="text-text-primary font-bold">DATA SEEDS</p>
-                            <p className="text-text-secondary">Used in the <span className="text-water-blue">LAB</span> for global genetic upgrades or liquidated in the <span className="text-mineral-gold">MARKET</span> for credits.</p>
+                            <p className="text-text-secondary">Legacy Data Seeds remain visible for save compatibility while their replacement with evidence-based knowledge is designed.</p>
                           </div>
                         </div>
                       </div>
