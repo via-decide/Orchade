@@ -1,0 +1,89 @@
+name: Temporary fix PR45 review findings
+
+on:
+  push:
+    branches:
+      - feat/remove-action-based-currency-rewards
+
+permissions:
+  contents: write
+
+jobs:
+  fix-and-validate:
+    if: ${{ !contains(github.event.head_commit.message, '[pr45-review-fixed]') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/remove-action-based-currency-rewards
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Apply focused review fixes
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          types = Path('src/types.ts')
+          text = types.read_text()
+          old = "  harvestedTypes?: string[];\n  user: {"
+          new = "  harvestedTypes?: string[];\n  harvestInventory?: Record<string, number>;\n  user: {"
+          assert old in text
+          types.write_text(text.replace(old, new, 1))
+
+          app = Path('src/App.tsx')
+          text = app.read_text()
+
+          old = "    harvestedTypes: [],\n    user: null,"
+          new = "    harvestedTypes: [],\n    harvestInventory: {},\n    user: null,"
+          assert old in text
+          text = text.replace(old, new, 1)
+
+          old = "            harvestedTypes: data.harvestedTypes ?? prev.harvestedTypes ?? [],\n          }));"
+          new = "            harvestedTypes: data.harvestedTypes ?? prev.harvestedTypes ?? [],\n            harvestInventory: data.harvestInventory ?? prev.harvestInventory ?? {},\n          }));"
+          assert text.count(old) >= 2
+          text = text.replace(old, new, 2)
+
+          old = "          harvestedTypes: [],\n          createdAt: serverTimestamp()\n        };\n        setDoc(userDocRef, initialState).catch(e => handleFirestoreError(e, OperationType.WRITE, `users/${state.user!.uid}`));"
+          new = "          harvestedTypes: [],\n          harvestInventory: {},\n          createdAt: serverTimestamp()\n        };\n        const batch = writeBatch(db);\n        batch.set(userDocRef, initialState);\n        batch.set(doc(db, 'system', 'global_stats'), { totalUsers: increment(1) }, { merge: true });\n        batch.commit().catch(e => handleFirestoreError(e, OperationType.WRITE, `users/${state.user!.uid}`));"
+          assert old in text
+          text = text.replace(old, new, 1)
+
+          old = "            harvestedTypes: updates.harvestedTypes ?? current.harvestedTypes,\n          };"
+          new = "            harvestedTypes: updates.harvestedTypes ?? current.harvestedTypes,\n            harvestInventory: updates.harvestInventory ?? current.harvestInventory,\n          };"
+          assert old in text
+          text = text.replace(old, new, 1)
+
+          old = "      let harvestedTypes = prev.harvestedTypes || [];\n      let isHarvestCleared = false;"
+          new = "      let harvestedTypes = prev.harvestedTypes || [];\n      const harvestInventory = { ...(prev.harvestInventory ?? {}) };\n      let isHarvestCleared = false;"
+          assert old in text
+          text = text.replace(old, new, 1)
+
+          old = "        const harvestResult = applyHarvest(plant);\n        const cropDef = getCropDefinition(plant.cropId);"
+          new = "        const harvestResult = applyHarvest(plant);\n        const cropDef = getCropDefinition(plant.cropId);\n        const outputId = cropDef?.harvest.itemId ?? plant.cropId ?? plant.type;\n        harvestInventory[outputId] = (harvestInventory[outputId] ?? 0) + harvestResult.yieldCount;"
+          assert old in text
+          text = text.replace(old, new, 1)
+
+          old = "        harvestedTypes, \n        selectedPlantIndex: isHarvestCleared ? null : prev.selectedPlantIndex \n      };\n      saveState({ orchards: newOrchards, credits, dataSeeds, harvestedTypes });"
+          new = "        harvestedTypes,\n        harvestInventory,\n        selectedPlantIndex: isHarvestCleared ? null : prev.selectedPlantIndex \n      };\n      saveState({ orchards: newOrchards, credits, dataSeeds, harvestedTypes, harvestInventory });"
+          assert old in text
+          text = text.replace(old, new, 1)
+
+          app.write_text(text)
+          PY
+
+          rm .github/workflows/tmp-fix-pr45-review.yml
+          npm ci
+          git diff --check
+          npm test
+          npm run lint
+          npm run build
+
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/types.ts src/App.tsx .github/workflows/tmp-fix-pr45-review.yml
+          git commit -m 'Preserve harvest output and user counts [pr45-review-fixed]'
+          git push origin HEAD:feat/remove-action-based-currency-rewards
