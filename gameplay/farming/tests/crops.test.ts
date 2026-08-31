@@ -57,6 +57,7 @@ export function runCropsTests(): { passed: number; failed: number; errors: strin
 
   const harvestResult = applyHarvest(matureApplePlant);
   assert(harvestResult.harvested === true, 'Apple harvest must succeed when mature');
+  assert(!('reward' in harvestResult), 'Harvest results must not award score currency');
   assert(harvestResult.yieldCount >= 20 && harvestResult.yieldCount <= 60, 'Apple yield must fall within researched range (20-60)');
   assert(harvestResult.resetPlant.stageIndex === 2, 'Perennial Apple must remain in bearing stage (index 2) after harvest');
   assert(harvestResult.resetPlant.rootStrength === 730, 'Perennial Apple root strength must reset to stage 2 threshold (730d)');

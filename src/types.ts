@@ -66,6 +66,7 @@ export type GameState = {
     daysRemaining: number;
   } | null;
   harvestedTypes?: string[];
+  harvestInventory?: Record<string, number>;
   user: {
     uid: string;
     displayName: string | null;
