@@ -188,6 +188,7 @@ const App: React.FC = () => {
     weatherForecast: [getRandomWeather(), getRandomWeather(), getRandomWeather()],
     climateControl: null,
     harvestedTypes: [],
+    harvestInventory: {},
     user: null,
     isAuthReady: false,
     globalStats: null,
@@ -390,6 +391,7 @@ const App: React.FC = () => {
             weatherForecast: data.weatherForecast ?? prev.weatherForecast ?? [getRandomWeather(), getRandomWeather(), getRandomWeather()],
             climateControl: data.climateControl !== undefined ? data.climateControl : prev.climateControl ?? null,
             harvestedTypes: data.harvestedTypes ?? prev.harvestedTypes ?? [],
+            harvestInventory: data.harvestInventory ?? prev.harvestInventory ?? {},
           }));
         } catch (e) {
           console.warn('Error reading guest state:', e);
@@ -431,9 +433,13 @@ const App: React.FC = () => {
           weatherForecast: initialForecast,
           climateControl: null,
           harvestedTypes: [],
+          harvestInventory: {},
           createdAt: serverTimestamp()
         };
-        setDoc(userDocRef, initialState).catch(e => handleFirestoreError(e, OperationType.WRITE, `users/${state.user!.uid}`));
+        const batch = writeBatch(db);
+        batch.set(userDocRef, initialState);
+        batch.set(doc(db, 'system', 'global_stats'), { totalUsers: increment(1) }, { merge: true });
+        batch.commit().catch(e => handleFirestoreError(e, OperationType.WRITE, `users/${state.user!.uid}`));
       }
     }, (error) => handleFirestoreError(error, OperationType.GET, `users/${state.user!.uid}`));
 
@@ -510,6 +516,7 @@ const App: React.FC = () => {
             weatherForecast: updates.weatherForecast ?? current.weatherForecast,
             climateControl: updates.climateControl !== undefined ? updates.climateControl : current.climateControl,
             harvestedTypes: updates.harvestedTypes ?? current.harvestedTypes,
+            harvestInventory: updates.harvestInventory ?? current.harvestInventory,
           };
           localStorage.setItem('orchard_guest_state', JSON.stringify(merged));
           return current;
@@ -689,6 +696,7 @@ const App: React.FC = () => {
       }
 
       let harvestedTypes = prev.harvestedTypes || [];
+      const harvestInventory = { ...(prev.harvestInventory ?? {}) };
       let isHarvestCleared = false;
       if (action === 'harvest') {
         const stages = getPlantStages(plant.cropId);
@@ -702,6 +710,8 @@ const App: React.FC = () => {
         
         const harvestResult = applyHarvest(plant);
         const cropDef = getCropDefinition(plant.cropId);
+        const outputId = cropDef?.harvest.itemId ?? plant.cropId ?? plant.type;
+        harvestInventory[outputId] = (harvestInventory[outputId] ?? 0) + harvestResult.yieldCount;
         if (cropDef?.isPerennial) {
           newPlants[prev.selectedPlantIndex!] = harvestResult.resetPlant;
           addLog(`Perennial Harvest: Collected ${harvestResult.yieldCount} ${cropDef.harvest.displayName}. Tree remains established.`, 'success');
@@ -729,10 +739,11 @@ const App: React.FC = () => {
         orchards: newOrchards, 
         credits, 
         dataSeeds, 
-        harvestedTypes, 
+        harvestedTypes,
+        harvestInventory,
         selectedPlantIndex: isHarvestCleared ? null : prev.selectedPlantIndex 
       };
-      saveState({ orchards: newOrchards, credits, dataSeeds, harvestedTypes });
+      saveState({ orchards: newOrchards, credits, dataSeeds, harvestedTypes, harvestInventory });
       return nextState;
     });
   };
