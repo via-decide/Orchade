@@ -67,8 +67,19 @@ the player receives a toolkit, not capital or knowledge. To prevent a deadlock,
 the first eligible research project must support a **time-only discovery task**
 (survey soil, observe the site, or inspect a seed catalogue). Completing that
 task earns research credits through the same public credit API described below;
-it does not silently grant an unlock. Later projects may require time, research
-credits, ordinary credits, or a declared combination.
+it does not silently grant an unlock.
+
+The same onboarding completion also grants a one-time, idempotent **first
+placement voucher**. After the player chooses an eligible starter project, the
+voucher is redeemed against that project's versioned supply recipe and deposits
+the quoted consumable items (for example, its seed pack) plus exactly the
+ordinary credits required by its first placement quote. Voucher redemption and
+the inventory/wallet deposits are one save transaction, keyed by the onboarding
+event, and the voucher cannot be exchanged for cash or applied to a different
+recipe. If no starter recipe is priced, onboarding cannot be published as
+complete. This guarantees one affordable placement without inventing a second
+economy or giving every new save unrestricted capital. Later projects may
+require time, research credits, ordinary credits, or a declared combination.
 
 The existing `dataSeeds` field is the closest implemented progression currency:
 it purchases upgrades and can be converted to ordinary credits. Preserve old
@@ -115,6 +126,8 @@ type ResearchProject = {
   requiredResearchTime: number;
   researchCreditCost: number;
   ordinaryCreditCost?: number;
+  ordinaryCreditReservationId?: string;
+  completionTransactionId?: string;
   prerequisites: KnowledgeId[];
 };
 ```
@@ -128,15 +141,43 @@ IDs prevent collisions when another game participates later.
 1. The research catalogue lists projects and a locked preview. Crop projects are
    filtered by current season (see below); non-crop projects use their own
    prerequisites.
-2. `startProject` validates season, prerequisites, and any ordinary-credit
-   requirement, then records progress. It does not grant the knowledge early.
+2. `startProject` validates season and prerequisites. If the quote has a nonzero
+   ordinary-credit cost, the economy service atomically reserves that amount and
+   the project records the reservation ID in the same save transaction. Reserved
+   credits are unavailable to other purchases. Cancelling or invalidating a
+   project releases them; starting does not grant the knowledge early.
 3. Existing game-time/event infrastructure contributes research time. On
    completion, the progression service asks the research-credit service to spend
-   the quoted amount with an idempotency key.
-4. Only a successful debit produces the `KnowledgeGrant`. Definitions then become
-   visible to placement and detailed encyclopaedia views.
+   the quoted amount with an idempotency key and asks the economy service to
+   capture the recorded ordinary-credit reservation. Capture, project completion,
+   and the grant are coordinated by the durable completion transaction described
+   below; an absent or invalid reservation prevents completion.
+4. Only successful research-credit debit **and** ordinary-credit capture produce
+   the `KnowledgeGrant`. Definitions then become visible to placement and detailed
+   encyclopaedia views.
 5. Placement requests must independently re-check the grant; hiding a locked
    button is not authorization.
+
+### Atomic and recoverable project completion
+
+Each completion uses a stable ID derived from the account and project attempt.
+Before either ledger is called, progression durably records a completion record
+with that ID, the exact costs, reservation ID, knowledge ID, and status
+`pending`. Research-credit `spend` and ordinary-credit reservation capture both
+use that completion ID as their idempotency key. An `applied` receipt **or a
+`duplicate` receipt whose transaction ID and request fingerprint match this
+completion record** is proof that the corresponding debit succeeded. A duplicate
+for any other request is an error and never authorizes a grant.
+
+After both receipts are durably attached, one save transaction writes the
+`KnowledgeGrant` (including the completion transaction ID), marks the project
+complete, and marks the completion record `granted`. A crash at any boundary is
+safe: an outbox worker retries every non-`granted` record, recovers matching
+receipts from the ledgers, and finishes the grant without charging again. If a
+debit cannot be completed, the record remains reconcilable and no grant is made;
+compensation/release policy must be explicit rather than silently abandoning a
+successful debit. Completion records and ledger receipts are retained for audit
+and reconciliation.
 
 The repository currently has researched crop data in `src/data/cropCatalog.ts`
 and a smaller canonical `data/crops/crop-definitions.json`, but the named
@@ -270,8 +311,9 @@ ledger operation.
 
 ## Confirmation points before implementation
 
-1. Confirm zero ordinary credits and zero research credits, with the first credits
-   earned through a time-only discovery task.
+1. Confirm zero ordinary credits and zero research credits at save creation, with
+   the first research credits and restricted first-placement voucher earned
+   through a time-only discovery task.
 2. Confirm whether spring remains the deterministic starting season and whether
    3.5 acres remains free starting land.
 3. Choose the canonical researched crop dataset, since the requested
@@ -281,4 +323,3 @@ ledger operation.
    those entries `unpriced` rather than guess.
 5. Confirm that legacy `dataSeeds` migrate 1:1 into research credits and that the
    current direct research-currency-to-cash conversion is retired.
-
