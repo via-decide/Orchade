@@ -6,6 +6,7 @@
 import { runCropsTests } from '../gameplay/farming/tests/crops.test';
 import { runFarmLoopTests } from '../gameplay/world/tests/farm-loop.test';
 import { runDeterminismTests } from './determinism.test';
+import { runHomesteadSimulationTests } from './homesteadSimulation.test';
 
 console.log('🧪 Starting Orchade Test Runner...\n');
 
@@ -18,8 +19,11 @@ console.log(`[Farm Loop Module] Passed: ${farmLoopResults.passed}, Failed: ${far
 const determinismResults = runDeterminismTests();
 console.log(`[Determinism Module] Passed: ${determinismResults.passed}, Failed: ${determinismResults.failed}`);
 
-const totalPassed = cropResults.passed + farmLoopResults.passed + determinismResults.passed;
-const totalFailed = cropResults.failed + farmLoopResults.failed + determinismResults.failed;
+const homesteadResults = runHomesteadSimulationTests();
+console.log(`[Homestead Simulation] Passed: ${homesteadResults.passed}, Failed: ${homesteadResults.failed}`);
+
+const totalPassed = cropResults.passed + farmLoopResults.passed + determinismResults.passed + homesteadResults.passed;
+const totalFailed = cropResults.failed + farmLoopResults.failed + determinismResults.failed + homesteadResults.failed;
 
 console.log(`\n========================================`);
 console.log(`Total Passed: ${totalPassed} | Total Failed: ${totalFailed}`);

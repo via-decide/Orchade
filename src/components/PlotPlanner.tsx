@@ -15,6 +15,11 @@ import { HarvestCellarPanel, PantryItem } from './HarvestCellarPanel';
 import { HomesteadReportModal } from './HomesteadReportModal';
 import { RotationalGrazingModal } from './RotationalGrazingModal';
 import { HomesteadEngineeringModal } from './HomesteadEngineeringModal';
+import { hashSeed } from '../engine/random/rng';
+import {
+  advanceHomesteadDay,
+  DEFAULT_PLOT_PLANNER_SCENARIO,
+} from '../simulation/homestead';
 
 const ACRE_SQFT = 43560;
 const COLS = 24;
@@ -54,7 +59,7 @@ export function PlotPlanner() {
   // Core Configuration
   const [totalAcreage, setTotalAcreage] = useState<number>(3.5);
   const [currentSeason, setCurrentSeason] = useState<'spring' | 'summer' | 'autumn' | 'winter'>('spring');
-  const [cycleDay, setCycleDay] = useState<number>(1);
+  const [cycleDay, setCycleDay] = useState<number>(DEFAULT_PLOT_PLANNER_SCENARIO.startDay);
   const [credits, setCredits] = useState<number>(420);
   const [selectedZoneId, setSelectedZoneId] = useState<number>(2); // Default to Tomato guild
 
@@ -214,6 +219,7 @@ export function PlotPlanner() {
   const dragMovedRef = useRef<boolean>(false);
   const toolModeRef = useRef<'select' | 'tend' | 'water' | 'harvest'>(toolMode);
   toolModeRef.current = toolMode;
+  const simulationRngStateRef = useRef<number>(hashSeed(DEFAULT_PLOT_PLANNER_SCENARIO.seed));
 
   // Recalculate sqft when acreage changes
   useEffect(() => {
@@ -515,147 +521,36 @@ export function PlotPlanner() {
 
   // Advance Seasonal / Day Cycle (with Phase 3 Animal & Energy Simulation)
   const handleAdvanceDay = () => {
-    const nextDay = cycleDay + 1;
-    setCycleDay(nextDay);
+    const result = advanceHomesteadDay<ZoneData>({
+      scenario: DEFAULT_PLOT_PLANNER_SCENARIO,
+      state: {
+        day: cycleDay,
+        season: currentSeason,
+        water: waterState,
+        solar: solarState,
+        zones,
+        paddocks,
+        rngState: simulationRngStateRef.current,
+      },
+    });
 
-    // 30 days per season
-    const seasons: ('spring' | 'summer' | 'autumn' | 'winter')[] = ['spring', 'summer', 'autumn', 'winter'];
-    const currentSeasonIdx = seasons.indexOf(currentSeason);
-    let newSeason = currentSeason;
-    if (nextDay % 30 === 1 && nextDay > 1) {
-      newSeason = seasons[(currentSeasonIdx + 1) % 4];
-      setCurrentSeason(newSeason);
-      addLog(`🍂 Season shifted to ${SEASON_METADATA[newSeason].name.toUpperCase()}! Temperature and solar radiation updated.`, 'bonus');
+    simulationRngStateRef.current = result.state.rngState;
+    setCycleDay(result.state.day);
+    setCurrentSeason(result.state.season);
+    setWaterState(result.state.water);
+    setSolarState(result.state.solar);
+    setPaddocks(result.state.paddocks);
+    setZones(result.state.zones);
+
+    if (result.events.some(event => event.type === 'SEASON_CHANGED')) {
+      addLog(`🍂 Season shifted to ${SEASON_METADATA[result.state.season].name.toUpperCase()}! Temperature and solar radiation updated.`, 'bonus');
     }
-
-    const seasonInfo = SEASON_METADATA[newSeason];
-
-    // 1. Simulate Solar & Hydrology Energy Balance
-    const solarGenerationToday = (solarState.solarArrayWatts / 1000) * (seasonInfo.sunlightHours * 0.75) + (solarState.backupBiomassGenActive ? 12 : 0);
-    const updatedBatteryKwh = Math.min(
-      solarState.maxBatteryStorageKwh,
-      Math.max(1.0, solarState.currentBatteryStorageKwh + (solarGenerationToday - solarState.dailyLoadKwh))
-    );
-
-    // Water consumption & rain infiltration
-    const isRainDay = Math.random() < (seasonInfo.id === 'spring' ? 0.35 : 0.15);
-    const rainCatchment = isRainDay ? (waterState.catchmentSqft * 0.623 * 0.75) : 0; // 0.75 in rain
-    const updatedCistern = Math.min(
-      waterState.maxCisternCapacityGallons,
-      Math.max(100, waterState.currentStoredGallons + rainCatchment - waterState.dailyConsumptionGallons)
-    );
-
-    setSolarState(prev => ({
-      ...prev,
-      dailyGenerationKwh: solarGenerationToday,
-      currentBatteryStorageKwh: updatedBatteryKwh
-    }));
-
-    setWaterState(prev => ({
-      ...prev,
-      currentStoredGallons: updatedCistern
-    }));
-
-    if (isRainDay) {
-      addLog(`🌧️ Precipitation Event! Harvested +${Math.round(rainCatchment)} gal of rainwater into homestead cisterns.`, 'bonus');
+    const rainfallEvent = result.events.find(event => event.type === 'RAINFALL_OCCURRED');
+    if (rainfallEvent) {
+      const { harvestedGallons } = rainfallEvent.payload as { harvestedGallons: number };
+      addLog(`🌧️ Precipitation Event! Harvested +${Math.round(harvestedGallons)} gal of rainwater into homestead cisterns.`, 'bonus');
     }
-
-    // 2. Simulate Livestock Paddocks & Biomass Grazing
-    setPaddocks(prev => prev.map(p => {
-      const breed = LIVESTOCK_BREEDS[p.breedId];
-      if (!breed) return p;
-
-      const newDaysInPaddock = p.daysInPaddock + 1;
-      const isOvergrazing = newDaysInPaddock > breed.rotationalDays;
-      const pastureDrain = isOvergrazing ? 15 : 8;
-      const newBiomass = Math.max(5, p.pastureBiomass - pastureDrain);
-      const newCycleProgress = p.cycleProgress + 1;
-
-      // Apply manure NPK to host zone
-      setZones(zPrev => zPrev.map(z => {
-        if (z.id === p.zoneId) {
-          return {
-            ...z,
-            soil: {
-              ...z.soil,
-              nitrogen: Math.min(100, z.soil.nitrogen + Math.round(breed.outputs.manureNpk.n / 4)),
-              organicMatter: Math.min(15, z.soil.organicMatter + 0.1)
-            }
-          };
-        }
-        return z;
-      }));
-
-      return {
-        ...p,
-        daysInPaddock: newDaysInPaddock,
-        pastureBiomass: newBiomass,
-        manureAccumulation: Math.min(100, p.manureAccumulation + 8),
-        cycleProgress: newCycleProgress,
-        health: isOvergrazing ? Math.max(50, p.health - 5) : Math.min(100, p.health + 2)
-      };
-    }));
-
-    // 3. Simulate Zones Crop Growth & Telemetry
-    setZones(prev => prev.map(z => {
-      if (!z.plant || !z.plant.cropId) return z;
-      const crop = EXPANDED_CROP_CATALOG[z.plant.cropId];
-      if (!crop) return z;
-
-      // Seasonal frost check
-      let frostDamage = 0;
-      if (seasonInfo.frostRisk > 0 && !crop.frostTolerant && Math.random() < seasonInfo.frostRisk) {
-        frostDamage = 15;
-      }
-
-      // Water drain based on irrigation efficiency
-      const waterDrain = (waterState.irrigationType === 'drip' ? 5 : 8) + (seasonInfo.id === 'summer' ? 4 : 0);
-      const newWater = Math.max(0, z.plant.water - waterDrain);
-
-      // Nitrogen / Nutrient depletion
-      const nDrain = crop.nutrientDemand.n === 'heavy' ? 4 : crop.nutrientDemand.n === 'fixer' ? -6 : 2;
-      const pDrain = crop.nutrientDemand.p === 'heavy' ? 3 : 1;
-      const kDrain = crop.nutrientDemand.k === 'heavy' ? 3 : 1;
-
-      const newN = Math.min(100, Math.max(10, z.soil.nitrogen - nDrain));
-      const newP = Math.min(100, Math.max(10, z.soil.phosphorus - pDrain));
-      const newK = Math.min(100, Math.max(10, z.soil.potassium - kDrain));
-
-      // Growth step
-      const newRootStrength = z.plant.rootStrength + 1;
-      let nextStageIdx = z.plant.stageIndex;
-
-      let daysAccum = 0;
-      for (let i = 0; i <= z.plant.stageIndex; i++) {
-        daysAccum += crop.growthStages[i]?.days || 10;
-      }
-
-      if (newRootStrength >= daysAccum && nextStageIdx < crop.growthStages.length - 1) {
-        nextStageIdx += 1;
-      }
-
-      const isReadyToHarvest = nextStageIdx === crop.growthStages.length - 1;
-
-      return {
-        ...z,
-        soil: {
-          ...z.soil,
-          nitrogen: newN,
-          phosphorus: newP,
-          potassium: newK
-        },
-        plant: {
-          ...z.plant,
-          water: newWater,
-          stageIndex: nextStageIdx,
-          rootStrength: newRootStrength,
-          health: Math.max(10, Math.min(100, z.plant.health - frostDamage)),
-          isHarvestable: isReadyToHarvest
-        }
-      };
-    }));
-
-    addLog(`Advanced to Cycle Day ${nextDay} (${SEASON_METADATA[newSeason].name}). Systems updated.`, 'info');
+    addLog(`Advanced to Cycle Day ${result.state.day} (${SEASON_METADATA[result.state.season].name}). Systems updated.`, 'info');
   };
 
   // Phase 3 Livestock Handlers
