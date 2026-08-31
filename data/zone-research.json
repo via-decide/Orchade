@@ -1,0 +1,61 @@
+{
+  "_purpose": "Companion file to crop-definitions-researched.json. Covers the zones that DON'T have a crop assigned — Livestock, Energy & Fuel, Water Catchment, Composting — with the same sourcing discipline: every figure is either traceable to a cited source or explicitly flagged as a rule-of-thumb/game-balance choice. Tool Shed and House + Living are excluded on purpose — they're storage/living space, not a modeled biological or physical process, so there's nothing to research beyond square footage (already covered by the hereafterfarms/Kfarm references earlier in this project).",
+
+  "livestock": {
+    "chickens": {
+      "spacing": {
+        "coopSqftPerBird": { "value": 3.5, "range": [3, 4], "note": "Standard-size breed indoor coop space. Consistent across 6 independent sources (extension.org, hatchery guides, veterinary source, coop builders). Bantam/small breeds: ~2 sq ft/bird. Large breeds (Orpington, Brahma, Jersey Giant): ~4-5 sq ft/bird." },
+        "runSqftPerBird": { "value": 9, "range": [8, 10], "note": "Enclosed outdoor run, standard breeds. Same sources as above; some (EFSA) recommend 15-25 sq ft/bird for a genuinely free-range-quality run." },
+        "freeRangeSqftPerBird": { "value": 325, "range": [250, 400], "note": "Unrestricted foraging, not a fenced run — cited in one detailed legal/planning guide, treat as directional not precise." }
+      },
+      "diseaseRisk": "Overcrowding (below these minimums) is directly linked in sourced material to feather pecking, cannibalism, and faster spread of respiratory pathogens (Mycoplasma gallisepticum, infectious bronchitis) due to ammonia buildup — this is the mechanism behind the existing 'livestock crowding' adjacency penalty already in the plot planner's effects engine.",
+      "regulatoryNote": "Minimums vary by city/permit (Seattle: 2 sq ft indoor min; Portland: 15 sq ft total/bird; Chicago: 2 sq ft indoor, unspecified outdoor) — these are US examples only, cited to show the coop-sizing figures above are near the low end of what's commonly required, not generous estimates."
+    },
+    "goats": {
+      "spacing": {
+        "shelterSqftPerDoe": { "value": 18, "range": [15, 20], "note": "Indoor barn/shelter space, standard-size doe. Consistent across 5 sources. Miniature breeds (Nigerian Dwarf, Pygmy): roughly half, ~8-12 sq ft." },
+        "exerciseYardSqftPerGoat": { "value": 225, "range": [200, 250], "note": "Outdoor dry-lot/exercise area if NOT pasture-grazing — i.e. hay-fed, confined. Consistent across 4 independent sources landing in the 200-250 range." },
+        "pastureGoatsPerAcre": { "value": 6, "range": [4, 8], "note": "Alternative model: rotational grazing on real pasture instead of a dry lot. 1 acre = 43,560 sq ft supports 4-8 standard goats under rotational management; miniatures roughly double that density." }
+      },
+      "note": "Two different sizing models exist depending on management style (confined dry-lot vs. rotational pasture) — pick one per goat zone rather than mixing both, since they're not additive."
+    }
+  },
+
+  "energy": {
+    "solar": {
+      "sqftPerPanel": { "value": 17.5, "note": "Average residential panel (~400W), consistent across every source checked — this is a near-universal industry figure." },
+      "sqftPerKW": { "value": 58, "range": [45, 70], "note": "Derived, not directly cited as one number — sources give panel efficiency in W/sq ft (17.25-19 W/sqft depending on panel generation) and a 'total roof area including setbacks' rule of thumb of ~70 sqft/kW. Use 70 sqft/kW if budgeting total footprint including access/spacing; use ~53-58 sqft/kW for pure panel-only area." },
+      "context": "These figures come from ROOF-mounted residential solar research. The plot planner's 'Energy & Fuel' zone is ground-area allocation, not roof area — if the real system will be roof-mounted (as in both the hereafterfarms and Kfarm references), this zone's sq ft is really about inverter/battery/mounting-frame ground footprint, not the panels themselves, and these sqft/kW figures should NOT be applied directly to it. Flagging this mismatch rather than quietly reusing a roof figure for a ground zone."
+    }
+  },
+
+  "waterCatchment": {
+    "formula": {
+      "gallonsPerSqftPerInch": 0.623,
+      "sourceConfidence": "very high — this is a derived geometric constant (1 sq ft × 1 inch of rain = 1/12 cubic foot = 0.623 gallons), confirmed identically across 7+ independent sources including Texas A&M AgriLife Extension, one of the most widely cited references in this field. Not a rule of thumb, not disputed.",
+      "usage": "Annual gallons = Catchment Area (sq ft) × Annual Rainfall (inches) × 0.623 × Collection Efficiency. Catchment area is the roof (or other collection surface) footprint feeding the system, not the tank zone's own footprint.",
+      "collectionEfficiency": { "value": 0.8, "range": [0.75, 0.9], "note": "Accounts for losses from first-flush diverters, splash, gutter overflow, evaporation. Metal roofs run higher (~95% runoff coefficient); asphalt shingle lower." }
+    },
+    "tankSizing": {
+      "smallSeasonalUse": "200-500 gallons",
+      "gardenIrrigationBuffer": "size for 1-2 months of storage against dry spells",
+      "wholeHouseBackup": "daily usage × longest expected dry-spell days (example: family of 4 at 50 gal/day, 30-day dry spell = 1,500 gallons)"
+    },
+    "note": "This zone's actual water YIELD depends on the catchment area feeding it (a roof elsewhere on the plot), not its own footprint. Its own sq ft is really tank/cistern footprint, similar to the Energy zone's roof-vs-ground mismatch above."
+  },
+
+  "composting": {
+    "cnRatio": {
+      "ideal": "25:1 to 30:1 carbon:nitrogen by weight",
+      "practicalRuleOfThumb": "roughly 3 parts brown material (dry leaves, straw, cardboard) to 1 part green material (fresh grass clippings, kitchen scraps, manure) BY VOLUME — not the same as the elemental 25-30:1 ratio, which needs actual material C:N data. Bulk density varies hugely by material (e.g. 1 cubic yard of manure needs ~150 gallons of dry leaves OR only ~3 gallons of sawdust to hit the same ratio).",
+      "failureModes": "Too much carbon (brown) → decomposition stalls, sits inert for months. Too much nitrogen (green) → goes anaerobic within ~48 hours, smells of ammonia/rotten eggs, attracts flies."
+    },
+    "minimumPileSize": "3ft × 3ft × 3ft (27 cubic feet / 1 cubic yard) — below this, the pile loses heat through surface area faster than microbes generate it, and hot composting (130-160°F, which kills weed seeds and pathogens) doesn't happen. This matches the hereafterfarms reference's '3-bin system, each ~4×4 ft' from earlier in this project — each bin is comfortably above this minimum.",
+    "volumeShrinkage": "40-60% reduction from starting volume to finished compost as material breaks down and moisture evaporates. A 10 cubic-ft starting pile yields roughly 4-6 cubic ft of finished compost — relevant if the tool ever models compost output quantity, not just growth-rate bonuses."
+  },
+
+  "_still_unresearched": [
+    "House + Living and Tool Shed sq ft — not included here on purpose. These are storage/living space allocations, not a biological or physical process with a formula to research. The Kfarm reference (barn 24'x36', greenhouse 12'x16') already gives real-world anchor dimensions if needed.",
+    "Duck/waterfowl-specific stocking density — the Kfarm reference showed a separate duck pond distinct from the goat pen's water; not researched here since it wasn't in the current zone list, but flag if livestock ever splits into species-specific sub-types instead of one generic 'Small Livestock' zone."
+  ]
+}
