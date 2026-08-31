@@ -15,6 +15,7 @@ import { HarvestCellarPanel, PantryItem } from './HarvestCellarPanel';
 import { HomesteadReportModal } from './HomesteadReportModal';
 import { RotationalGrazingModal } from './RotationalGrazingModal';
 import { HomesteadEngineeringModal } from './HomesteadEngineeringModal';
+import { Project001Panel } from './Project001Panel';
 import { hashSeed } from '../engine/random/rng';
 import {
   advanceHomesteadDay,
@@ -57,7 +58,7 @@ export interface ZoneData {
 
 export function PlotPlanner() {
   // Core Configuration
-  const [totalAcreage, setTotalAcreage] = useState<number>(3.5);
+  const [totalAcreage, setTotalAcreage] = useState<number>(0.75);
   const [currentSeason, setCurrentSeason] = useState<'spring' | 'summer' | 'autumn' | 'winter'>('spring');
   const [cycleDay, setCycleDay] = useState<number>(DEFAULT_PLOT_PLANNER_SCENARIO.startDay);
   const [credits, setCredits] = useState<number>(420);
@@ -149,7 +150,7 @@ export function PlotPlanner() {
   // Initialize Zones from default preset
   const defaultPreset = HOMESTEAD_PRESETS[0];
   const [zones, setZones] = useState<ZoneData[]>(() => {
-    const tileSqft = (3.5 * ACRE_SQFT) / (COLS * ROWS);
+    const tileSqft = (0.75 * ACRE_SQFT) / (COLS * ROWS);
     return defaultPreset.zones.map((bz, index) => {
       const isCrop = bz.type === 'crop' || (bz.cropId && bz.cropId !== null);
 
@@ -928,7 +929,7 @@ export function PlotPlanner() {
         <div className="flex items-center gap-2 bg-[#171410] px-3 py-1.5 rounded-lg border border-[#332c22]">
           <span className="text-xs font-mono text-[#8a7f68]">Scale:</span>
           <div className="flex gap-1">
-            {[0.5, 1.0, 3.5, 5.0].map(ac => (
+            {[0.5, 0.75, 1.0, 3.5, 5.0].map(ac => (
               <button
                 key={ac}
                 onClick={() => setTotalAcreage(ac)}
@@ -994,6 +995,8 @@ export function PlotPlanner() {
           </button>
         </div>
       </div>
+
+      <Project001Panel totalAcreage={totalAcreage} />
 
       {/* Preset Blueprints Drawer */}
       <div className="bg-[#171410] border border-[#332c22] p-2.5 rounded-xl flex flex-wrap items-center justify-between gap-2 text-xs font-mono">

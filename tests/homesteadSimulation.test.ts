@@ -114,7 +114,7 @@ export function runHomesteadSimulationTests(): { passed: number; failed: number;
   assert(!/Math\.random\s*\(|Date\.now\s*\(|crypto\.randomUUID\s*\(/.test(simulatorSources), 'Homestead simulator contains no wall-clock or nondeterministic random calls');
 
   assertThrows(() => validateHomesteadScenario({ ...scenario, seed: '' }), 'Empty scenario seed fails closed');
-  assertThrows(() => validateHomesteadScenario({ ...scenario, schemaVersion: 2 }), 'Unsupported scenario schema fails closed');
+  assertThrows(() => validateHomesteadScenario({ ...scenario, schemaVersion: 99 }), 'Unsupported scenario schema fails closed');
   assertThrows(() => validateHomesteadScenario({ ...scenario, startDay: 0 }), 'Invalid scenario startDay fails closed');
   assertThrows(() => validateHomesteadScenario({ ...scenario, controllerMode: 'unsupported' as HomesteadScenarioDefinition['controllerMode'] }), 'Unsupported controller mode fails closed');
 
