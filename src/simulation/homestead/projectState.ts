@@ -167,17 +167,41 @@ export interface FailureRecord {
   recovery?: string;
 }
 
+export type ObservationSourceType = 'SIMULATED_SENSOR' | 'PHYSICAL_SENSOR' | 'MANUAL' | 'IMPORT';
+export type ObservationQuality = 'SIMULATED' | 'MEASURED' | 'ESTIMATED' | 'VALIDATED' | 'SUSPECT' | 'INVALID';
+export type ObservationSourceTrust = 'TRUSTED' | 'UNVERIFIED' | 'REVOKED';
+export type ObservationValidationStatus = 'ACCEPTED' | 'REJECTED' | 'SUSPECT' | 'DUPLICATE';
+
+export interface ObservationValidationSummary {
+  status: ObservationValidationStatus;
+  reasonCodes: string[];
+  normalizedUnit?: string;
+}
+
 export interface ObservationRecord {
   id: string;
-  tick: number;
+  /** Legacy alias retained for compatibility with simulated Project 001 evidence. */
+  tick?: number;
+  propertyId?: string;
+  scenarioId?: string;
+  entityId?: string;
+  simulationTick?: number;
+  observedAt?: string;
+  receivedAt?: string;
   metric: string;
   value: number;
   unit: string;
-  sourceType: 'SIMULATED_SENSOR' | 'PHYSICAL_SENSOR';
+  sourceType: ObservationSourceType;
   sourceId: string;
-  quality: 'SIMULATED' | 'MEASURED' | 'ESTIMATED';
+  quality: ObservationQuality;
   relatedEntity?: string;
+  calibrationRef?: string;
+  provenanceRef?: string;
+  sequence?: number;
   evidenceRefs: string[];
+  validationResult?: ObservationValidationSummary;
+  sourceTrust?: ObservationSourceTrust;
+  verificationRef?: string;
 }
 
 export interface EvidenceRecord {

@@ -6,6 +6,7 @@
 import { runCropsTests } from '../gameplay/farming/tests/crops.test';
 import { runFarmLoopTests } from '../gameplay/world/tests/farm-loop.test';
 import { runDeterminismTests } from './determinism.test';
+import { runDigitalTwinContractTests } from './digitalTwinContracts.test';
 import { runHomesteadSimulationTests } from './homesteadSimulation.test';
 import { runPrerequisiteContractTests } from './prerequisiteContracts.test';
 import { runProject001Tests } from './project001.test';
@@ -38,6 +39,9 @@ console.log(`[System Performance] Passed: ${systemPerformanceResults.passed}, Fa
 const prerequisiteResults = runPrerequisiteContractTests();
 console.log(`[Physical Prerequisites] Passed: ${prerequisiteResults.passed}, Failed: ${prerequisiteResults.failed}`);
 
+const digitalTwinResults = runDigitalTwinContractTests();
+console.log(`[True Number / Digital Twin] Passed: ${digitalTwinResults.passed}, Failed: ${digitalTwinResults.failed}`);
+
 const totalPassed = cropResults.passed
   + farmLoopResults.passed
   + determinismResults.passed
@@ -45,7 +49,8 @@ const totalPassed = cropResults.passed
   + project001Results.passed
   + progressionResults.passed
   + systemPerformanceResults.passed
-  + prerequisiteResults.passed;
+  + prerequisiteResults.passed
+  + digitalTwinResults.passed;
 const totalFailed = cropResults.failed
   + farmLoopResults.failed
   + determinismResults.failed
@@ -53,7 +58,8 @@ const totalFailed = cropResults.failed
   + project001Results.failed
   + progressionResults.failed
   + systemPerformanceResults.failed
-  + prerequisiteResults.failed;
+  + prerequisiteResults.failed
+  + digitalTwinResults.failed;
 
 console.log(`\n========================================`);
 console.log(`Total Passed: ${totalPassed} | Total Failed: ${totalFailed}`);
