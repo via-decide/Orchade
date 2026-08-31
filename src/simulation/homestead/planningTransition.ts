@@ -120,7 +120,7 @@ export function applyHomesteadPlanningIntent(
 
   if (intent.type === 'UNLOCK_CONTENT') {
     const result = performUnlock(state.research, intent.contentId, state.progression.level, context.season, context.day);
-    if (!result.ok) return event('UNLOCK_REJECTED', { contentId: intent.contentId, reason: result.error, balance: state.research.balance });
+    if (result.ok === false) return event('UNLOCK_REJECTED', { contentId: intent.contentId, reason: result.error, balance: state.research.balance });
     return {
       state: { ...state, day: context.day, research: result.state, nextEventSequence: state.nextEventSequence + 1 },
       events: [createHomesteadEvent(state.scenarioId, context.day, state.nextEventSequence, 'CONTENT_UNLOCKED', {

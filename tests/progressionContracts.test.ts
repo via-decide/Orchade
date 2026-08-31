@@ -50,7 +50,7 @@ export function runProgressionContractTests(): { passed: number; failed: number;
   const spent = debit(earned, 10, { gameId: 'orchade', action: 'unlock_crop', contentId: 'garlic', tick: 5 });
   assert(spent.ok && spent.state.balance === 15 && spent.state.totalSpent === 10, 'Debit transition reconciles balance and spending');
   const rejectedDebit = debit(emptyCredits, 10, { gameId: 'orchade', action: 'unlock_crop', contentId: 'garlic', tick: 5 });
-  assert(!rejectedDebit.ok && rejectedDebit.error === 'insufficient' && rejectedDebit.state === emptyCredits, 'Insufficient debit fails without modifying state');
+  assert(rejectedDebit.ok === false && rejectedDebit.error === 'insufficient' && rejectedDebit.state === emptyCredits, 'Insufficient debit fails without modifying state');
 
   let capped = createResearchCreditsState();
   for (let index = 0; index < 205; index += 1) capped = credit(capped, 1, { gameId: 'orchade', action: 'observation', tick: index });
@@ -67,7 +67,7 @@ export function runProgressionContractTests(): { passed: number; failed: number;
   const garlic = performUnlock(funded, 'garlic', 1, 'spring', 2);
   assert(garlic.ok && garlic.state.balance === 90 && garlic.state.unlocks.some(item => item.contentId === 'garlic'), 'Successful unlock deducts cost and records unlock');
   const duplicate = garlic.ok ? performUnlock(garlic.state, 'garlic', 1, 'spring', 3) : garlic;
-  assert(!duplicate.ok && duplicate.error === 'already-unlocked', 'Duplicate unlock fails without a second debit');
+  assert(duplicate.ok === false && duplicate.error === 'already-unlocked', 'Duplicate unlock fails without a second debit');
   assert(UNLOCK_REGISTRY.every(item => Number.isInteger(item.cost) && item.cost >= 0), 'Unlock costs remain explicit integer game-balance assumptions');
 
   const levelTwo = checkLevelUp(1, {
