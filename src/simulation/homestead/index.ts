@@ -6,6 +6,7 @@ export * from './events';
 export * from './knowledge';
 export * from './planningRun';
 export * from './planningTransition';
+export * from './prerequisiteFacts';
 export * from './project001Scenario';
 export * from './projectInitialState';
 export * from './projectRun';
