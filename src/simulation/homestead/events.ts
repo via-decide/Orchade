@@ -45,7 +45,14 @@ export type HomesteadSimulationEventType =
   | 'EXPERIMENT_STARTED'
   | 'EXPERIMENT_COMPLETED'
   | 'LEARNED_RULE_CREATED'
-  | 'METRIC_SNAPSHOT_RECORDED';
+  | 'METRIC_SNAPSHOT_RECORDED'
+  | 'RESEARCH_CREDIT_GRANTED'
+  | 'CONTENT_UNLOCKED'
+  | 'UNLOCK_REJECTED'
+  | 'LEVEL_ADVANCED'
+  | 'LEVEL_ADVANCE_REJECTED'
+  | 'ENVIRONMENT_SKIN_SELECTED'
+  | 'ENVIRONMENT_SKIN_REJECTED';
 
 export interface HomesteadSimulationEvent<TPayload = unknown> {
   id: string;

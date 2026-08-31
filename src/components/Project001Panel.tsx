@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { ProgressionPanel } from './ProgressionPanel';
 import {
   PROJECT_001_BASELINE_SCENARIO,
   advanceProject001RunSession,
@@ -71,6 +72,15 @@ export function Project001Panel({ totalAcreage }: Project001PanelProps) {
   const failures = displayState.knowledge.failures;
   const selectedFailure: FailureRecord | undefined = failures.find(item => item.id === selectedFailureId) ?? failures[0];
   const recentEvents = (session?.events ?? initialState.lastEvents).slice(-8).reverse();
+  const progressionInputs = {
+    pantryItemCount: displayState.household.foodInventoryCalories > 0 ? 1 : 0,
+    totalReusedLbs: displayState.nutrients.cumulativeInternalSupplyUnits,
+    waterStoredGallons: displayState.water.tankLevelL * 0.264172,
+    paidUnlockCount: 0,
+    activePaddockCount: displayState.livestock.length,
+    closedLoopPercent: metrics.nutrientCircularity * 100,
+    solarWatts: scenario.energy.solarCapacityKw * 1000,
+  };
 
   useEffect(() => {
     setSession(null); setRun(null); setComparison(null); setRunning(false); setReplayStatus('idle'); setSelectedFailureId(null);
@@ -136,6 +146,14 @@ export function Project001Panel({ totalAcreage }: Project001PanelProps) {
 
       <div className="h-1.5 rounded-full bg-[#2a241b] overflow-hidden"><div className="h-full bg-[#c9a227] transition-all" style={{ width: `${progress * 100}%` }} /></div>
       <div className="text-[10px] font-mono text-[#8a7f68] flex justify-between"><span>{running ? 'RUNNING' : run ? 'COMPLETE' : session ? 'PAUSED' : 'READY'} · Day {elapsedDays}/{durationDays}</span><span>{replayStatus === 'verified' ? '✓ Replay checksum verified' : replayStatus === 'mismatch' ? '⚠ Replay mismatch' : scenario.simulationVersion}</span></div>
+
+      <ProgressionPanel
+        scenarioId={scenario.id}
+        currentDay={session?.state.day ?? scenario.startDay}
+        season={displayState.climate.season}
+        availableAreaM2={displayState.land.remainingUsableAreaM2}
+        levelInputs={progressionInputs}
+      />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
         <div className="bg-[#1f1b15] border border-[#332c22] rounded-lg p-2.5 space-y-2">
