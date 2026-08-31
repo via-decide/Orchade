@@ -1101,10 +1101,18 @@ const App: React.FC = () => {
     addLog(`Atmospheric Stabilizer Engaged: Local ecosystem weather locked to ${WEATHER_TYPES[targetType].name} for 3 temporal cycles!`, 'success');
   };
 
+  const isPlotPlannerTab = state.activeTab === 'plot_planner';
+
   return (
-    <div className="min-h-screen p-4 sm:p-6 flex flex-col items-center gap-6 max-w-6xl mx-auto">
+    <div
+      className={
+        isPlotPlannerTab
+          ? 'orchade-app-shell w-full'
+          : 'min-h-screen p-4 sm:p-6 flex flex-col items-center gap-6 max-w-6xl mx-auto'
+      }
+    >
       {/* Top Main Mode Switcher */}
-      <div className="w-full flex flex-wrap items-center justify-between bg-[#1f1b15] border border-[#332c22] p-2 rounded-xl gap-2 shadow-lg">
+      <div className={`w-full flex flex-wrap items-center justify-between bg-[#1f1b15] border border-[#332c22] p-2 rounded-xl gap-2 shadow-lg ${isPlotPlannerTab ? 'flex-none' : ''}`}>
         <div className="flex items-center gap-2 flex-wrap">
           <button
             onClick={() => setState(p => ({ ...p, activeTab: 'plot_planner' }))}
@@ -1136,7 +1144,7 @@ const App: React.FC = () => {
       </div>
 
       {state.activeTab === 'plot_planner' ? (
-        <div className="w-full">
+        <div className="w-full flex-1 min-h-0 flex flex-col overflow-hidden">
           <PlotPlanner />
         </div>
       ) : (

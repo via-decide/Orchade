@@ -10,12 +10,18 @@ import {
 } from '../data/homesteadEngineering';
 import { CompanionMatrixModal } from './CompanionMatrixModal';
 import { RotationPlannerModal } from './RotationPlannerModal';
-import { SoilNutrientPanel, SoilState } from './SoilNutrientPanel';
-import { HarvestCellarPanel, PantryItem } from './HarvestCellarPanel';
+import { SoilState } from './SoilNutrientPanel';
+import { PantryItem } from './HarvestCellarPanel';
 import { HomesteadReportModal } from './HomesteadReportModal';
 import { RotationalGrazingModal } from './RotationalGrazingModal';
 import { HomesteadEngineeringModal } from './HomesteadEngineeringModal';
-import { Project001Panel } from './Project001Panel';
+import { PlannerHeader } from './PlannerHeader';
+import { PersistentPlotBoard } from './PersistentPlotBoard';
+import { PlannerTabBar, PlannerPrimaryTab } from './PlannerTabBar';
+import { PlannerPlanPanel } from './PlannerPlanPanel';
+import { PlannerOperatePanel, OperateSubView } from './PlannerOperatePanel';
+import { PlannerSystemPanel } from './PlannerSystemPanel';
+import { PlannerEvidencePanel } from './PlannerEvidencePanel';
 import { hashSeed } from '../engine/random/rng';
 import {
   advanceHomesteadDay,
@@ -123,7 +129,8 @@ export function PlotPlanner() {
   const [isGrazingModalOpen, setIsGrazingModalOpen] = useState<boolean>(false);
   const [isEngineeringModalOpen, setIsEngineeringModalOpen] = useState<boolean>(false);
 
-  const [activeBottomTab, setActiveBottomTab] = useState<'details' | 'soil' | 'cellar' | 'grazing' | 'energy' | 'log'>('details');
+  const [activePrimaryTab, setActivePrimaryTab] = useState<PlannerPrimaryTab>('operate');
+  const [operateSubView, setOperateSubView] = useState<OperateSubView>('details');
   const [zoomMicroGrid, setZoomMicroGrid] = useState<boolean>(false);
 
   // Overlays
@@ -880,759 +887,96 @@ export function PlotPlanner() {
   const paddockBreed = activePaddockOnSelected ? LIVESTOCK_BREEDS[activePaddockOnSelected.breedId] : null;
 
   return (
-    <div className="w-full space-y-4 font-sans text-[#f4ecd8]">
-      
-      {/* Top Phase 3 Master Homestead Toolbar */}
-      <div className="bg-[#1f1b15] border border-[#332c22] p-3 rounded-xl shadow-lg flex flex-wrap items-center justify-between gap-3">
-        
-        {/* Left: Cycle, Season & Treasury */}
-        <div className="flex items-center gap-2.5 flex-wrap">
-          <div className="flex items-center gap-2 bg-[#171410] px-3 py-1.5 rounded-lg border border-[#332c22]">
-            <span className="text-xl">{seasonInfo.icon}</span>
-            <div>
-              <div className="text-[10px] text-[#8a7f68] font-mono uppercase tracking-wider">Active Season</div>
-              <div className="text-xs font-bold font-mono text-[#f4ecd8] flex items-center gap-1.5">
-                <span>{seasonInfo.name.toUpperCase()}</span>
-                <span className="text-[10px] text-[#c9a227]">({seasonInfo.avgTempF}°F · {seasonInfo.sunlightHours}h sun)</span>
-              </div>
-            </div>
-          </div>
+    <div className="orchade-shell gap-2 p-2 font-sans text-[#f4ecd8]">
+      <PlannerHeader
+        seasonInfo={seasonInfo}
+        cycleDay={cycleDay}
+        waterGallons={waterState.currentStoredGallons}
+        batteryKwh={solarState.currentBatteryStorageKwh}
+        credits={credits}
+        totalAcreage={totalAcreage}
+        selectedZoneLabel={`#${selectedZone.id} ${selectedZone.name}`}
+        selectedZoneType={selectedZone.type}
+        onAdvanceDay={handleAdvanceDay}
+      />
 
-          <div className="flex items-center gap-2 bg-[#171410] px-3 py-1.5 rounded-lg border border-[#332c22]">
-            <div>
-              <div className="text-[10px] text-[#8a7f68] font-mono uppercase tracking-wider">Temporal Cycle</div>
-              <div className="text-xs font-bold font-mono text-[#81c784]">DAY {cycleDay}</div>
-            </div>
-          </div>
+      <PersistentPlotBoard
+        cols={COLS}
+        rows={ROWS}
+        zones={zones}
+        paddocks={paddocks}
+        selectedZoneId={selectedZoneId}
+        draggingZoneId={draggingZoneId}
+        dragPreviewPos={dragPreviewPos}
+        dragHasCollision={dragHasCollision}
+        zoneEffect={zoneEffect}
+        toolMode={toolMode}
+        setToolMode={setToolMode}
+        showTopography={showTopography}
+        themeBg={seasonInfo.themeBg}
+        gridContainerRef={gridContainerRef}
+        onZoneMouseDown={handleZoneMouseDown}
+        onZoneMouseEnter={handleZoneMouseEnter}
+      />
 
-          {/* Quick Microgrid & Hydrology Telemetry Badge */}
-          <div className="hidden md:flex items-center gap-3 bg-[#171410] px-3 py-1.5 rounded-lg border border-[#332c22] text-xs font-mono">
-            <div>
-              <div className="text-[9.5px] text-[#8a7f68] uppercase">💧 Water</div>
-              <div className="text-[#64b5f6] font-bold">{Math.round(waterState.currentStoredGallons)} gal</div>
-            </div>
-            <div className="border-l border-[#332c22] pl-3">
-              <div className="text-[9.5px] text-[#8a7f68] uppercase">⚡ Battery</div>
-              <div className="text-[#e9c46a] font-bold">{solarState.currentBatteryStorageKwh.toFixed(1)} kWh</div>
-            </div>
-          </div>
+      <PlannerTabBar active={activePrimaryTab} onChange={setActivePrimaryTab} />
 
-          <div className="flex items-center gap-2 bg-[#171410] px-3 py-1.5 rounded-lg border border-[#332c22]">
-            <div>
-              <div className="text-[10px] text-[#8a7f68] font-mono uppercase tracking-wider">Homestead Treasury</div>
-              <div className="text-xs font-bold font-mono text-[#c9a227]">{credits.toLocaleString()} 🪙</div>
-            </div>
-          </div>
+      <div className="orchade-workspace">
+        <div className="orchade-workspace-pane h-full" hidden={activePrimaryTab !== 'plan'}>
+          <PlannerPlanPanel
+            totalAcreage={totalAcreage}
+            setTotalAcreage={setTotalAcreage}
+            presets={HOMESTEAD_PRESETS}
+            onLoadPreset={handleLoadPreset}
+            showSynergyLines={showSynergyLines}
+            setShowSynergyLines={setShowSynergyLines}
+            showTopography={showTopography}
+            setShowTopography={setShowTopography}
+            onOpenCompanion={() => setIsCompanionModalOpen(true)}
+            onOpenRotation={() => setIsRotationModalOpen(true)}
+          />
         </div>
 
-        {/* Center: Land Scale Control */}
-        <div className="flex items-center gap-2 bg-[#171410] px-3 py-1.5 rounded-lg border border-[#332c22]">
-          <span className="text-xs font-mono text-[#8a7f68]">Scale:</span>
-          <div className="flex gap-1">
-            {[0.5, 0.75, 1.0, 3.5, 5.0].map(ac => (
-              <button
-                key={ac}
-                onClick={() => setTotalAcreage(ac)}
-                className={`px-2 py-1 rounded text-xs font-mono font-bold transition-all cursor-pointer ${
-                  totalAcreage === ac
-                    ? 'bg-[#c9a227] text-[#171410]'
-                    : 'bg-[#221c15] text-[#b8ab8e] hover:text-white border border-[#332c22]'
-                }`}
-              >
-                {ac} ac
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Right: Modals & Next Day Advance */}
-        <div className="flex items-center gap-2 flex-wrap">
-          <button
-            onClick={() => setIsGrazingModalOpen(true)}
-            className="px-3 py-1.5 rounded-lg text-xs font-mono font-bold bg-[#262016] hover:bg-[#3d3323] text-[#ffb74d] border border-[#ffb74d]/40 flex items-center gap-1.5 transition-all cursor-pointer"
-            title="Open Rotational Grazing & Animal Tractors"
-          >
-            <span>🐑 Grazing ({paddocks.length})</span>
-          </button>
-
-          <button
-            onClick={() => setIsEngineeringModalOpen(true)}
-            className="px-3 py-1.5 rounded-lg text-xs font-mono font-bold bg-[#262016] hover:bg-[#3d3323] text-[#64b5f6] border border-[#1976d2]/40 flex items-center gap-1.5 transition-all cursor-pointer"
-            title="Open Off-Grid Solar & Hydrology Engineering"
-          >
-            <span>⚡ Utilities & Solar</span>
-          </button>
-
-          <button
-            onClick={() => setIsCompanionModalOpen(true)}
-            className="px-3 py-1.5 rounded-lg text-xs font-mono font-bold bg-[#262016] hover:bg-[#3d3323] text-[#e9c46a] border border-[#8a6f1c]/40 flex items-center gap-1.5 transition-all cursor-pointer"
-            title="Open Scientific Companion Planting Matrix"
-          >
-            <span>🌿 Companion</span>
-          </button>
-
-          <button
-            onClick={() => setIsRotationModalOpen(true)}
-            className="px-3 py-1.5 rounded-lg text-xs font-mono font-bold bg-[#262016] hover:bg-[#3d3323] text-[#81c784] border border-[#2e4726] flex items-center gap-1.5 transition-all cursor-pointer"
-            title="Open 4-Year Crop Rotation Planner"
-          >
-            <span>🔄 Rotation</span>
-          </button>
-
-          <button
-            onClick={() => setIsReportModalOpen(true)}
-            className="px-3 py-1.5 rounded-lg text-xs font-mono font-bold bg-[#262016] hover:bg-[#3d3323] text-[#b8ab8e] border border-[#332c22] flex items-center gap-1.5 transition-all cursor-pointer"
-            title="Export or Print Homestead Agronomic Audit"
-          >
-            <span>📋 Audit</span>
-          </button>
-
-          <button
-            onClick={handleAdvanceDay}
-            className="px-4 py-1.5 rounded-lg text-xs font-mono font-bold bg-[#c9a227] hover:bg-[#e0b738] text-[#171410] shadow-md flex items-center gap-1.5 transition-all cursor-pointer"
-          >
-            <span>⏩ Next Day</span>
-          </button>
-        </div>
-      </div>
-
-      <Project001Panel totalAcreage={totalAcreage} />
-
-      {/* Preset Blueprints Drawer */}
-      <div className="bg-[#171410] border border-[#332c22] p-2.5 rounded-xl flex flex-wrap items-center justify-between gap-2 text-xs font-mono">
-        <div className="flex items-center gap-2">
-          <span className="text-[#8a7f68]">Permaculture Templates:</span>
-          <div className="flex gap-1.5 flex-wrap">
-            {HOMESTEAD_PRESETS.map(p => (
-              <button
-                key={p.id}
-                onClick={() => handleLoadPreset(p)}
-                className="px-2.5 py-1 rounded bg-[#221c15] hover:bg-[#332c22] border border-[#3d3323] text-[#f4ecd8] text-[11px] transition-all cursor-pointer flex items-center gap-1"
-              >
-                <span>📐 {p.name.split('-Acre')[0]}-Acre</span>
-                <span className="text-[9px] text-[#c9a227]">({p.badge})</span>
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Overlay Toggles */}
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setShowSynergyLines(!showSynergyLines)}
-            className={`px-2.5 py-1 rounded text-[11px] font-mono transition-all cursor-pointer ${
-              showSynergyLines ? 'bg-[#81c784]/20 text-[#81c784] border border-[#81c784]/40' : 'bg-[#221c15] text-[#8a7f68] border border-[#332c22]'
-            }`}
-          >
-            {showSynergyLines ? '✨ Synergies ON' : '✨ Synergies OFF'}
-          </button>
-
-          <button
-            onClick={() => setShowTopography(!showTopography)}
-            className={`px-2.5 py-1 rounded text-[11px] font-mono transition-all cursor-pointer ${
-              showTopography ? 'bg-[#64b5f6]/20 text-[#64b5f6] border border-[#64b5f6]/40' : 'bg-[#221c15] text-[#8a7f68] border border-[#332c22]'
-            }`}
-          >
-            {showTopography ? '⛰️ Topography ON' : '⛰️ Topography OFF'}
-          </button>
-        </div>
-      </div>
-
-      {/* Main Grid & Telemetry Layout */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
-        
-        {/* Left / Center (cols 1-8): Interactive 24x18 Draggable Site Plan */}
-        <div className="lg:col-span-8 space-y-3">
-          <div className="bg-[#1f1b15] border border-[#332c22] p-3 rounded-xl shadow-lg relative">
-            
-            {/* Header & Tool Mode Palette */}
-            <div className="flex flex-wrap justify-between items-center mb-2.5 px-1 gap-2 text-xs font-mono">
-              <div className="flex items-center gap-2">
-                <span className="text-[#8a7f68] font-bold">Active Tool:</span>
-                <div className="flex gap-1 bg-[#171410] p-1 rounded-lg border border-[#332c22]">
-                  <button
-                    onClick={() => setToolMode('select')}
-                    className={`px-2.5 py-1 rounded text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-                      toolMode === 'select'
-                        ? 'bg-[#c9a227] text-[#171410] shadow'
-                        : 'text-[#b8ab8e] hover:text-white hover:bg-[#262016]'
-                    }`}
-                    title="Select and drag zones to reorganize layout"
-                  >
-                    <span>🖐️ Move / Select</span>
-                  </button>
-
-                  <button
-                    onClick={() => setToolMode('tend')}
-                    className={`px-2.5 py-1 rounded text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-                      toolMode === 'tend'
-                        ? 'bg-[#388e3c] text-white shadow'
-                        : 'text-[#81c784] hover:text-white hover:bg-[#262016]'
-                    }`}
-                    title="Click any zone on the grid to weed & cultivate with synergy boost"
-                  >
-                    <span>🌿 Weed & Tend Tool</span>
-                  </button>
-
-                  <button
-                    onClick={() => setToolMode('water')}
-                    className={`px-2.5 py-1 rounded text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-                      toolMode === 'water'
-                        ? 'bg-[#1976d2] text-white shadow'
-                        : 'text-[#64b5f6] hover:text-white hover:bg-[#262016]'
-                    }`}
-                    title="Click any zone on the grid to irrigate"
-                  >
-                    <span>💧 Water Tool</span>
-                  </button>
-
-                  <button
-                    onClick={() => setToolMode('harvest')}
-                    className={`px-2.5 py-1 rounded text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-                      toolMode === 'harvest'
-                        ? 'bg-[#f57c00] text-white shadow'
-                        : 'text-[#ffb74d] hover:text-white hover:bg-[#262016]'
-                    }`}
-                    title="Click ready crops to harvest directly from the grid"
-                  >
-                    <span>🌾 Harvest Tool</span>
-                  </button>
-                </div>
-              </div>
-
-              <div className="text-[11px] text-[#b8ab8e] font-mono">
-                {toolMode === 'select' && <span>🖐️ Drag zones to move · Click to inspect</span>}
-                {toolMode === 'tend' && <span className="text-[#81c784]">🌿 Click any zone to weed & tend</span>}
-                {toolMode === 'water' && <span className="text-[#64b5f6]">💧 Click any zone to irrigate</span>}
-                {toolMode === 'harvest' && <span className="text-[#ffb74d]">🌾 Click ripe zones to harvest</span>}
-              </div>
-            </div>
-
-            {/* Grid Container */}
-            <div
-              ref={gridContainerRef}
-              style={{ backgroundColor: seasonInfo.themeBg }}
-              className={`w-full aspect-[4/3] border-2 border-[#3d3323] rounded-lg relative overflow-hidden select-none shadow-inner ${
-                toolMode === 'select' ? 'cursor-default' : 'cursor-crosshair'
-              }`}
-            >
-              {/* Background 24x18 Grid Lines */}
-              <div
-                className="absolute inset-0 pointer-events-none opacity-20"
-                style={{
-                  backgroundImage: `
-                    linear-gradient(to right, #8a7f68 1px, transparent 1px),
-                    linear-gradient(to bottom, #8a7f68 1px, transparent 1px)
-                  `,
-                  backgroundSize: `${100 / COLS}% ${100 / ROWS}%`
-                }}
-              />
-
-              {/* Topography Contours if active */}
-              {showTopography && (
-                <div className="absolute inset-0 pointer-events-none opacity-25 flex flex-col justify-between p-2 text-[9px] font-mono text-[#64b5f6]">
-                  <div>▲ High Elevation Ridge (North Keyline Swale)</div>
-                  <div>— Mid-Slope Fertile Loam & Pasture —</div>
-                  <div>▼ Lowland Water Catchment & Irrigation Pond</div>
-                </div>
-              )}
-
-              {/* Render Zones */}
-              {zones.map(z => {
-                const isSelected = z.id === selectedZoneId;
-                const isDragging = z.id === draggingZoneId;
-                const crop = z.plant?.cropId ? EXPANDED_CROP_CATALOG[z.plant.cropId] : null;
-                const stage = crop ? crop.growthStages[z.plant.stageIndex] || crop.growthStages[0] : null;
-
-                // Check if this zone has an animal paddock
-                const zonePaddock = paddocks.find(p => p.zoneId === z.id);
-                const zoneBreed = zonePaddock ? LIVESTOCK_BREEDS[zonePaddock.breedId] : null;
-
-                const leftPct = ((z.col - 1) / COLS) * 100;
-                const topPct = ((z.row - 1) / ROWS) * 100;
-                const widthPct = (z.w / COLS) * 100;
-                const heightPct = (z.h / ROWS) * 100;
-
-                const hasActiveEffect = zoneEffect?.zoneId === z.id;
-
-                return (
-                  <div
-                    key={z.id}
-                    onMouseDown={(e) => handleZoneMouseDown(e, z)}
-                    onMouseEnter={() => handleZoneMouseEnter(z)}
-                    style={{
-                      left: `${leftPct}%`,
-                      top: `${topPct}%`,
-                      width: `${widthPct}%`,
-                      height: `${heightPct}%`,
-                      backgroundColor: z.color
-                    }}
-                    className={`absolute rounded transition-shadow flex flex-col justify-between p-1.5 border-2 ${
-                      toolMode === 'select' ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer hover:brightness-110'
-                    } ${
-                      isSelected
-                        ? 'border-[#f4ecd8] shadow-[0_0_15px_rgba(201,162,39,0.5)] z-20 ring-2 ring-[#c9a227]'
-                        : 'border-black/40 hover:border-white/50 z-10'
-                    } ${isDragging ? 'opacity-30' : 'opacity-95'}`}
-                  >
-                    {/* Floating Action Badge Feedback */}
-                    {hasActiveEffect && (
-                      <div
-                        className="absolute -top-3 left-1/2 -translate-x-1/2 px-2 py-0.5 rounded-full text-[10px] font-mono font-bold text-white shadow-xl z-40 animate-bounce flex items-center gap-1 whitespace-nowrap border border-white/40"
-                        style={{ backgroundColor: zoneEffect.color }}
-                      >
-                        <span>{zoneEffect.icon}</span>
-                        <span>{zoneEffect.text}</span>
-                      </div>
-                    )}
-
-                    {/* Zone Badge Header */}
-                    <div className="flex justify-between items-start leading-none pointer-events-none">
-                      <span className="text-[9px] font-mono font-bold px-1 py-0.5 bg-black/60 rounded text-[#f4ecd8]">
-                        #{z.id}
-                      </span>
-                      <div className="flex gap-1 items-center">
-                        {zoneBreed && (
-                          <span className="text-xs bg-black/60 px-1 py-0.5 rounded" title={zoneBreed.name}>
-                            {zoneBreed.icon}
-                          </span>
-                        )}
-                        {crop && (
-                          <span className="text-xs">{stage?.icon || '🌱'}</span>
-                        )}
-                        {z.type === 'water' && <span className="text-xs">💧</span>}
-                        {z.type === 'compost' && <span className="text-xs">🍂</span>}
-                        {z.type === 'livestock' && !zoneBreed && <span className="text-xs">🐑</span>}
-                        {z.type === 'building' && <span className="text-xs">🏡</span>}
-                      </div>
-                    </div>
-
-                    {/* Zone Name & Specs */}
-                    <div className="pointer-events-none">
-                      <div className="text-[10px] font-bold text-[#f4ecd8] truncate leading-tight drop-shadow">
-                        {z.name}
-                      </div>
-                      <div className="text-[8.5px] text-[#f4ecd8]/80 font-mono leading-none mt-0.5">
-                        {Math.round(z.sqft).toLocaleString()} sq ft
-                      </div>
-                    </div>
-
-                    {/* Crop Moisture & Nutrients Mini Bars */}
-                    {z.plant && z.plant.cropId && (
-                      <div className="w-full space-y-0.5 pointer-events-none">
-                        <div className="w-full bg-black/50 h-1 rounded-full overflow-hidden">
-                          <div
-                            className="bg-[#64b5f6] h-full transition-all duration-300"
-                            style={{ width: `${z.plant.water}%` }}
-                          />
-                        </div>
-                        <div className="w-full bg-black/50 h-1 rounded-full overflow-hidden">
-                          <div
-                            className="bg-[#81c784] h-full transition-all duration-300"
-                            style={{ width: `${z.plant.health}%` }}
-                          />
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-
-              {/* Drag Preview Outline with Collision Feedback */}
-              {dragPreviewPos && draggingZoneId && (
-                <div
-                  style={{
-                    left: `${((dragPreviewPos.col - 1) / COLS) * 100}%`,
-                    top: `${((dragPreviewPos.row - 1) / ROWS) * 100}%`,
-                    width: `${((zones.find(z => z.id === draggingZoneId)?.w || 1) / COLS) * 100}%`,
-                    height: `${((zones.find(z => z.id === draggingZoneId)?.h || 1) / ROWS) * 100}%`
-                  }}
-                  className={`absolute border-2 border-dashed pointer-events-none z-30 rounded transition-colors duration-100 flex items-center justify-center ${
-                    dragHasCollision
-                      ? 'border-[#e57373] bg-[#e57373]/30 text-[#ffcdd2]'
-                      : 'border-[#81c784] bg-[#81c784]/25 text-[#c8e6c9]'
-                  }`}
-                >
-                  <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 bg-black/70 rounded">
-                    {dragHasCollision ? '⚠️ Blocked' : '✓ Drop Here'}
-                  </span>
-                </div>
-              )}
-            </div>
-
-            {/* Grid Footnote */}
-            <div className="flex justify-between items-center mt-2 px-1 text-[11px] font-mono text-[#8a7f68]">
-              <span>Snap-to-grid collision detection active</span>
-              <span className="text-[#81c784]">Click or drag any zone · Use Weed & Tend tool directly on grid</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Right (cols 9-12): Zone Telemetry, Agronomy & Actions */}
-        <div className="lg:col-span-4 space-y-3">
-          <div className="bg-[#1f1b15] border border-[#332c22] p-4 rounded-xl shadow-lg space-y-4">
-            
-            {/* Zone Title Header */}
-            <div className="flex justify-between items-start border-b border-[#332c22] pb-3">
-              <div>
-                <div className="text-[10px] text-[#8a7f68] font-mono uppercase tracking-wider">
-                  Zone Inspector (Col {selectedZone.col}, Row {selectedZone.row})
-                </div>
-                <h3 className="text-base font-bold text-[#f4ecd8] font-mono">
-                  #{selectedZone.id} {selectedZone.name}
-                </h3>
-                <div className="text-xs text-[#81c784] font-mono mt-0.5">
-                  {Math.round(selectedZone.sqft).toLocaleString()} sq ft ({selectedZone.w}×{selectedZone.h} tiles)
-                </div>
-              </div>
-
-              <div className="text-right">
-                <span className="text-xs font-mono font-bold px-2 py-1 rounded bg-[#262016] border border-[#3d3323] text-[#c9a227]">
-                  {selectedZone.type.toUpperCase()}
-                </span>
-              </div>
-            </div>
-
-            {/* Phase 3 Animal Paddock Info if Present */}
-            {activePaddockOnSelected && paddockBreed && (
-              <div className="bg-[#261f14] border border-[#8a6f1c] p-2.5 rounded-lg text-xs font-mono space-y-1">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-1.5 text-[#f4ecd8] font-bold">
-                    <span>{paddockBreed.icon}</span>
-                    <span>{paddockBreed.name}</span>
-                  </div>
-                  <span className="text-[10px] text-[#81c784] bg-[#2e7d32]/20 px-1.5 py-0.5 rounded">
-                    Day {activePaddockOnSelected.daysInPaddock}/{paddockBreed.rotationalDays}
-                  </span>
-                </div>
-                <div className="text-[10.5px] text-[#b8ab8e]">
-                  Pasture Forage: <b>{Math.round(activePaddockOnSelected.pastureBiomass)}%</b> · Yield in <b>{Math.max(0, paddockBreed.outputs.cycleDays - activePaddockOnSelected.cycleProgress)} days</b>
-                </div>
-              </div>
-            )}
-
-            {/* Crop Details & Growth Stage */}
-            {selectedCrop ? (
-              <div className="space-y-3">
-                <div className="bg-[#171410] border border-[#332c22] p-3 rounded-lg flex items-center justify-between">
-                  <div className="flex items-center gap-2.5">
-                    <span className="text-2xl">{selectedCrop.growthStages[selectedZone.plant.stageIndex]?.icon || '🌱'}</span>
-                    <div>
-                      <div className="text-xs font-bold text-[#f4ecd8]">{selectedCrop.displayName}</div>
-                      <div className="text-[10px] text-[#8a7f68] font-mono italic">{selectedCrop.scientificName}</div>
-                    </div>
-                  </div>
-
-                  <div className="text-right font-mono text-xs">
-                    <div className="text-[#81c784] font-bold">
-                      {selectedCrop.growthStages[selectedZone.plant.stageIndex]?.name}
-                    </div>
-                    <div className="text-[10px] text-[#8a7f68]">
-                      Stage {selectedZone.plant.stageIndex + 1}/{selectedCrop.growthStages.length}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Vitals */}
-                <div className="grid grid-cols-2 gap-2 text-xs font-mono">
-                  <div className="bg-[#171410] p-2 rounded border border-[#2a241b]">
-                    <div className="flex justify-between text-[#8a7f68] text-[10px]">
-                      <span>Hydration</span>
-                      <span className="text-[#64b5f6] font-bold">{Math.round(selectedZone.plant.water)}%</span>
-                    </div>
-                    <div className="w-full bg-black/40 h-1.5 rounded-full overflow-hidden mt-1">
-                      <div className="bg-[#64b5f6] h-full" style={{ width: `${selectedZone.plant.water}%` }} />
-                    </div>
-                  </div>
-
-                  <div className="bg-[#171410] p-2 rounded border border-[#2a241b]">
-                    <div className="flex justify-between text-[#8a7f68] text-[10px]">
-                      <span>Vigor / Health</span>
-                      <span className="text-[#81c784] font-bold">{Math.round(selectedZone.plant.health)}%</span>
-                    </div>
-                    <div className="w-full bg-black/40 h-1.5 rounded-full overflow-hidden mt-1">
-                      <div className="bg-[#81c784] h-full" style={{ width: `${selectedZone.plant.health}%` }} />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Agronomic Actions */}
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    onClick={() => handleHydrateZone(selectedZone.id)}
-                    className="p-2 rounded bg-[#1976d2]/20 hover:bg-[#1976d2]/30 border border-[#1976d2]/40 text-[#64b5f6] text-xs font-mono font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5"
-                  >
-                    <span>💧 Water Zone</span>
-                  </button>
-
-                  <button
-                    onClick={() => handleTendZone(selectedZone.id)}
-                    className="p-2 rounded bg-[#388e3c]/20 hover:bg-[#388e3c]/30 border border-[#388e3c]/40 text-[#81c784] text-xs font-mono font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5"
-                  >
-                    <span>🌿 Weed & Tend</span>
-                  </button>
-                </div>
-
-                {/* Harvest Button if ready */}
-                {selectedZone.plant.isHarvestable && (
-                  <button
-                    onClick={() => handleHarvestZone(selectedZone.id)}
-                    className="w-full p-2.5 rounded bg-[#c9a227] hover:bg-[#e0b738] text-[#171410] text-xs font-mono font-bold shadow-lg animate-pulse transition-all cursor-pointer flex items-center justify-center gap-2"
-                  >
-                    <span>🌾 Harvest Crop Yield</span>
-                  </button>
-                )}
-
-                {/* Micro-grid preview trigger */}
-                <button
-                  onClick={() => setZoomMicroGrid(true)}
-                  className="w-full p-2 rounded bg-[#221c15] hover:bg-[#2e261d] border border-[#3d3323] text-[#b8ab8e] hover:text-[#f4ecd8] text-xs font-mono transition-all cursor-pointer flex items-center justify-center gap-1.5"
-                >
-                  <span>🔍 Zoom Micro-Grid Plant Matrix</span>
-                </button>
-              </div>
-            ) : (
-              <div className="p-4 bg-[#171410] border border-dashed border-[#332c22] rounded-lg text-center text-xs text-[#8a7f68]">
-                <span>Building / Utility Zone. Powers and stores resources for adjacent agroecological guilds.</span>
-              </div>
-            )}
-
-            {/* Active Neighbor Synergies */}
-            <div className="space-y-1.5 pt-2 border-t border-[#332c22]">
-              <div className="text-xs font-mono font-bold text-[#e9c46a] uppercase tracking-wider flex items-center justify-between">
-                <span>Neighbor Synergies ({selectedSynergies.length})</span>
-                <span className="text-[10px] text-[#8a7f68]">Active Grid Guilds</span>
-              </div>
-
-              {selectedSynergies.length === 0 ? (
-                <div className="text-[11px] text-[#8a7f68] italic">No active adjacent guild bonuses.</div>
-              ) : (
-                <div className="space-y-1 max-h-40 overflow-y-auto pr-1">
-                  {selectedSynergies.map((syn, idx) => (
-                    <div
-                      key={idx}
-                      className={`p-2 rounded text-[11px] border leading-tight ${
-                        syn.type === 'bonus'
-                          ? 'bg-[#182315] border-[#2e4726] text-[#c8e6c9]'
-                          : 'bg-[#261614] border-[#4d2621] text-[#ffcdd2]'
-                      }`}
-                    >
-                      <div className="font-bold flex justify-between">
-                        <span>{syn.title}</span>
-                        <span className="text-[9px] opacity-70 font-mono">{syn.source}</span>
-                      </div>
-                      <div className="text-[10px] opacity-90 mt-0.5">{syn.desc}</div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Bottom Tabs: Soil Pedology / Root Cellar & Market / Rotational Grazing / Utilities / Homestead Log */}
-      <div className="space-y-3">
-        <div className="flex gap-2 border-b border-[#332c22] pb-2 text-xs font-mono overflow-x-auto">
-          <button
-            onClick={() => setActiveBottomTab('details')}
-            className={`px-3 py-2 rounded-lg font-bold shrink-0 transition-all cursor-pointer ${
-              activeBottomTab === 'details'
-                ? 'bg-[#c9a227] text-[#171410]'
-                : 'bg-[#1f1b15] text-[#b8ab8e] hover:text-white border border-[#332c22]'
-            }`}
-          >
-            📊 Zone #{selectedZone.id} Overview
-          </button>
-
-          <button
-            onClick={() => setActiveBottomTab('soil')}
-            className={`px-3 py-2 rounded-lg font-bold shrink-0 transition-all cursor-pointer ${
-              activeBottomTab === 'soil'
-                ? 'bg-[#c9a227] text-[#171410]'
-                : 'bg-[#1f1b15] text-[#b8ab8e] hover:text-white border border-[#332c22]'
-            }`}
-          >
-            🧪 Soil Chemistry & Pedology
-          </button>
-
-          <button
-            onClick={() => setActiveBottomTab('grazing')}
-            className={`px-3 py-2 rounded-lg font-bold shrink-0 transition-all cursor-pointer ${
-              activeBottomTab === 'grazing'
-                ? 'bg-[#c9a227] text-[#171410]'
-                : 'bg-[#1f1b15] text-[#b8ab8e] hover:text-white border border-[#332c22]'
-            }`}
-          >
-            🐑 Rotational Grazing ({paddocks.length} herds)
-          </button>
-
-          <button
-            onClick={() => setActiveBottomTab('energy')}
-            className={`px-3 py-2 rounded-lg font-bold shrink-0 transition-all cursor-pointer ${
-              activeBottomTab === 'energy'
-                ? 'bg-[#c9a227] text-[#171410]'
-                : 'bg-[#1f1b15] text-[#b8ab8e] hover:text-white border border-[#332c22]'
-            }`}
-          >
-            ⚡ Water & Solar Microgrid
-          </button>
-
-          <button
-            onClick={() => setActiveBottomTab('cellar')}
-            className={`px-3 py-2 rounded-lg font-bold shrink-0 transition-all cursor-pointer ${
-              activeBottomTab === 'cellar'
-                ? 'bg-[#c9a227] text-[#171410]'
-                : 'bg-[#1f1b15] text-[#b8ab8e] hover:text-white border border-[#332c22]'
-            }`}
-          >
-            🛖 Root Cellar & Seasonal Market ({pantry.length} items)
-          </button>
-
-          <button
-            onClick={() => setActiveBottomTab('log')}
-            className={`px-3 py-2 rounded-lg font-bold shrink-0 transition-all cursor-pointer ${
-              activeBottomTab === 'log'
-                ? 'bg-[#c9a227] text-[#171410]'
-                : 'bg-[#1f1b15] text-[#b8ab8e] hover:text-white border border-[#332c22]'
-            }`}
-          >
-            📜 Activity Log
-          </button>
-        </div>
-
-        {activeBottomTab === 'soil' && (
-          <SoilNutrientPanel
-            zone={selectedZone}
-            soil={selectedZone.soil}
+        <div className="orchade-workspace-pane h-full" hidden={activePrimaryTab !== 'operate'}>
+          <PlannerOperatePanel
+            activeSubView={operateSubView}
+            setActiveSubView={setOperateSubView}
+            selectedZone={selectedZone}
+            selectedCrop={selectedCrop}
+            selectedSynergies={selectedSynergies}
+            activePaddockOnSelected={activePaddockOnSelected}
+            paddockBreed={paddockBreed}
+            onHydrateZone={handleHydrateZone}
+            onTendZone={handleTendZone}
+            onHarvestZone={handleHarvestZone}
+            onZoomMicroGrid={() => setZoomMicroGrid(true)}
             credits={credits}
             onApplyAmendment={handleApplyAmendment}
-          />
-        )}
-
-        {activeBottomTab === 'grazing' && (
-          <div className="bg-[#171410] border border-[#332c22] p-4 rounded-xl space-y-3">
-            <div className="flex items-center justify-between border-b border-[#332c22] pb-2">
-              <div className="flex items-center gap-2">
-                <span className="text-xl">🐑</span>
-                <div>
-                  <h3 className="text-sm font-bold font-mono text-[#f4ecd8]">Active Livestock Herds & Silvopasture</h3>
-                  <span className="text-[11px] text-[#8a7f68]">Rotational animal tractors cycle fertility into soil beds</span>
-                </div>
-              </div>
-              <button
-                onClick={() => setIsGrazingModalOpen(true)}
-                className="px-3 py-1 rounded bg-[#c9a227] text-[#171410] font-mono font-bold text-xs cursor-pointer"
-              >
-                + Manage Herds & Paddocks
-              </button>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-              {paddocks.map(p => {
-                const breed = LIVESTOCK_BREEDS[p.breedId];
-                const zone = zones.find(z => z.id === p.zoneId);
-                return (
-                  <div key={p.id} className="bg-[#1e1913] border border-[#332c22] p-3 rounded-lg flex flex-col justify-between">
-                    <div>
-                      <div className="flex items-center justify-between mb-1">
-                        <div className="flex items-center gap-1.5 font-bold text-xs text-[#f4ecd8]">
-                          <span>{breed?.icon}</span>
-                          <span>{breed?.name}</span>
-                        </div>
-                        <span className="text-[10px] font-mono text-[#81c784]">Zone #{p.zoneId}</span>
-                      </div>
-                      <div className="text-[10px] text-[#8a7f68] font-mono">Location: {zone?.name}</div>
-                      <div className="text-[10.5px] text-[#b8ab8e] mt-1">
-                        Forage: <b>{Math.round(p.pastureBiomass)}%</b> · Days Grazed: <b>{p.daysInPaddock}/{breed?.rotationalDays}</b>
-                      </div>
-                    </div>
-
-                    <div className="mt-2 pt-2 border-t border-[#332c22] flex justify-between items-center text-[10px] font-mono">
-                      <span className="text-[#e9c46a]">Output: {breed?.outputs.name}</span>
-                      <button
-                        onClick={() => setIsGrazingModalOpen(true)}
-                        className="text-[#64b5f6] hover:underline cursor-pointer"
-                      >
-                        Shift Paddock
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
-        {activeBottomTab === 'energy' && (
-          <div className="bg-[#171410] border border-[#332c22] p-4 rounded-xl space-y-3">
-            <div className="flex items-center justify-between border-b border-[#332c22] pb-2">
-              <div className="flex items-center gap-2">
-                <span className="text-xl">⚡</span>
-                <div>
-                  <h3 className="text-sm font-bold font-mono text-[#f4ecd8]">Off-Grid Utilities: Water & Solar Telemetry</h3>
-                  <span className="text-[11px] text-[#8a7f68]">Resilience calculations for cistern storage and LiFePO4 battery balance</span>
-                </div>
-              </div>
-              <button
-                onClick={() => setIsEngineeringModalOpen(true)}
-                className="px-3 py-1 rounded bg-[#c9a227] text-[#171410] font-mono font-bold text-xs cursor-pointer"
-              >
-                + Upgrade Utilities Infrastructure
-              </button>
-            </div>
-
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs font-mono">
-              <div className="bg-[#1e1913] p-3 rounded-lg border border-[#2a241b]">
-                <div className="text-[#8a7f68] text-[10px]">Cistern Reservoir</div>
-                <div className="text-sm font-bold text-[#64b5f6] mt-0.5">{Math.round(waterState.currentStoredGallons)} gal</div>
-                <div className="text-[9.5px] text-[#8a7f68] mt-1">Capacity: {waterState.maxCisternCapacityGallons} gal</div>
-              </div>
-              <div className="bg-[#1e1913] p-3 rounded-lg border border-[#2a241b]">
-                <div className="text-[#8a7f68] text-[10px]">Daily Irrigation Demand</div>
-                <div className="text-sm font-bold text-[#f4ecd8] mt-0.5">{Math.round(waterState.dailyConsumptionGallons)} gal/d</div>
-                <div className="text-[9.5px] text-[#81c784] mt-1">Type: {waterState.irrigationType.toUpperCase()}</div>
-              </div>
-              <div className="bg-[#1e1913] p-3 rounded-lg border border-[#2a241b]">
-                <div className="text-[#8a7f68] text-[10px]">PV Solar Microgrid</div>
-                <div className="text-sm font-bold text-[#e9c46a] mt-0.5">{(solarState.solarArrayWatts / 1000).toFixed(1)} kW Array</div>
-                <div className="text-[9.5px] text-[#8a7f68] mt-1">Daily Gen: +{solarState.dailyGenerationKwh.toFixed(1)} kWh</div>
-              </div>
-              <div className="bg-[#1e1913] p-3 rounded-lg border border-[#2a241b]">
-                <div className="text-[#8a7f68] text-[10px]">LiFePO4 Storage Bank</div>
-                <div className="text-sm font-bold text-[#81c784] mt-0.5">{solarState.currentBatteryStorageKwh.toFixed(1)} / {solarState.maxBatteryStorageKwh.toFixed(1)} kWh</div>
-                <div className="text-[9.5px] text-[#8a7f68] mt-1">Load: {solarState.dailyLoadKwh.toFixed(1)} kWh/d</div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {activeBottomTab === 'cellar' && (
-          <HarvestCellarPanel
+            paddocks={paddocks}
+            zones={zones}
+            onOpenGrazingModal={() => setIsGrazingModalOpen(true)}
             pantry={pantry}
             currentSeason={currentSeason}
-            credits={credits}
             onSellItem={handleSellPantryItem}
             onPreserveItem={handlePreservePantryItem}
           />
-        )}
+        </div>
 
-        {activeBottomTab === 'log' && (
-          <div className="bg-[#171410] border border-[#332c22] p-4 rounded-xl space-y-2 max-h-60 overflow-y-auto">
-            <div className="text-xs font-mono font-bold text-[#e9c46a] mb-2 uppercase">Recent Homestead Activity:</div>
-            {activityLogs.map(log => (
-              <div
-                key={log.id}
-                className="text-xs font-mono flex items-start gap-2 p-1.5 rounded bg-[#1e1913] border border-[#2a241b]"
-              >
-                <span className="text-[#8a7f68] shrink-0">[{log.time}]</span>
-                <span className={log.type === 'bonus' ? 'text-[#81c784]' : log.type === 'alert' ? 'text-[#e57373]' : 'text-[#f4ecd8]'}>
-                  {log.message}
-                </span>
-              </div>
-            ))}
-          </div>
-        )}
+        <div className="orchade-workspace-pane h-full" hidden={activePrimaryTab !== 'system'}>
+          <PlannerSystemPanel
+            totalAcreage={totalAcreage}
+            waterState={waterState}
+            solarState={solarState}
+            onOpenEngineeringModal={() => setIsEngineeringModalOpen(true)}
+          />
+        </div>
+
+        <div className="orchade-workspace-pane h-full" hidden={activePrimaryTab !== 'evidence'}>
+          <PlannerEvidencePanel
+            activityLogs={activityLogs}
+            onOpenReportModal={() => setIsReportModalOpen(true)}
+          />
+        </div>
       </div>
 
       {/* Micro-Grid Zoom Modal */}
