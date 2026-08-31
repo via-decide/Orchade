@@ -9,6 +9,8 @@
     {"name":"weather","purpose":"Owns weather types, forecasts, climate modifiers, and weather event contracts.","status":"in-progress","dependencies":["world"],"publicApi":["WeatherState","WeatherKind","describeWeather"],"events":["WEATHER_UPDATED"]},
     {"name":"economy","purpose":"Owns currencies, pricing rules, shop contracts, and economy telemetry.","status":"in-progress","dependencies":["inventory","farming"],"publicApi":["EconomyState","PriceQuote","quotePrice"],"events":["ECONOMY_CHANGED"]},
     {"name":"ui","purpose":"Owns gameplay-facing presentation contracts, tabs, and view model boundaries.","status":"in-progress","dependencies":["farming","inventory","economy","weather"],"publicApi":["GameplayTab","UiState","setActiveTab"],"events":["UI_TAB_CHANGED"]},
-    {"name":"world","purpose":"Owns orchards, locations, scene state, and world progression boundaries.","status":"in-progress","dependencies":["weather"],"publicApi":["WorldState","WorldLocation","advanceWorldDay"],"events":["PLAYER_MOVED","WORLD_UPDATED"]}
+    {"name":"world","purpose":"Owns orchards, locations, scene state, and world progression boundaries.","status":"in-progress","dependencies":["weather"],"publicApi":["WorldState","WorldLocation","advanceWorldDay"],"events":["PLAYER_MOVED","WORLD_UPDATED"]},
+    {"name":"research-credits","purpose":"Owns deterministic cross-game research-credit ledger and content-unlock contracts.","status":"in-progress","dependencies":[],"publicApi":["ResearchCreditsState","credit","debit","performUnlock"],"events":["RESEARCH_CREDIT_GRANTED","CONTENT_UNLOCKED","UNLOCK_REJECTED"]},
+    {"name":"progression","purpose":"Owns BUILD, OPERATE, and MASTER access criteria plus calibrated environment-skin contracts.","status":"in-progress","dependencies":[],"publicApi":["ProgressionState","checkLevelUp","EnvironmentSkin"],"events":["LEVEL_ADVANCED","LEVEL_ADVANCE_REJECTED","ENVIRONMENT_SKIN_SELECTED"]}
   ]
 }

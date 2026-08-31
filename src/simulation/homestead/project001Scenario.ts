@@ -1,0 +1,171 @@
+import {
+  HOMESTEAD_SCENARIO_SCHEMA_VERSION,
+  PROJECT_001_SIMULATION_VERSION,
+  type HomesteadScenarioDefinition,
+} from './scenario';
+
+export const PROJECT_001_BASELINE_SCENARIO: HomesteadScenarioDefinition = {
+  id: 'project-001-self-sufficient-homestead',
+  schemaVersion: HOMESTEAD_SCENARIO_SCHEMA_VERSION,
+  simulationVersion: PROJECT_001_SIMULATION_VERSION,
+  seed: 'orchade-project-001-fixed',
+  startDate: '2026-01-01',
+  startDay: 1,
+  durationDays: 365,
+  timestep: 'day',
+  unitSystem: 'metric',
+  controllerMode: 'manual',
+  intents: ['support-household-food-demand', 'maximize-resilience', 'measure-property-cost-coverage'],
+  revision: {
+    id: 'project-001-rev-001',
+    changeSet: [],
+    reason: 'Initial 0.75-acre Project 001 baseline.',
+    evidenceRefs: [],
+    createdAt: '2026-08-31T00:00:00.000Z',
+  },
+  land: {
+    totalAreaM2: 3035.14,
+    usableAreaM2: 2500,
+    reservedAreaM2: 535.14,
+    slopePercent: 3,
+    aspect: 'south',
+    elevationM: 45,
+    soilZones: [
+      { id: 'soil-main', areaM2: 1700, moisture: 65, fertility: 68, organicMatter: 5.5, drainage: 70, waterHoldingCapacity: 72, healthScore: 70 },
+      { id: 'soil-orchard', areaM2: 800, moisture: 58, fertility: 62, organicMatter: 4.8, drainage: 75, waterHoldingCapacity: 64, healthScore: 65 },
+    ],
+    waterZones: [
+      { id: 'water-tank-zone', type: 'tank', areaM2: 12 },
+      { id: 'water-pond-zone', type: 'pond', areaM2: 80 },
+    ],
+    placements: [
+      { id: 'house', type: 'house', areaM2: 180 },
+      { id: 'vegetable-beds', type: 'vegetable-bed', areaM2: 300 },
+      { id: 'staple-field', type: 'staple-field', areaM2: 700 },
+      { id: 'starter-orchard', type: 'orchard', areaM2: 600 },
+      { id: 'greenhouse', type: 'greenhouse', areaM2: 50 },
+      { id: 'chicken-run', type: 'livestock', areaM2: 80 },
+      { id: 'compost-system', type: 'compost', areaM2: 20 },
+      { id: 'water-system', type: 'water', areaM2: 92 },
+      { id: 'solar-array', type: 'solar', areaM2: 40 },
+      { id: 'tool-shed', type: 'shed', areaM2: 24 },
+    ],
+  },
+  climate: {
+    profileId: 'explicit-project-001-temperate-assumption',
+    deterministicStress: 'none',
+    seasons: [
+      { season: 'winter', startDayOfYear: 1, endDayOfYear: 59, meanTemperatureC: 8, rainfallProbability: 0.18, rainfallMmWhenWet: 7, solarHours: 5, humidityPercent: 68, frostRisk: 0.35 },
+      { season: 'spring', startDayOfYear: 60, endDayOfYear: 151, meanTemperatureC: 18, rainfallProbability: 0.32, rainfallMmWhenWet: 9, solarHours: 8, humidityPercent: 62, frostRisk: 0.08 },
+      { season: 'summer', startDayOfYear: 152, endDayOfYear: 243, meanTemperatureC: 29, rainfallProbability: 0.12, rainfallMmWhenWet: 12, solarHours: 10, humidityPercent: 52, frostRisk: 0 },
+      { season: 'autumn', startDayOfYear: 244, endDayOfYear: 365, meanTemperatureC: 17, rainfallProbability: 0.22, rainfallMmWhenWet: 8, solarHours: 7, humidityPercent: 60, frostRisk: 0.12 },
+    ],
+  },
+  household: {
+    members: 4,
+    caloriesPerPersonDay: 2200,
+    waterLitresPerPersonDay: 80,
+    labourMinutesAvailablePerDay: 480,
+    initialFoodInventoryCalories: 120000,
+  },
+  foodProducers: [
+    { id: 'producer-vegetables', type: 'vegetable-bed', placementId: 'vegetable-beds', cropId: 'mixed-vegetables', areaM2: 300, plantingDay: 15, cycleDays: 60, waterLitresPerM2Day: 1.4, nutrientUnitsPerM2Cycle: 0.08, labourMinutesPerDay: 75, harvestLabourMinutes: 180, expectedCaloriesPerHarvest: 180000, expectedKgPerHarvest: 180, residueUnitsPerHarvest: 45 },
+    { id: 'producer-staples', type: 'staple-field', placementId: 'staple-field', cropId: 'potato-pulse-rotation', areaM2: 700, plantingDay: 35, cycleDays: 120, waterLitresPerM2Day: 0.8, nutrientUnitsPerM2Cycle: 0.06, labourMinutesPerDay: 55, harvestLabourMinutes: 420, expectedCaloriesPerHarvest: 950000, expectedKgPerHarvest: 700, residueUnitsPerHarvest: 100 },
+    { id: 'producer-orchard', type: 'orchard', placementId: 'starter-orchard', cropId: 'mixed-fruit', areaM2: 600, plantingDay: 1, cycleDays: 365, establishmentDays: 730, waterLitresPerM2Day: 0.25, nutrientUnitsPerM2Cycle: 0.03, labourMinutesPerDay: 25, harvestLabourMinutes: 300, expectedCaloriesPerHarvest: 500000, expectedKgPerHarvest: 500, residueUnitsPerHarvest: 80 },
+    { id: 'producer-greenhouse', type: 'greenhouse', placementId: 'greenhouse', cropId: 'protected-greens', areaM2: 50, plantingDay: 1, cycleDays: 45, waterLitresPerM2Day: 1.1, nutrientUnitsPerM2Cycle: 0.1, labourMinutesPerDay: 40, harvestLabourMinutes: 90, expectedCaloriesPerHarvest: 65000, expectedKgPerHarvest: 55, residueUnitsPerHarvest: 18 },
+  ],
+  livestock: [
+    { id: 'livestock-chickens', placementId: 'chicken-run', type: 'chickens', count: 24, feedKgPerAnimalDay: 0.12, waterLitresPerAnimalDay: 0.5, labourMinutesPerDay: 35, caloriesProducedPerDay: 900, manureUnitsPerDay: 1.8, initialFeedKg: 120 },
+  ],
+  water: {
+    tankCapacityL: 5000,
+    initialTankLevelL: 4500,
+    catchmentAreaM2: 90,
+    captureEfficiency: 0.8,
+    leakageFractionPerDay: 0.001,
+    tankEvaporationLPerDay: 2,
+    pondCapacityL: 8000,
+    initialPondLevelL: 4000,
+    runoffAreaM2: 400,
+    runoffCoefficient: 0.12,
+    pondEvaporationLPerDay: 12,
+    externalWaterLPerDay: 0,
+  },
+  energy: {
+    solarCapacityKw: 6.4,
+    solarEfficiency: 0.75,
+    batteryCapacityKwh: 15,
+    initialBatteryKwh: 13.8,
+    gridEnabled: true,
+    biomassKwhPerDay: 0,
+    householdLoadKwhPerDay: 18.2,
+    farmBaseLoadKwhPerDay: 1.5,
+    pumpKwhPerLitre: 0.0012,
+    systemLossFraction: 0.08,
+  },
+  nutrients: {
+    initialFreshMaterialUnits: 20,
+    initialActiveMaterialUnits: 40,
+    initialMatureCompostUnits: 30,
+    freshToActiveFractionPerDay: 0.12,
+    activeToMatureFractionPerDay: 0.025,
+    organicWasteUnitsPerPersonDay: 0.25,
+    externalNutrientUnitsPerDay: 0,
+  },
+  economy: {
+    currency: 'INR',
+    initialCash: 10000,
+    dailyPropertyOperatingCost: 50,
+    dailyHouseholdExpenditure: 700,
+    purchasedFoodCostPer1000Calories: 35,
+    feedCostPerKg: 34,
+    gridCostPerKwh: 8,
+    externalWaterCostPer1000L: 120,
+    externalNutrientCostPerUnit: 15,
+    activities: [
+      { id: 'education-session', type: 'EDUCATION', enabled: true, occurrencesPerMonth: 1, capacityPerOccurrence: 8, unitPrice: 800, operatingCostPerOccurrence: 1000, labourMinutesPerOccurrence: 240, evidenceLevel: 'ASSUMED' },
+      { id: 'consulting-session', type: 'CONSULTING', enabled: true, occurrencesPerMonth: 2, capacityPerOccurrence: 1, unitPrice: 2500, operatingCostPerOccurrence: 200, labourMinutesPerOccurrence: 120, evidenceLevel: 'ASSUMED' },
+      { id: 'content-release', type: 'CONTENT', enabled: true, occurrencesPerMonth: 2, capacityPerOccurrence: 1, unitPrice: 600, operatingCostPerOccurrence: 100, labourMinutesPerOccurrence: 180, evidenceLevel: 'ASSUMED' },
+    ],
+  },
+  operatingPolicy: {
+    prioritizeHouseholdWater: true,
+    allowFoodPurchases: true,
+    allowFeedPurchases: true,
+    allowExternalWater: false,
+    allowGridImport: true,
+    irrigationSoilMoistureTarget: 65,
+    minimumCropMoisture: 35,
+    applyMatureCompost: true,
+  },
+  experiments: [
+    { id: 'experiment-water-storage', question: 'Does increasing storage reduce dry-season crop stress?', hypothesis: 'Increasing tank capacity from 5,000 L to 12,000 L will reduce shortage and irrigation-skip days.', scenarioBaselineRevisionId: 'project-001-rev-001', changedVariables: ['water.tankCapacityL', 'water.initialTankLevelL'], startTick: 1, endTick: 365, expectedOutcome: 'Fewer water-shortage days under the same climate seed.', status: 'PLANNED' },
+  ],
+  metadata: {
+    name: 'PROJECT 001 — 0.75-acre baseline',
+    description: 'Explicit dogfood assumptions for testing coupled household, land, water, food, nutrient, energy, labour, economy, and knowledge flows.',
+  },
+};
+
+export const DEFAULT_PLOT_PLANNER_SCENARIO = PROJECT_001_BASELINE_SCENARIO;
+
+export function createProject001WaterIntervention(
+  baseline: HomesteadScenarioDefinition = PROJECT_001_BASELINE_SCENARIO,
+): HomesteadScenarioDefinition {
+  return {
+    ...baseline,
+    revision: {
+      id: 'project-001-rev-002',
+      parentRevisionId: baseline.revision.id,
+      changeSet: [
+        { path: 'water.tankCapacityL', previousValue: baseline.water.tankCapacityL, nextValue: 12000, operation: 'replace' },
+        { path: 'water.initialTankLevelL', previousValue: baseline.water.initialTankLevelL, nextValue: 8000, operation: 'replace' },
+      ],
+      reason: 'Test a bounded storage intervention against baseline water-shortage evidence.',
+      evidenceRefs: [],
+      createdAt: '2026-08-31T00:00:01.000Z',
+    },
+    water: { ...baseline.water, tankCapacityL: 12000, initialTankLevelL: 8000 },
+    metadata: { ...baseline.metadata, name: 'PROJECT 001 — 12,000 L storage intervention' },
+  };
+}
