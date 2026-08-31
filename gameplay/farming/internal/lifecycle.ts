@@ -90,22 +90,19 @@ export function createNewPlant(cropId?: string, id: string = `plant_${Date.now()
   };
 }
 
-export function applyHarvest(plant: FarmingPlant): { harvested: boolean; yieldCount: number; reward: number; resetPlant: FarmingPlant } {
+export function applyHarvest(plant: FarmingPlant): { harvested: boolean; yieldCount: number; resetPlant: FarmingPlant } {
   const crop = getCropDefinition(plant.cropId);
   const stages = getPlantStages(plant.cropId);
   const maxStageIndex = stages.length - 1;
 
   if (plant.stageIndex < maxStageIndex) {
-    return { harvested: false, yieldCount: 0, reward: 0, resetPlant: plant };
+    return { harvested: false, yieldCount: 0, resetPlant: plant };
   }
 
   let yieldCount = 1;
-  let reward = 500 + plant.rootStrength * 0.5;
-
   if (crop && crop.harvest) {
     const { minYield, maxYield } = crop.harvest;
     yieldCount = Math.floor(Math.random() * (maxYield - minYield + 1)) + minYield;
-    reward = 350 + (yieldCount * 45) + (plant.rootStrength * 0.3);
   }
 
   const updatedPlant: FarmingPlant = { ...plant };
@@ -133,7 +130,6 @@ export function applyHarvest(plant: FarmingPlant): { harvested: boolean; yieldCo
   return {
     harvested: true,
     yieldCount,
-    reward: Math.floor(reward),
     resetPlant: updatedPlant
   };
 }
