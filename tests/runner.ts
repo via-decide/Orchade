@@ -9,6 +9,7 @@ import { runDeterminismTests } from './determinism.test';
 import { runHomesteadSimulationTests } from './homesteadSimulation.test';
 import { runProject001Tests } from './project001.test';
 import { runProgressionContractTests } from './progressionContracts.test';
+import { runSystemPerformanceTests } from './systemPerformance.test';
 
 console.log('🧪 Starting Orchade Test Runner...\n');
 
@@ -30,8 +31,23 @@ console.log(`[Project 001] Passed: ${project001Results.passed}, Failed: ${projec
 const progressionResults = runProgressionContractTests();
 console.log(`[Progression Contracts] Passed: ${progressionResults.passed}, Failed: ${progressionResults.failed}`);
 
-const totalPassed = cropResults.passed + farmLoopResults.passed + determinismResults.passed + homesteadResults.passed + project001Results.passed + progressionResults.passed;
-const totalFailed = cropResults.failed + farmLoopResults.failed + determinismResults.failed + homesteadResults.failed + project001Results.failed + progressionResults.failed;
+const systemPerformanceResults = runSystemPerformanceTests();
+console.log(`[System Performance] Passed: ${systemPerformanceResults.passed}, Failed: ${systemPerformanceResults.failed}`);
+
+const totalPassed = cropResults.passed
+  + farmLoopResults.passed
+  + determinismResults.passed
+  + homesteadResults.passed
+  + project001Results.passed
+  + progressionResults.passed
+  + systemPerformanceResults.passed;
+const totalFailed = cropResults.failed
+  + farmLoopResults.failed
+  + determinismResults.failed
+  + homesteadResults.failed
+  + project001Results.failed
+  + progressionResults.failed
+  + systemPerformanceResults.failed;
 
 console.log(`\n========================================`);
 console.log(`Total Passed: ${totalPassed} | Total Failed: ${totalFailed}`);

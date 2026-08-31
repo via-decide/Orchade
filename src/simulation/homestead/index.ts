@@ -15,3 +15,4 @@ export * from './revision';
 export * from './run';
 export * from './scenario';
 export * from './state';
+export * from './systemPerformance';
