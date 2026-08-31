@@ -26,51 +26,93 @@ jobs:
         run: |
           python - <<'PY'
           from pathlib import Path
+          import re
+
+          def replace_once(text: str, old: str, new: str, label: str) -> str:
+              if old not in text:
+                  raise RuntimeError(f'missing patch anchor: {label}')
+              return text.replace(old, new, 1)
 
           types = Path('src/types.ts')
           text = types.read_text()
-          old = "  harvestedTypes?: string[];\n  user: {"
-          new = "  harvestedTypes?: string[];\n  harvestInventory?: Record<string, number>;\n  user: {"
-          assert old in text
-          types.write_text(text.replace(old, new, 1))
+          text = replace_once(
+              text,
+              "  harvestedTypes?: string[];\n  user: {",
+              "  harvestedTypes?: string[];\n  harvestInventory?: Record<string, number>;\n  user: {",
+              'GameState harvest inventory',
+          )
+          types.write_text(text)
 
           app = Path('src/App.tsx')
           text = app.read_text()
 
-          old = "    harvestedTypes: [],\n    user: null,"
-          new = "    harvestedTypes: [],\n    harvestInventory: {},\n    user: null,"
-          assert old in text
-          text = text.replace(old, new, 1)
+          text = replace_once(
+              text,
+              "    harvestedTypes: [],\n    user: null,",
+              "    harvestedTypes: [],\n    harvestInventory: {},\n    user: null,",
+              'initial React state',
+          )
 
-          old = "            harvestedTypes: data.harvestedTypes ?? prev.harvestedTypes ?? [],\n          }));"
-          new = "            harvestedTypes: data.harvestedTypes ?? prev.harvestedTypes ?? [],\n            harvestInventory: data.harvestInventory ?? prev.harvestInventory ?? {},\n          }));"
-          assert text.count(old) >= 2
-          text = text.replace(old, new, 2)
+          text, sync_count = re.subn(
+              r"(?P<indent>\s*)harvestedTypes: data\.harvestedTypes \?\? prev\.harvestedTypes \?\? \[\],",
+              lambda m: f"{m.group('indent')}harvestedTypes: data.harvestedTypes ?? prev.harvestedTypes ?? [],\n{m.group('indent')}harvestInventory: data.harvestInventory ?? prev.harvestInventory ?? {{}},",
+              text,
+          )
+          if sync_count < 2:
+              raise RuntimeError(f'expected at least two sync sites, found {sync_count}')
 
-          old = "          harvestedTypes: [],\n          createdAt: serverTimestamp()\n        };\n        setDoc(userDocRef, initialState).catch(e => handleFirestoreError(e, OperationType.WRITE, `users/${state.user!.uid}`));"
-          new = "          harvestedTypes: [],\n          harvestInventory: {},\n          createdAt: serverTimestamp()\n        };\n        const batch = writeBatch(db);\n        batch.set(userDocRef, initialState);\n        batch.set(doc(db, 'system', 'global_stats'), { totalUsers: increment(1) }, { merge: true });\n        batch.commit().catch(e => handleFirestoreError(e, OperationType.WRITE, `users/${state.user!.uid}`));"
-          assert old in text
-          text = text.replace(old, new, 1)
+          text = replace_once(
+              text,
+              "          harvestedTypes: [],\n          createdAt: serverTimestamp()\n        };\n        setDoc(userDocRef, initialState).catch(e => handleFirestoreError(e, OperationType.WRITE, `users/${state.user!.uid}`));",
+              "          harvestedTypes: [],\n          harvestInventory: {},\n          createdAt: serverTimestamp()\n        };\n        const batch = writeBatch(db);\n        batch.set(userDocRef, initialState);\n        batch.set(doc(db, 'system', 'global_stats'), { totalUsers: increment(1) }, { merge: true });\n        batch.commit().catch(e => handleFirestoreError(e, OperationType.WRITE, `users/${state.user!.uid}`));",
+              'new-user atomic bookkeeping',
+          )
 
-          old = "            harvestedTypes: updates.harvestedTypes ?? current.harvestedTypes,\n          };"
-          new = "            harvestedTypes: updates.harvestedTypes ?? current.harvestedTypes,\n            harvestInventory: updates.harvestInventory ?? current.harvestInventory,\n          };"
-          assert old in text
-          text = text.replace(old, new, 1)
+          text = replace_once(
+              text,
+              "            harvestedTypes: updates.harvestedTypes ?? current.harvestedTypes,\n          };",
+              "            harvestedTypes: updates.harvestedTypes ?? current.harvestedTypes,\n            harvestInventory: updates.harvestInventory ?? current.harvestInventory,\n          };",
+              'guest persistence',
+          )
 
-          old = "      let harvestedTypes = prev.harvestedTypes || [];\n      let isHarvestCleared = false;"
-          new = "      let harvestedTypes = prev.harvestedTypes || [];\n      const harvestInventory = { ...(prev.harvestInventory ?? {}) };\n      let isHarvestCleared = false;"
-          assert old in text
-          text = text.replace(old, new, 1)
+          text = replace_once(
+              text,
+              "      let harvestedTypes = prev.harvestedTypes || [];\n      let isHarvestCleared = false;",
+              "      let harvestedTypes = prev.harvestedTypes || [];\n      const harvestInventory = { ...(prev.harvestInventory ?? {}) };\n      let isHarvestCleared = false;",
+              'harvest inventory accumulator',
+          )
 
-          old = "        const harvestResult = applyHarvest(plant);\n        const cropDef = getCropDefinition(plant.cropId);"
-          new = "        const harvestResult = applyHarvest(plant);\n        const cropDef = getCropDefinition(plant.cropId);\n        const outputId = cropDef?.harvest.itemId ?? plant.cropId ?? plant.type;\n        harvestInventory[outputId] = (harvestInventory[outputId] ?? 0) + harvestResult.yieldCount;"
-          assert old in text
-          text = text.replace(old, new, 1)
+          text = replace_once(
+              text,
+              "        const harvestResult = applyHarvest(plant);\n        const cropDef = getCropDefinition(plant.cropId);",
+              "        const harvestResult = applyHarvest(plant);\n        const cropDef = getCropDefinition(plant.cropId);\n        const outputId = cropDef?.harvest.itemId ?? plant.cropId ?? plant.type;\n        harvestInventory[outputId] = (harvestInventory[outputId] ?? 0) + harvestResult.yieldCount;",
+              'harvest output storage',
+          )
 
-          old = "        harvestedTypes, \n        selectedPlantIndex: isHarvestCleared ? null : prev.selectedPlantIndex \n      };\n      saveState({ orchards: newOrchards, credits, dataSeeds, harvestedTypes });"
-          new = "        harvestedTypes,\n        harvestInventory,\n        selectedPlantIndex: isHarvestCleared ? null : prev.selectedPlantIndex \n      };\n      saveState({ orchards: newOrchards, credits, dataSeeds, harvestedTypes, harvestInventory });"
-          assert old in text
-          text = text.replace(old, new, 1)
+          text, state_count = re.subn(
+              r"(\n\s*harvestedTypes,)(\s*\n\s*selectedPlantIndex: isHarvestCleared \? null : prev\.selectedPlantIndex)",
+              r"\1\n        harvestInventory,\2",
+              text,
+              count=1,
+          )
+          if state_count != 1:
+              raise RuntimeError('failed to add harvestInventory to nextState')
+
+          text = replace_once(
+              text,
+              "      saveState({ orchards: newOrchards, credits, dataSeeds, harvestedTypes });",
+              "      saveState({ orchards: newOrchards, credits, dataSeeds, harvestedTypes, harvestInventory });",
+              'persist harvest inventory',
+          )
+
+          required = [
+              'harvestInventory: data.harvestInventory',
+              "batch.set(doc(db, 'system', 'global_stats'), { totalUsers: increment(1) }, { merge: true });",
+              'harvestInventory[outputId] =',
+          ]
+          for token in required:
+              if token not in text:
+                  raise RuntimeError(f'missing final token: {token}')
 
           app.write_text(text)
           PY
