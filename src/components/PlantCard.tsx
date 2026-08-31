@@ -45,7 +45,7 @@ const PlantCard: React.FC<PlantCardProps> = ({ plant, isSelected, onClick }) => 
         <div className="flex flex-col items-start">
           <div className="flex items-center gap-1.5">
             <span className="text-[10px] font-bold uppercase tracking-widest text-text-secondary">
-              Stage {plant.stageIndex}
+              Stage {plant.stageIndex + 1}
             </span>
           </div>
           <span className="text-sm font-bold text-text-primary truncate w-full text-left">{plant.type}</span>

@@ -1,11 +1,20 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { EXPANDED_CROP_CATALOG, SOIL_AMENDMENTS, SEASON_METADATA, CropDefinition } from '../data/cropCatalog';
 import { HOMESTEAD_PRESETS, HomesteadPreset } from '../data/homesteadPresets';
+import { LIVESTOCK_BREEDS, PaddockState, LivestockBreed } from '../data/livestockData';
+import {
+  WaterHydrologyState,
+  SolarMicrogridState,
+  WATER_INFRASTRUCTURE_UPGRADES,
+  ENERGY_INFRASTRUCTURE_UPGRADES
+} from '../data/homesteadEngineering';
 import { CompanionMatrixModal } from './CompanionMatrixModal';
 import { RotationPlannerModal } from './RotationPlannerModal';
 import { SoilNutrientPanel, SoilState } from './SoilNutrientPanel';
 import { HarvestCellarPanel, PantryItem } from './HarvestCellarPanel';
 import { HomesteadReportModal } from './HomesteadReportModal';
+import { RotationalGrazingModal } from './RotationalGrazingModal';
+import { HomesteadEngineeringModal } from './HomesteadEngineeringModal';
 
 const ACRE_SQFT = 43560;
 const COLS = 24;
@@ -46,14 +55,69 @@ export function PlotPlanner() {
   const [totalAcreage, setTotalAcreage] = useState<number>(3.5);
   const [currentSeason, setCurrentSeason] = useState<'spring' | 'summer' | 'autumn' | 'winter'>('spring');
   const [cycleDay, setCycleDay] = useState<number>(1);
-  const [credits, setCredits] = useState<number>(350);
+  const [credits, setCredits] = useState<number>(420);
   const [selectedZoneId, setSelectedZoneId] = useState<number>(2); // Default to Tomato guild
+
+  // Phase 3 Systems State: Livestock Paddocks
+  const [paddocks, setPaddocks] = useState<PaddockState[]>([
+    {
+      id: 'pad-1',
+      zoneId: 7, // Chicken Coop / Pasture
+      breedId: 'heritage_chickens',
+      population: 24,
+      health: 100,
+      pastureBiomass: 88,
+      daysInPaddock: 2,
+      manureAccumulation: 28,
+      cycleProgress: 2,
+      shelterStatus: 'coop'
+    },
+    {
+      id: 'pad-2',
+      zoneId: 8, // Apple Orchard Silvopasture
+      breedId: 'apiculture_bees',
+      population: 40000,
+      health: 100,
+      pastureBiomass: 95,
+      daysInPaddock: 12,
+      manureAccumulation: 5,
+      cycleProgress: 6,
+      shelterStatus: 'solar_fence'
+    }
+  ]);
+
+  // Phase 3 Systems State: Water Hydrology & Off-Grid Solar Microgrid
+  const [waterState, setWaterState] = useState<WaterHydrologyState>({
+    catchmentSqft: 2800, // House + barn roofs
+    currentStoredGallons: 4200,
+    maxCisternCapacityGallons: 6000,
+    annualRainfallInches: 38,
+    dailyConsumptionGallons: 180,
+    swaleInfiltrationRate: 1200,
+    graywaterRecycledGallons: 45,
+    irrigationType: 'drip',
+    keylinePondsCount: 1
+  });
+
+  const [solarState, setSolarState] = useState<SolarMicrogridState>({
+    solarArrayWatts: 6400,
+    batteryBankKwh: 15.0,
+    currentBatteryStorageKwh: 13.8,
+    maxBatteryStorageKwh: 15.0,
+    dailyGenerationKwh: 28.5,
+    dailyLoadKwh: 18.2,
+    isOffGridTied: true,
+    backupBiomassGenActive: false
+  });
 
   // Modals & Panels
   const [isCompanionModalOpen, setIsCompanionModalOpen] = useState<boolean>(false);
   const [isRotationModalOpen, setIsRotationModalOpen] = useState<boolean>(false);
   const [isReportModalOpen, setIsReportModalOpen] = useState<boolean>(false);
-  const [activeBottomTab, setActiveBottomTab] = useState<'details' | 'soil' | 'cellar' | 'log'>('details');
+  const [isGrazingModalOpen, setIsGrazingModalOpen] = useState<boolean>(false);
+  const [isEngineeringModalOpen, setIsEngineeringModalOpen] = useState<boolean>(false);
+
+  const [activeBottomTab, setActiveBottomTab] = useState<'details' | 'soil' | 'cellar' | 'grazing' | 'energy' | 'log'>('details');
   const [zoomMicroGrid, setZoomMicroGrid] = useState<boolean>(false);
 
   // Overlays
@@ -64,14 +128,17 @@ export function PlotPlanner() {
   // Notification / Activity Log
   const [activityLogs, setActivityLogs] = useState<{ id: string; time: string; message: string; type: 'info' | 'bonus' | 'alert' }[]>([
     { id: '1', time: 'Day 1 · Spring', message: 'Homestead Site Plan initialized. 3.5 Acres calculated (152,460 sq ft).', type: 'info' },
-    { id: '2', time: 'Day 1 · Spring', message: 'Tomato & Basil companion guild established (+25% flavor & pest repellency).', type: 'bonus' }
+    { id: '2', time: 'Day 1 · Spring', message: 'Heritage Chickens & Italian Bee Colony active in rotational silvopasture.', type: 'bonus' },
+    { id: '3', time: 'Day 1 · Spring', message: 'Off-grid 6.4kW PV Solar microgrid & 6,000 gal rainwater catchment online.', type: 'bonus' }
   ]);
 
   // Pantry Storage Inventory
   const [pantry, setPantry] = useState<PantryItem[]>([
     { id: 'p1', cropId: 'apple', name: 'Bushels of Apples', qty: 25, unit: 'bushels', preservation: 'cold_cellar', quality: 1.25, basePrice: 65, harvestDay: 1 },
     { id: 'p2', cropId: 'basil', name: 'Aromatic Basil Leaves', qty: 10, unit: 'bunches', preservation: 'dry', quality: 1.2, basePrice: 15, harvestDay: 1 },
-    { id: 'p3', cropId: 'garlic', name: 'Cured Hardneck Garlic Bulbs', qty: 18, unit: 'bulbs', preservation: 'dry', quality: 1.3, basePrice: 22, harvestDay: 1 }
+    { id: 'p3', cropId: 'garlic', name: 'Cured Hardneck Garlic Bulbs', qty: 18, unit: 'bulbs', preservation: 'dry', quality: 1.3, basePrice: 22, harvestDay: 1 },
+    { id: 'p4', cropId: 'egg', name: 'Pastured Golden Yolk Eggs', qty: 6, unit: 'dozen', preservation: 'fresh', quality: 1.4, basePrice: 18, harvestDay: 1 },
+    { id: 'p5', cropId: 'honey', name: 'Raw Wildflower Honey & Beeswax', qty: 4, unit: 'jars', preservation: 'dry', quality: 1.5, basePrice: 55, harvestDay: 1 }
   ]);
 
   // Initialize Zones from default preset
@@ -80,7 +147,6 @@ export function PlotPlanner() {
     const tileSqft = (3.5 * ACRE_SQFT) / (COLS * ROWS);
     return defaultPreset.zones.map((bz, index) => {
       const isCrop = bz.type === 'crop' || (bz.cropId && bz.cropId !== null);
-      const crop = bz.cropId ? EXPANDED_CROP_CATALOG[bz.cropId] : null;
 
       return {
         id: index + 1,
@@ -118,11 +184,36 @@ export function PlotPlanner() {
     });
   });
 
-  // Dragging State
+  // Active Tool Mode
+  const [toolMode, setToolMode] = useState<'select' | 'tend' | 'water' | 'harvest'>('select');
+
+  // Floating feedback effect per zone
+  const [zoneEffect, setZoneEffect] = useState<{ zoneId: number; text: string; icon: string; color: string } | null>(null);
+
+  const triggerZoneEffect = (zoneId: number, text: string, icon: string, color: string) => {
+    setZoneEffect({ zoneId, text, icon, color });
+    setTimeout(() => {
+      setZoneEffect(prev => (prev?.zoneId === zoneId ? null : prev));
+    }, 1800);
+  };
+
+  // Dragging State & Refs for stable 60fps event handling
   const [draggingZoneId, setDraggingZoneId] = useState<number | null>(null);
   const [dragOffset, setDragOffset] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const [dragPreviewPos, setDragPreviewPos] = useState<{ col: number; row: number } | null>(null);
+  const [dragHasCollision, setDragHasCollision] = useState<boolean>(false);
+  const isMouseDownRef = useRef<boolean>(false);
+  const lastTendedZoneIdRef = useRef<number | null>(null);
   const gridContainerRef = useRef<HTMLDivElement>(null);
+
+  const zonesRef = useRef<ZoneData[]>(zones);
+  zonesRef.current = zones;
+  const draggingZoneIdRef = useRef<number | null>(null);
+  const dragPreviewPosRef = useRef<{ col: number; row: number } | null>(null);
+  const dragOffsetRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+  const dragMovedRef = useRef<boolean>(false);
+  const toolModeRef = useRef<'select' | 'tend' | 'water' | 'harvest'>(toolMode);
+  toolModeRef.current = toolMode;
 
   // Recalculate sqft when acreage changes
   useEffect(() => {
@@ -154,10 +245,35 @@ export function PlotPlanner() {
   };
 
   // Drag handlers
-  const handleMouseDown = (e: React.MouseEvent, zone: ZoneData) => {
+  const handleZoneMouseDown = (e: React.MouseEvent, zone: ZoneData) => {
     e.stopPropagation();
     setSelectedZoneId(zone.id);
+    isMouseDownRef.current = true;
+    lastTendedZoneIdRef.current = zone.id;
+
+    // If using a specialized click-tool, perform action immediately on click
+    if (toolMode === 'tend') {
+      handleTendZone(zone.id);
+      return;
+    }
+    if (toolMode === 'water') {
+      handleHydrateZone(zone.id);
+      return;
+    }
+    if (toolMode === 'harvest') {
+      if (zone.plant?.isHarvestable) {
+        handleHarvestZone(zone.id);
+      } else {
+        addLog(`Zone #${zone.id} (${zone.name}) is not ready for harvest yet.`, 'alert');
+        triggerZoneEffect(zone.id, 'Not ready yet', '⏳', '#ffb74d');
+      }
+      return;
+    }
+
+    // Default select & move mode: initiate drag
     setDraggingZoneId(zone.id);
+    draggingZoneIdRef.current = zone.id;
+    dragMovedRef.current = false;
 
     if (!gridContainerRef.current) return;
     const rect = gridContainerRef.current.getBoundingClientRect();
@@ -167,15 +283,36 @@ export function PlotPlanner() {
     const mouseCol = (e.clientX - rect.left) / cellW;
     const mouseRow = (e.clientY - rect.top) / cellH;
 
-    setDragOffset({
+    const offset = {
       x: mouseCol - zone.col,
       y: mouseRow - zone.row
-    });
-    setDragPreviewPos({ col: zone.col, row: zone.row });
+    };
+    setDragOffset(offset);
+    dragOffsetRef.current = offset;
+    const initialPos = { col: zone.col, row: zone.row };
+    setDragPreviewPos(initialPos);
+    dragPreviewPosRef.current = initialPos;
+    setDragHasCollision(false);
+  };
+
+  // Support sweeping / dragging active tools across zones
+  const handleZoneMouseEnter = (zone: ZoneData) => {
+    if (!isMouseDownRef.current) return;
+    if (lastTendedZoneIdRef.current === zone.id) return;
+    lastTendedZoneIdRef.current = zone.id;
+
+    if (toolModeRef.current === 'tend') {
+      handleTendZone(zone.id);
+    } else if (toolModeRef.current === 'water') {
+      handleHydrateZone(zone.id);
+    } else if (toolModeRef.current === 'harvest' && zone.plant?.isHarvestable) {
+      handleHarvestZone(zone.id);
+    }
   };
 
   const handleMouseMove = useCallback((e: MouseEvent) => {
-    if (draggingZoneId === null || !gridContainerRef.current) return;
+    const currentDragId = draggingZoneIdRef.current;
+    if (currentDragId === null || !gridContainerRef.current) return;
     const rect = gridContainerRef.current.getBoundingClientRect();
     const cellW = rect.width / COLS;
     const cellH = rect.height / ROWS;
@@ -183,47 +320,85 @@ export function PlotPlanner() {
     const mouseCol = (e.clientX - rect.left) / cellW;
     const mouseRow = (e.clientY - rect.top) / cellH;
 
-    const targetZone = zones.find(z => z.id === draggingZoneId);
+    const targetZone = zonesRef.current.find(z => z.id === currentDragId);
     if (!targetZone) return;
 
-    let newCol = Math.round(mouseCol - dragOffset.x);
-    let newRow = Math.round(mouseRow - dragOffset.y);
+    let newCol = Math.round(mouseCol - dragOffsetRef.current.x);
+    let newRow = Math.round(mouseRow - dragOffsetRef.current.y);
 
     newCol = Math.max(1, Math.min(COLS - targetZone.w + 1, newCol));
     newRow = Math.max(1, Math.min(ROWS - targetZone.h + 1, newRow));
 
-    setDragPreviewPos({ col: newCol, row: newRow });
-  }, [draggingZoneId, dragOffset, zones]);
+    if (newCol !== targetZone.col || newRow !== targetZone.row) {
+      dragMovedRef.current = true;
+    }
+
+    const collision = checkCollision(
+      targetZone.id,
+      newCol,
+      newRow,
+      targetZone.w,
+      targetZone.h,
+      zonesRef.current
+    );
+
+    setDragHasCollision(collision);
+    const newPos = { col: newCol, row: newRow };
+    setDragPreviewPos(newPos);
+    dragPreviewPosRef.current = newPos;
+  }, []);
 
   const handleMouseUp = useCallback(() => {
-    if (draggingZoneId !== null && dragPreviewPos !== null) {
-      const targetZone = zones.find(z => z.id === draggingZoneId);
-      if (targetZone) {
-        const hasCollision = checkCollision(
-          targetZone.id,
-          dragPreviewPos.col,
-          dragPreviewPos.row,
-          targetZone.w,
-          targetZone.h,
-          zones
-        );
+    isMouseDownRef.current = false;
+    lastTendedZoneIdRef.current = null;
+    const currentDragId = draggingZoneIdRef.current;
+    const currentPos = dragPreviewPosRef.current;
 
-        if (!hasCollision) {
-          setZones(prev => prev.map(z => {
-            if (z.id === draggingZoneId) {
-              return { ...z, col: dragPreviewPos.col, row: dragPreviewPos.row };
-            }
-            return z;
-          }));
-          addLog(`Zone #${targetZone.id} (${targetZone.name}) repositioned to Grid [${dragPreviewPos.col}, ${dragPreviewPos.row}].`, 'info');
-        } else {
-          addLog(`⚠️ Placement collision on Grid [${dragPreviewPos.col}, ${dragPreviewPos.row}]. Snapped back to original position.`, 'alert');
+    if (currentDragId !== null && currentPos !== null) {
+      const targetZone = zonesRef.current.find(z => z.id === currentDragId);
+      if (targetZone) {
+        const moved = currentPos.col !== targetZone.col || currentPos.row !== targetZone.row;
+        if (moved) {
+          const hasCollision = checkCollision(
+            targetZone.id,
+            currentPos.col,
+            currentPos.row,
+            targetZone.w,
+            targetZone.h,
+            zonesRef.current
+          );
+
+          if (!hasCollision) {
+            setZones(prev => prev.map(z => {
+              if (z.id === currentDragId) {
+                return { ...z, col: currentPos.col, row: currentPos.row };
+              }
+              return z;
+            }));
+            addLog(`Zone #${targetZone.id} (${targetZone.name}) repositioned to Grid [Col ${currentPos.col}, Row ${currentPos.row}].`, 'info');
+            triggerZoneEffect(targetZone.id, `Relocated to [${currentPos.col}, ${currentPos.row}]`, '📍', '#81c784');
+          } else {
+            addLog(`⚠️ Placement collision on Grid [${currentPos.col}, ${currentPos.row}]. Snapped back to original position.`, 'alert');
+            triggerZoneEffect(targetZone.id, 'Collision Snapped Back', '⚠️', '#e57373');
+          }
         }
       }
     }
     setDraggingZoneId(null);
+    draggingZoneIdRef.current = null;
     setDragPreviewPos(null);
-  }, [draggingZoneId, dragPreviewPos, zones]);
+    dragPreviewPosRef.current = null;
+    setDragHasCollision(false);
+  }, []);
+
+  useEffect(() => {
+    const onGlobalMouseUp = () => {
+      isMouseDownRef.current = false;
+      lastTendedZoneIdRef.current = null;
+    };
+    window.addEventListener('mouseup', onGlobalMouseUp);
+    return () => window.removeEventListener('mouseup', onGlobalMouseUp);
+  }, []);
 
   useEffect(() => {
     if (draggingZoneId !== null) {
@@ -236,7 +411,7 @@ export function PlotPlanner() {
     }
   }, [draggingZoneId, handleMouseMove, handleMouseUp]);
 
-  // Neighbor Synergies Evaluator
+  // Neighbor Synergies Evaluator (Enhanced with Animal Silvopasture & Pollination)
   const getZoneSynergies = (zone: ZoneData) => {
     const synergies: { type: 'bonus' | 'penalty' | 'info'; title: string; desc: string; source: string }[] = [];
     const neighbors = zones.filter(other => {
@@ -247,6 +422,38 @@ export function PlotPlanner() {
     });
 
     const crop = zone.plant?.cropId ? EXPANDED_CROP_CATALOG[zone.plant.cropId] : null;
+
+    // Check if zone hosts an active livestock paddock
+    const paddockInZone = paddocks.find(p => p.zoneId === zone.id);
+    if (paddockInZone) {
+      const breed = LIVESTOCK_BREEDS[paddockInZone.breedId];
+      if (breed) {
+        synergies.push({
+          type: 'bonus',
+          title: `Active Herd: ${breed.name}`,
+          desc: `${breed.grazingImpact.weedSuppression}% weed suppression & high-value ${breed.outputs.name} production.`,
+          source: `Paddock #${paddockInZone.id}`
+        });
+      }
+    }
+
+    // Check if bees are in proximity (within 6 tiles)
+    const hasBeeApiaryNearby = paddocks.some(p => {
+      if (p.breedId !== 'apiculture_bees') return false;
+      const beeZone = zones.find(z => z.id === p.zoneId);
+      if (!beeZone) return false;
+      const dist = Math.hypot(zone.col - beeZone.col, zone.row - beeZone.row);
+      return dist <= 8;
+    });
+
+    if (hasBeeApiaryNearby && (crop?.category === 'fruiting' || crop?.category === 'herb' || crop?.id === 'tomato' || crop?.id === 'apple')) {
+      synergies.push({
+        type: 'bonus',
+        title: 'Apiary Pollination Corridor',
+        desc: 'Honeybee foraging increases blossom fruit-set and seed density by +35%.',
+        source: 'Bee Colony'
+      });
+    }
 
     neighbors.forEach(n => {
       // Water proximity
@@ -279,25 +486,6 @@ export function PlotPlanner() {
         });
       }
 
-      // Livestock proximity
-      if (n.type === 'livestock') {
-        if (crop?.category === 'leafy' || crop?.id === 'lettuce') {
-          synergies.push({
-            type: 'penalty',
-            title: 'Foraging Pest Pressure',
-            desc: 'Small livestock proximity attracts minor aphids & leaf pests.',
-            source: n.name
-          });
-        } else {
-          synergies.push({
-            type: 'bonus',
-            title: 'Manure Topdressing',
-            desc: 'Organic manure seepage naturally boosts nitrogen levels.',
-            source: n.name
-          });
-        }
-      }
-
       // Crop-to-crop companion effects
       if (crop && n.plant?.cropId) {
         const neighborCrop = EXPANDED_CROP_CATALOG[n.plant.cropId];
@@ -325,7 +513,7 @@ export function PlotPlanner() {
     return synergies;
   };
 
-  // Advance Seasonal / Day Cycle
+  // Advance Seasonal / Day Cycle (with Phase 3 Animal & Energy Simulation)
   const handleAdvanceDay = () => {
     const nextDay = cycleDay + 1;
     setCycleDay(nextDay);
@@ -337,12 +525,78 @@ export function PlotPlanner() {
     if (nextDay % 30 === 1 && nextDay > 1) {
       newSeason = seasons[(currentSeasonIdx + 1) % 4];
       setCurrentSeason(newSeason);
-      addLog(`🍂 Season shifted to ${SEASON_METADATA[newSeason].name.toUpperCase()}! Temperature and sun hours updated.`, 'bonus');
+      addLog(`🍂 Season shifted to ${SEASON_METADATA[newSeason].name.toUpperCase()}! Temperature and solar radiation updated.`, 'bonus');
     }
 
     const seasonInfo = SEASON_METADATA[newSeason];
 
-    // Simulate zones growth & soil consumption
+    // 1. Simulate Solar & Hydrology Energy Balance
+    const solarGenerationToday = (solarState.solarArrayWatts / 1000) * (seasonInfo.sunlightHours * 0.75) + (solarState.backupBiomassGenActive ? 12 : 0);
+    const updatedBatteryKwh = Math.min(
+      solarState.maxBatteryStorageKwh,
+      Math.max(1.0, solarState.currentBatteryStorageKwh + (solarGenerationToday - solarState.dailyLoadKwh))
+    );
+
+    // Water consumption & rain infiltration
+    const isRainDay = Math.random() < (seasonInfo.id === 'spring' ? 0.35 : 0.15);
+    const rainCatchment = isRainDay ? (waterState.catchmentSqft * 0.623 * 0.75) : 0; // 0.75 in rain
+    const updatedCistern = Math.min(
+      waterState.maxCisternCapacityGallons,
+      Math.max(100, waterState.currentStoredGallons + rainCatchment - waterState.dailyConsumptionGallons)
+    );
+
+    setSolarState(prev => ({
+      ...prev,
+      dailyGenerationKwh: solarGenerationToday,
+      currentBatteryStorageKwh: updatedBatteryKwh
+    }));
+
+    setWaterState(prev => ({
+      ...prev,
+      currentStoredGallons: updatedCistern
+    }));
+
+    if (isRainDay) {
+      addLog(`🌧️ Precipitation Event! Harvested +${Math.round(rainCatchment)} gal of rainwater into homestead cisterns.`, 'bonus');
+    }
+
+    // 2. Simulate Livestock Paddocks & Biomass Grazing
+    setPaddocks(prev => prev.map(p => {
+      const breed = LIVESTOCK_BREEDS[p.breedId];
+      if (!breed) return p;
+
+      const newDaysInPaddock = p.daysInPaddock + 1;
+      const isOvergrazing = newDaysInPaddock > breed.rotationalDays;
+      const pastureDrain = isOvergrazing ? 15 : 8;
+      const newBiomass = Math.max(5, p.pastureBiomass - pastureDrain);
+      const newCycleProgress = p.cycleProgress + 1;
+
+      // Apply manure NPK to host zone
+      setZones(zPrev => zPrev.map(z => {
+        if (z.id === p.zoneId) {
+          return {
+            ...z,
+            soil: {
+              ...z.soil,
+              nitrogen: Math.min(100, z.soil.nitrogen + Math.round(breed.outputs.manureNpk.n / 4)),
+              organicMatter: Math.min(15, z.soil.organicMatter + 0.1)
+            }
+          };
+        }
+        return z;
+      }));
+
+      return {
+        ...p,
+        daysInPaddock: newDaysInPaddock,
+        pastureBiomass: newBiomass,
+        manureAccumulation: Math.min(100, p.manureAccumulation + 8),
+        cycleProgress: newCycleProgress,
+        health: isOvergrazing ? Math.max(50, p.health - 5) : Math.min(100, p.health + 2)
+      };
+    }));
+
+    // 3. Simulate Zones Crop Growth & Telemetry
     setZones(prev => prev.map(z => {
       if (!z.plant || !z.plant.cropId) return z;
       const crop = EXPANDED_CROP_CATALOG[z.plant.cropId];
@@ -354,8 +608,8 @@ export function PlotPlanner() {
         frostDamage = 15;
       }
 
-      // Water drain
-      const waterDrain = 8 + (seasonInfo.id === 'summer' ? 6 : 0);
+      // Water drain based on irrigation efficiency
+      const waterDrain = (waterState.irrigationType === 'drip' ? 5 : 8) + (seasonInfo.id === 'summer' ? 4 : 0);
       const newWater = Math.max(0, z.plant.water - waterDrain);
 
       // Nitrogen / Nutrient depletion
@@ -368,7 +622,6 @@ export function PlotPlanner() {
       const newK = Math.min(100, Math.max(10, z.soil.potassium - kDrain));
 
       // Growth step
-      const currentStage = crop.growthStages[z.plant.stageIndex] || crop.growthStages[0];
       const newRootStrength = z.plant.rootStrength + 1;
       let nextStageIdx = z.plant.stageIndex;
 
@@ -402,34 +655,182 @@ export function PlotPlanner() {
       };
     }));
 
-    addLog(`Advanced to Cycle Day ${nextDay} (${SEASON_METADATA[newSeason].name}). Crop telemetry and soil updated.`, 'info');
+    addLog(`Advanced to Cycle Day ${nextDay} (${SEASON_METADATA[newSeason].name}). Systems updated.`, 'info');
+  };
+
+  // Phase 3 Livestock Handlers
+  const handleAdoptBreed = (targetZone: number, breedId: string) => {
+    const breed = LIVESTOCK_BREEDS[breedId];
+    if (!breed || credits < breed.cost) return;
+
+    setCredits(prev => prev - breed.cost);
+    const newPaddock: PaddockState = {
+      id: `pad-${Date.now()}`,
+      zoneId: targetZone,
+      breedId: breed.id,
+      population: breed.species === 'poultry' ? 18 : breed.species === 'apiculture' ? 35000 : 4,
+      health: 100,
+      pastureBiomass: 90,
+      daysInPaddock: 0,
+      manureAccumulation: 10,
+      cycleProgress: 0,
+      shelterStatus: 'solar_fence'
+    };
+
+    setPaddocks(prev => [...prev, newPaddock]);
+    addLog(`Integrated ${breed.name} into Zone #${targetZone} (-${breed.cost} 🪙). Rotational grazing active.`, 'bonus');
+  };
+
+  const handleRotatePaddock = (paddockId: string, destZoneId: number) => {
+    setPaddocks(prev => prev.map(p => {
+      if (p.id === paddockId) {
+        return {
+          ...p,
+          zoneId: destZoneId,
+          daysInPaddock: 0,
+          pastureBiomass: 95
+        };
+      }
+      return p;
+    }));
+    addLog(`Mobile livestock tractor shifted to Zone #${destZoneId}. Previous pasture enters rest & root regeneration.`, 'bonus');
+  };
+
+  const handleHarvestLivestockYield = (paddockId: string) => {
+    const paddock = paddocks.find(p => p.id === paddockId);
+    if (!paddock) return;
+    const breed = LIVESTOCK_BREEDS[paddock.breedId];
+    if (!breed) return;
+
+    const newItem: PantryItem = {
+      id: `livestock-${Date.now()}`,
+      cropId: breed.outputs.resourceId,
+      name: breed.outputs.name,
+      qty: breed.outputs.qtyPerCycle,
+      unit: breed.outputs.unit,
+      preservation: 'fresh',
+      quality: 1.3,
+      basePrice: breed.outputs.basePrice,
+      harvestDay: cycleDay
+    };
+
+    setPantry(prev => [newItem, ...prev]);
+    setPaddocks(prev => prev.map(p => {
+      if (p.id === paddockId) {
+        return { ...p, cycleProgress: 0 };
+      }
+      return p;
+    }));
+
+    addLog(`Harvested ${breed.outputs.qtyPerCycle} ${breed.outputs.unit} of ${breed.outputs.name}!`, 'bonus');
+  };
+
+  // Phase 3 Water & Solar Upgrade Handlers
+  const handleUpgradeWater = (upgradeId: string) => {
+    const up = WATER_INFRASTRUCTURE_UPGRADES.find(u => u.id === upgradeId);
+    if (!up || credits < up.cost) return;
+
+    setCredits(prev => prev - up.cost);
+    setWaterState(prev => ({
+      ...prev,
+      maxCisternCapacityGallons: prev.maxCisternCapacityGallons + (up.storageBonusGallons || 0),
+      irrigationType: up.id === 'gravity_drip_manifold' ? 'drip' : up.id === 'subsurface_clay_ollas' ? 'subsurface_ollas' : prev.irrigationType
+    }));
+    addLog(`Constructed ${up.name} (-${up.cost} 🪙). Homestead water security increased.`, 'bonus');
+  };
+
+  const handleUpgradeSolar = (upgradeId: string) => {
+    const up = ENERGY_INFRASTRUCTURE_UPGRADES.find(u => u.id === upgradeId);
+    if (!up || credits < up.cost) return;
+
+    setCredits(prev => prev - up.cost);
+    setSolarState(prev => ({
+      ...prev,
+      solarArrayWatts: prev.solarArrayWatts + (up.wattsBonus || 0),
+      maxBatteryStorageKwh: prev.maxBatteryStorageKwh + (up.kwhCapacityBonus || 0),
+      batteryBankKwh: prev.batteryBankKwh + (up.kwhCapacityBonus || 0)
+    }));
+    addLog(`Installed ${up.name} (-${up.cost} 🪙). Off-grid microgrid capacity boosted.`, 'bonus');
+  };
+
+  const handleToggleGenerator = () => {
+    setSolarState(prev => ({
+      ...prev,
+      backupBiomassGenActive: !prev.backupBiomassGenActive
+    }));
+    addLog(solarState.backupBiomassGenActive ? 'Woodgas generator set to standby.' : '⚡ Woodgas Biomass Generator fired up! +12 kWh continuous generation.', 'bonus');
   };
 
   // Agronomic action handlers
   const handleHydrateZone = (zoneId: number) => {
+    const targetZone = zonesRef.current.find(z => z.id === zoneId);
+    if (!targetZone || !targetZone.plant) return;
+
+    // Check water synergy
+    const synergies = getZoneSynergies(targetZone);
+    const hasWaterSynergy = synergies.some(s => s.title.includes('Hydraulic Gravity Swale'));
+    const waterGain = hasWaterSynergy ? 55 : 40;
+
     setZones(prev => prev.map(z => {
       if (z.id === zoneId && z.plant) {
         return {
           ...z,
-          plant: { ...z.plant, water: Math.min(100, z.plant.water + 40), health: Math.min(100, z.plant.health + 5) }
+          plant: { ...z.plant, water: Math.min(100, z.plant.water + waterGain), health: Math.min(100, z.plant.health + 8) }
         };
       }
       return z;
     }));
-    addLog(`Irrigated Zone #${zoneId}. Root hydration replenished to optimal capacity.`, 'info');
+
+    const logText = hasWaterSynergy
+      ? `Irrigated Zone #${zoneId} (+${waterGain}% moisture). Gravity Swale synergy amplified retention.`
+      : `Irrigated Zone #${zoneId}. Root hydration replenished to optimal capacity.`;
+    addLog(logText, 'info');
+    triggerZoneEffect(zoneId, `+${waterGain}% Water`, '💧', '#64b5f6');
   };
 
   const handleTendZone = (zoneId: number) => {
+    const targetZone = zonesRef.current.find(z => z.id === zoneId);
+    if (!targetZone || !targetZone.plant) {
+      addLog(`Zone #${zoneId} contains homestead infrastructure. No crops to cultivate.`, 'info');
+      triggerZoneEffect(zoneId, 'No crop to tend', '🏡', '#b8ab8e');
+      return;
+    }
+
+    const synergies = getZoneSynergies(targetZone);
+    const hasShedSynergy = synergies.some(s => s.title.includes('Tool Depot'));
+    const hasCompostSynergy = synergies.some(s => s.title.includes('Microbial Soil Inoculation'));
+    const hasGrazingSynergy = synergies.some(s => s.title.includes('Active Herd'));
+
+    const healthGain = hasShedSynergy ? 18 : 12;
+    const omBonus = hasCompostSynergy ? 0.4 : 0.1;
+
     setZones(prev => prev.map(z => {
       if (z.id === zoneId && z.plant) {
         return {
           ...z,
-          plant: { ...z.plant, pests: 0, health: Math.min(100, z.plant.health + 10) }
+          soil: {
+            ...z.soil,
+            organicMatter: Math.min(15, z.soil.organicMatter + omBonus),
+            nitrogen: Math.min(100, z.soil.nitrogen + (hasCompostSynergy ? 2 : 0))
+          },
+          plant: {
+            ...z.plant,
+            pests: 0,
+            health: Math.min(100, z.plant.health + healthGain)
+          }
         };
       }
       return z;
     }));
-    addLog(`Cultivated and weeded Zone #${zoneId}. Pest pressure reduced to 0%.`, 'bonus');
+
+    let synergyBonusNotes = [];
+    if (hasShedSynergy) synergyBonusNotes.push('Tool Depot (+50% vigor)');
+    if (hasCompostSynergy) synergyBonusNotes.push('Microbial Inoculation (+OM)');
+    if (hasGrazingSynergy) synergyBonusNotes.push('Silvopasture Weed Control');
+
+    const bonusNote = synergyBonusNotes.length > 0 ? ` [Synergies: ${synergyBonusNotes.join(', ')}]` : '';
+    addLog(`Cultivated and weeded Zone #${zoneId}. Pest pressure reduced to 0%, health +${healthGain}%${bonusNote}.`, 'bonus');
+    triggerZoneEffect(zoneId, `Weeded & Cultivated (+${healthGain} Health)`, '🌿', '#81c784');
   };
 
   const handleApplyAmendment = (amendmentId: string) => {
@@ -578,13 +979,18 @@ export function PlotPlanner() {
   const selectedSynergies = selectedZone ? getZoneSynergies(selectedZone) : [];
   const seasonInfo = SEASON_METADATA[currentSeason];
 
+  // Active Paddock on selected zone
+  const activePaddockOnSelected = paddocks.find(p => p.zoneId === selectedZone.id);
+  const paddockBreed = activePaddockOnSelected ? LIVESTOCK_BREEDS[activePaddockOnSelected.breedId] : null;
+
   return (
     <div className="w-full space-y-4 font-sans text-[#f4ecd8]">
       
-      {/* Top Phase 2 Master Agronomic Toolbar */}
+      {/* Top Phase 3 Master Homestead Toolbar */}
       <div className="bg-[#1f1b15] border border-[#332c22] p-3 rounded-xl shadow-lg flex flex-wrap items-center justify-between gap-3">
-        {/* Left: Cycle & Season Status */}
-        <div className="flex items-center gap-3">
+        
+        {/* Left: Cycle, Season & Treasury */}
+        <div className="flex items-center gap-2.5 flex-wrap">
           <div className="flex items-center gap-2 bg-[#171410] px-3 py-1.5 rounded-lg border border-[#332c22]">
             <span className="text-xl">{seasonInfo.icon}</span>
             <div>
@@ -603,6 +1009,18 @@ export function PlotPlanner() {
             </div>
           </div>
 
+          {/* Quick Microgrid & Hydrology Telemetry Badge */}
+          <div className="hidden md:flex items-center gap-3 bg-[#171410] px-3 py-1.5 rounded-lg border border-[#332c22] text-xs font-mono">
+            <div>
+              <div className="text-[9.5px] text-[#8a7f68] uppercase">💧 Water</div>
+              <div className="text-[#64b5f6] font-bold">{Math.round(waterState.currentStoredGallons)} gal</div>
+            </div>
+            <div className="border-l border-[#332c22] pl-3">
+              <div className="text-[9.5px] text-[#8a7f68] uppercase">⚡ Battery</div>
+              <div className="text-[#e9c46a] font-bold">{solarState.currentBatteryStorageKwh.toFixed(1)} kWh</div>
+            </div>
+          </div>
+
           <div className="flex items-center gap-2 bg-[#171410] px-3 py-1.5 rounded-lg border border-[#332c22]">
             <div>
               <div className="text-[10px] text-[#8a7f68] font-mono uppercase tracking-wider">Homestead Treasury</div>
@@ -613,7 +1031,7 @@ export function PlotPlanner() {
 
         {/* Center: Land Scale Control */}
         <div className="flex items-center gap-2 bg-[#171410] px-3 py-1.5 rounded-lg border border-[#332c22]">
-          <span className="text-xs font-mono text-[#8a7f68]">Land Area:</span>
+          <span className="text-xs font-mono text-[#8a7f68]">Scale:</span>
           <div className="flex gap-1">
             {[0.5, 1.0, 3.5, 5.0].map(ac => (
               <button
@@ -629,19 +1047,32 @@ export function PlotPlanner() {
               </button>
             ))}
           </div>
-          <span className="text-[10.5px] font-mono text-[#81c784] pl-1 hidden sm:inline">
-            ({Math.round(totalAcreage * ACRE_SQFT).toLocaleString()} sq ft)
-          </span>
         </div>
 
-        {/* Right: Action Buttons & Modals Trigger */}
+        {/* Right: Modals & Next Day Advance */}
         <div className="flex items-center gap-2 flex-wrap">
+          <button
+            onClick={() => setIsGrazingModalOpen(true)}
+            className="px-3 py-1.5 rounded-lg text-xs font-mono font-bold bg-[#262016] hover:bg-[#3d3323] text-[#ffb74d] border border-[#ffb74d]/40 flex items-center gap-1.5 transition-all cursor-pointer"
+            title="Open Rotational Grazing & Animal Tractors"
+          >
+            <span>🐑 Grazing ({paddocks.length})</span>
+          </button>
+
+          <button
+            onClick={() => setIsEngineeringModalOpen(true)}
+            className="px-3 py-1.5 rounded-lg text-xs font-mono font-bold bg-[#262016] hover:bg-[#3d3323] text-[#64b5f6] border border-[#1976d2]/40 flex items-center gap-1.5 transition-all cursor-pointer"
+            title="Open Off-Grid Solar & Hydrology Engineering"
+          >
+            <span>⚡ Utilities & Solar</span>
+          </button>
+
           <button
             onClick={() => setIsCompanionModalOpen(true)}
             className="px-3 py-1.5 rounded-lg text-xs font-mono font-bold bg-[#262016] hover:bg-[#3d3323] text-[#e9c46a] border border-[#8a6f1c]/40 flex items-center gap-1.5 transition-all cursor-pointer"
             title="Open Scientific Companion Planting Matrix"
           >
-            <span>🌿 Companion Matrix</span>
+            <span>🌿 Companion</span>
           </button>
 
           <button
@@ -649,15 +1080,15 @@ export function PlotPlanner() {
             className="px-3 py-1.5 rounded-lg text-xs font-mono font-bold bg-[#262016] hover:bg-[#3d3323] text-[#81c784] border border-[#2e4726] flex items-center gap-1.5 transition-all cursor-pointer"
             title="Open 4-Year Crop Rotation Planner"
           >
-            <span>🔄 4-Year Rotation</span>
+            <span>🔄 Rotation</span>
           </button>
 
           <button
             onClick={() => setIsReportModalOpen(true)}
-            className="px-3 py-1.5 rounded-lg text-xs font-mono font-bold bg-[#262016] hover:bg-[#3d3323] text-[#64b5f6] border border-[#1976d2]/40 flex items-center gap-1.5 transition-all cursor-pointer"
+            className="px-3 py-1.5 rounded-lg text-xs font-mono font-bold bg-[#262016] hover:bg-[#3d3323] text-[#b8ab8e] border border-[#332c22] flex items-center gap-1.5 transition-all cursor-pointer"
             title="Export or Print Homestead Agronomic Audit"
           >
-            <span>📋 Audit Report</span>
+            <span>📋 Audit</span>
           </button>
 
           <button
@@ -715,16 +1146,77 @@ export function PlotPlanner() {
         {/* Left / Center (cols 1-8): Interactive 24x18 Draggable Site Plan */}
         <div className="lg:col-span-8 space-y-3">
           <div className="bg-[#1f1b15] border border-[#332c22] p-3 rounded-xl shadow-lg relative">
-            <div className="flex justify-between items-center mb-2 px-1 text-xs font-mono text-[#8a7f68]">
-              <span>Site Plan Grid (24×18 Tiles · Click & Drag to Reorganize)</span>
-              <span>Selected: #{selectedZone?.id} {selectedZone?.name}</span>
+            
+            {/* Header & Tool Mode Palette */}
+            <div className="flex flex-wrap justify-between items-center mb-2.5 px-1 gap-2 text-xs font-mono">
+              <div className="flex items-center gap-2">
+                <span className="text-[#8a7f68] font-bold">Active Tool:</span>
+                <div className="flex gap-1 bg-[#171410] p-1 rounded-lg border border-[#332c22]">
+                  <button
+                    onClick={() => setToolMode('select')}
+                    className={`px-2.5 py-1 rounded text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                      toolMode === 'select'
+                        ? 'bg-[#c9a227] text-[#171410] shadow'
+                        : 'text-[#b8ab8e] hover:text-white hover:bg-[#262016]'
+                    }`}
+                    title="Select and drag zones to reorganize layout"
+                  >
+                    <span>🖐️ Move / Select</span>
+                  </button>
+
+                  <button
+                    onClick={() => setToolMode('tend')}
+                    className={`px-2.5 py-1 rounded text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                      toolMode === 'tend'
+                        ? 'bg-[#388e3c] text-white shadow'
+                        : 'text-[#81c784] hover:text-white hover:bg-[#262016]'
+                    }`}
+                    title="Click any zone on the grid to weed & cultivate with synergy boost"
+                  >
+                    <span>🌿 Weed & Tend Tool</span>
+                  </button>
+
+                  <button
+                    onClick={() => setToolMode('water')}
+                    className={`px-2.5 py-1 rounded text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                      toolMode === 'water'
+                        ? 'bg-[#1976d2] text-white shadow'
+                        : 'text-[#64b5f6] hover:text-white hover:bg-[#262016]'
+                    }`}
+                    title="Click any zone on the grid to irrigate"
+                  >
+                    <span>💧 Water Tool</span>
+                  </button>
+
+                  <button
+                    onClick={() => setToolMode('harvest')}
+                    className={`px-2.5 py-1 rounded text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                      toolMode === 'harvest'
+                        ? 'bg-[#f57c00] text-white shadow'
+                        : 'text-[#ffb74d] hover:text-white hover:bg-[#262016]'
+                    }`}
+                    title="Click ready crops to harvest directly from the grid"
+                  >
+                    <span>🌾 Harvest Tool</span>
+                  </button>
+                </div>
+              </div>
+
+              <div className="text-[11px] text-[#b8ab8e] font-mono">
+                {toolMode === 'select' && <span>🖐️ Drag zones to move · Click to inspect</span>}
+                {toolMode === 'tend' && <span className="text-[#81c784]">🌿 Click any zone to weed & tend</span>}
+                {toolMode === 'water' && <span className="text-[#64b5f6]">💧 Click any zone to irrigate</span>}
+                {toolMode === 'harvest' && <span className="text-[#ffb74d]">🌾 Click ripe zones to harvest</span>}
+              </div>
             </div>
 
             {/* Grid Container */}
             <div
               ref={gridContainerRef}
               style={{ backgroundColor: seasonInfo.themeBg }}
-              className="w-full aspect-[4/3] border-2 border-[#3d3323] rounded-lg relative overflow-hidden select-none cursor-crosshair shadow-inner"
+              className={`w-full aspect-[4/3] border-2 border-[#3d3323] rounded-lg relative overflow-hidden select-none shadow-inner ${
+                toolMode === 'select' ? 'cursor-default' : 'cursor-crosshair'
+              }`}
             >
               {/* Background 24x18 Grid Lines */}
               <div
@@ -741,9 +1233,9 @@ export function PlotPlanner() {
               {/* Topography Contours if active */}
               {showTopography && (
                 <div className="absolute inset-0 pointer-events-none opacity-25 flex flex-col justify-between p-2 text-[9px] font-mono text-[#64b5f6]">
-                  <div>▲ High Elevation Ridge (North Swale)</div>
-                  <div>— Mid-Slope Fertile Loam —</div>
-                  <div>▼ Lowland Water Collection Basin (South Pond)</div>
+                  <div>▲ High Elevation Ridge (North Keyline Swale)</div>
+                  <div>— Mid-Slope Fertile Loam & Pasture —</div>
+                  <div>▼ Lowland Water Catchment & Irrigation Pond</div>
                 </div>
               )}
 
@@ -754,15 +1246,22 @@ export function PlotPlanner() {
                 const crop = z.plant?.cropId ? EXPANDED_CROP_CATALOG[z.plant.cropId] : null;
                 const stage = crop ? crop.growthStages[z.plant.stageIndex] || crop.growthStages[0] : null;
 
+                // Check if this zone has an animal paddock
+                const zonePaddock = paddocks.find(p => p.zoneId === z.id);
+                const zoneBreed = zonePaddock ? LIVESTOCK_BREEDS[zonePaddock.breedId] : null;
+
                 const leftPct = ((z.col - 1) / COLS) * 100;
                 const topPct = ((z.row - 1) / ROWS) * 100;
                 const widthPct = (z.w / COLS) * 100;
                 const heightPct = (z.h / ROWS) * 100;
 
+                const hasActiveEffect = zoneEffect?.zoneId === z.id;
+
                 return (
                   <div
                     key={z.id}
-                    onMouseDown={(e) => handleMouseDown(e, z)}
+                    onMouseDown={(e) => handleZoneMouseDown(e, z)}
+                    onMouseEnter={() => handleZoneMouseEnter(z)}
                     style={{
                       left: `${leftPct}%`,
                       top: `${topPct}%`,
@@ -770,24 +1269,44 @@ export function PlotPlanner() {
                       height: `${heightPct}%`,
                       backgroundColor: z.color
                     }}
-                    className={`absolute rounded transition-shadow flex flex-col justify-between p-1.5 cursor-grab active:cursor-grabbing border-2 ${
+                    className={`absolute rounded transition-shadow flex flex-col justify-between p-1.5 border-2 ${
+                      toolMode === 'select' ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer hover:brightness-110'
+                    } ${
                       isSelected
                         ? 'border-[#f4ecd8] shadow-[0_0_15px_rgba(201,162,39,0.5)] z-20 ring-2 ring-[#c9a227]'
                         : 'border-black/40 hover:border-white/50 z-10'
-                    } ${isDragging ? 'opacity-40' : 'opacity-95'}`}
+                    } ${isDragging ? 'opacity-30' : 'opacity-95'}`}
                   >
+                    {/* Floating Action Badge Feedback */}
+                    {hasActiveEffect && (
+                      <div
+                        className="absolute -top-3 left-1/2 -translate-x-1/2 px-2 py-0.5 rounded-full text-[10px] font-mono font-bold text-white shadow-xl z-40 animate-bounce flex items-center gap-1 whitespace-nowrap border border-white/40"
+                        style={{ backgroundColor: zoneEffect.color }}
+                      >
+                        <span>{zoneEffect.icon}</span>
+                        <span>{zoneEffect.text}</span>
+                      </div>
+                    )}
+
                     {/* Zone Badge Header */}
                     <div className="flex justify-between items-start leading-none pointer-events-none">
                       <span className="text-[9px] font-mono font-bold px-1 py-0.5 bg-black/60 rounded text-[#f4ecd8]">
                         #{z.id}
                       </span>
-                      {crop && (
-                        <span className="text-xs">{stage?.icon || '🌱'}</span>
-                      )}
-                      {z.type === 'water' && <span className="text-xs">💧</span>}
-                      {z.type === 'compost' && <span className="text-xs">🍂</span>}
-                      {z.type === 'livestock' && <span className="text-xs">🐑</span>}
-                      {z.type === 'building' && <span className="text-xs">🏡</span>}
+                      <div className="flex gap-1 items-center">
+                        {zoneBreed && (
+                          <span className="text-xs bg-black/60 px-1 py-0.5 rounded" title={zoneBreed.name}>
+                            {zoneBreed.icon}
+                          </span>
+                        )}
+                        {crop && (
+                          <span className="text-xs">{stage?.icon || '🌱'}</span>
+                        )}
+                        {z.type === 'water' && <span className="text-xs">💧</span>}
+                        {z.type === 'compost' && <span className="text-xs">🍂</span>}
+                        {z.type === 'livestock' && !zoneBreed && <span className="text-xs">🐑</span>}
+                        {z.type === 'building' && <span className="text-xs">🏡</span>}
+                      </div>
                     </div>
 
                     {/* Zone Name & Specs */}
@@ -805,13 +1324,13 @@ export function PlotPlanner() {
                       <div className="w-full space-y-0.5 pointer-events-none">
                         <div className="w-full bg-black/50 h-1 rounded-full overflow-hidden">
                           <div
-                            className="bg-[#64b5f6] h-full"
+                            className="bg-[#64b5f6] h-full transition-all duration-300"
                             style={{ width: `${z.plant.water}%` }}
                           />
                         </div>
                         <div className="w-full bg-black/50 h-1 rounded-full overflow-hidden">
                           <div
-                            className="bg-[#81c784] h-full"
+                            className="bg-[#81c784] h-full transition-all duration-300"
                             style={{ width: `${z.plant.health}%` }}
                           />
                         </div>
@@ -821,7 +1340,7 @@ export function PlotPlanner() {
                 );
               })}
 
-              {/* Drag Preview Outline */}
+              {/* Drag Preview Outline with Collision Feedback */}
               {dragPreviewPos && draggingZoneId && (
                 <div
                   style={{
@@ -830,15 +1349,23 @@ export function PlotPlanner() {
                     width: `${((zones.find(z => z.id === draggingZoneId)?.w || 1) / COLS) * 100}%`,
                     height: `${((zones.find(z => z.id === draggingZoneId)?.h || 1) / ROWS) * 100}%`
                   }}
-                  className="absolute border-2 border-dashed border-[#c9a227] bg-[#c9a227]/20 pointer-events-none z-30 rounded"
-                />
+                  className={`absolute border-2 border-dashed pointer-events-none z-30 rounded transition-colors duration-100 flex items-center justify-center ${
+                    dragHasCollision
+                      ? 'border-[#e57373] bg-[#e57373]/30 text-[#ffcdd2]'
+                      : 'border-[#81c784] bg-[#81c784]/25 text-[#c8e6c9]'
+                  }`}
+                >
+                  <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 bg-black/70 rounded">
+                    {dragHasCollision ? '⚠️ Blocked' : '✓ Drop Here'}
+                  </span>
+                </div>
               )}
             </div>
 
             {/* Grid Footnote */}
             <div className="flex justify-between items-center mt-2 px-1 text-[11px] font-mono text-[#8a7f68]">
-              <span>Snap-to-grid auto collision detection enabled</span>
-              <span className="text-[#81c784]">Click any zone to inspect pedology & agronomy</span>
+              <span>Snap-to-grid collision detection active</span>
+              <span className="text-[#81c784]">Click or drag any zone · Use Weed & Tend tool directly on grid</span>
             </div>
           </div>
         </div>
@@ -867,6 +1394,24 @@ export function PlotPlanner() {
                 </span>
               </div>
             </div>
+
+            {/* Phase 3 Animal Paddock Info if Present */}
+            {activePaddockOnSelected && paddockBreed && (
+              <div className="bg-[#261f14] border border-[#8a6f1c] p-2.5 rounded-lg text-xs font-mono space-y-1">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5 text-[#f4ecd8] font-bold">
+                    <span>{paddockBreed.icon}</span>
+                    <span>{paddockBreed.name}</span>
+                  </div>
+                  <span className="text-[10px] text-[#81c784] bg-[#2e7d32]/20 px-1.5 py-0.5 rounded">
+                    Day {activePaddockOnSelected.daysInPaddock}/{paddockBreed.rotationalDays}
+                  </span>
+                </div>
+                <div className="text-[10.5px] text-[#b8ab8e]">
+                  Pasture Forage: <b>{Math.round(activePaddockOnSelected.pastureBiomass)}%</b> · Yield in <b>{Math.max(0, paddockBreed.outputs.cycleDays - activePaddockOnSelected.cycleProgress)} days</b>
+                </div>
+              </div>
+            )}
 
             {/* Crop Details & Growth Stage */}
             {selectedCrop ? (
@@ -945,12 +1490,12 @@ export function PlotPlanner() {
                   onClick={() => setZoomMicroGrid(true)}
                   className="w-full p-2 rounded bg-[#221c15] hover:bg-[#2e261d] border border-[#3d3323] text-[#b8ab8e] hover:text-[#f4ecd8] text-xs font-mono transition-all cursor-pointer flex items-center justify-center gap-1.5"
                 >
-                  <span>🔍 Zoom Micro-Grid Plant Instances</span>
+                  <span>🔍 Zoom Micro-Grid Plant Matrix</span>
                 </button>
               </div>
             ) : (
               <div className="p-4 bg-[#171410] border border-dashed border-[#332c22] rounded-lg text-center text-xs text-[#8a7f68]">
-                <span>Building / Facility Zone. Enhances neighboring biological zones.</span>
+                <span>Building / Utility Zone. Powers and stores resources for adjacent agroecological guilds.</span>
               </div>
             )}
 
@@ -988,22 +1533,56 @@ export function PlotPlanner() {
         </div>
       </div>
 
-      {/* Bottom Tabs: Soil Pedology / Root Cellar & Market / Homestead Log */}
+      {/* Bottom Tabs: Soil Pedology / Root Cellar & Market / Rotational Grazing / Utilities / Homestead Log */}
       <div className="space-y-3">
-        <div className="flex gap-2 border-b border-[#332c22] pb-2 text-xs font-mono">
+        <div className="flex gap-2 border-b border-[#332c22] pb-2 text-xs font-mono overflow-x-auto">
+          <button
+            onClick={() => setActiveBottomTab('details')}
+            className={`px-3 py-2 rounded-lg font-bold shrink-0 transition-all cursor-pointer ${
+              activeBottomTab === 'details'
+                ? 'bg-[#c9a227] text-[#171410]'
+                : 'bg-[#1f1b15] text-[#b8ab8e] hover:text-white border border-[#332c22]'
+            }`}
+          >
+            📊 Zone #{selectedZone.id} Overview
+          </button>
+
           <button
             onClick={() => setActiveBottomTab('soil')}
-            className={`px-4 py-2 rounded-lg font-bold transition-all cursor-pointer ${
+            className={`px-3 py-2 rounded-lg font-bold shrink-0 transition-all cursor-pointer ${
               activeBottomTab === 'soil'
                 ? 'bg-[#c9a227] text-[#171410]'
                 : 'bg-[#1f1b15] text-[#b8ab8e] hover:text-white border border-[#332c22]'
             }`}
           >
-            🧪 Soil Chemistry & Pedology (Zone #{selectedZone.id})
+            🧪 Soil Chemistry & Pedology
           </button>
+
+          <button
+            onClick={() => setActiveBottomTab('grazing')}
+            className={`px-3 py-2 rounded-lg font-bold shrink-0 transition-all cursor-pointer ${
+              activeBottomTab === 'grazing'
+                ? 'bg-[#c9a227] text-[#171410]'
+                : 'bg-[#1f1b15] text-[#b8ab8e] hover:text-white border border-[#332c22]'
+            }`}
+          >
+            🐑 Rotational Grazing ({paddocks.length} herds)
+          </button>
+
+          <button
+            onClick={() => setActiveBottomTab('energy')}
+            className={`px-3 py-2 rounded-lg font-bold shrink-0 transition-all cursor-pointer ${
+              activeBottomTab === 'energy'
+                ? 'bg-[#c9a227] text-[#171410]'
+                : 'bg-[#1f1b15] text-[#b8ab8e] hover:text-white border border-[#332c22]'
+            }`}
+          >
+            ⚡ Water & Solar Microgrid
+          </button>
+
           <button
             onClick={() => setActiveBottomTab('cellar')}
-            className={`px-4 py-2 rounded-lg font-bold transition-all cursor-pointer ${
+            className={`px-3 py-2 rounded-lg font-bold shrink-0 transition-all cursor-pointer ${
               activeBottomTab === 'cellar'
                 ? 'bg-[#c9a227] text-[#171410]'
                 : 'bg-[#1f1b15] text-[#b8ab8e] hover:text-white border border-[#332c22]'
@@ -1011,15 +1590,16 @@ export function PlotPlanner() {
           >
             🛖 Root Cellar & Seasonal Market ({pantry.length} items)
           </button>
+
           <button
             onClick={() => setActiveBottomTab('log')}
-            className={`px-4 py-2 rounded-lg font-bold transition-all cursor-pointer ${
+            className={`px-3 py-2 rounded-lg font-bold shrink-0 transition-all cursor-pointer ${
               activeBottomTab === 'log'
                 ? 'bg-[#c9a227] text-[#171410]'
                 : 'bg-[#1f1b15] text-[#b8ab8e] hover:text-white border border-[#332c22]'
             }`}
           >
-            📜 Homestead Activity Log
+            📜 Activity Log
           </button>
         </div>
 
@@ -1030,6 +1610,103 @@ export function PlotPlanner() {
             credits={credits}
             onApplyAmendment={handleApplyAmendment}
           />
+        )}
+
+        {activeBottomTab === 'grazing' && (
+          <div className="bg-[#171410] border border-[#332c22] p-4 rounded-xl space-y-3">
+            <div className="flex items-center justify-between border-b border-[#332c22] pb-2">
+              <div className="flex items-center gap-2">
+                <span className="text-xl">🐑</span>
+                <div>
+                  <h3 className="text-sm font-bold font-mono text-[#f4ecd8]">Active Livestock Herds & Silvopasture</h3>
+                  <span className="text-[11px] text-[#8a7f68]">Rotational animal tractors cycle fertility into soil beds</span>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsGrazingModalOpen(true)}
+                className="px-3 py-1 rounded bg-[#c9a227] text-[#171410] font-mono font-bold text-xs cursor-pointer"
+              >
+                + Manage Herds & Paddocks
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+              {paddocks.map(p => {
+                const breed = LIVESTOCK_BREEDS[p.breedId];
+                const zone = zones.find(z => z.id === p.zoneId);
+                return (
+                  <div key={p.id} className="bg-[#1e1913] border border-[#332c22] p-3 rounded-lg flex flex-col justify-between">
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <div className="flex items-center gap-1.5 font-bold text-xs text-[#f4ecd8]">
+                          <span>{breed?.icon}</span>
+                          <span>{breed?.name}</span>
+                        </div>
+                        <span className="text-[10px] font-mono text-[#81c784]">Zone #{p.zoneId}</span>
+                      </div>
+                      <div className="text-[10px] text-[#8a7f68] font-mono">Location: {zone?.name}</div>
+                      <div className="text-[10.5px] text-[#b8ab8e] mt-1">
+                        Forage: <b>{Math.round(p.pastureBiomass)}%</b> · Days Grazed: <b>{p.daysInPaddock}/{breed?.rotationalDays}</b>
+                      </div>
+                    </div>
+
+                    <div className="mt-2 pt-2 border-t border-[#332c22] flex justify-between items-center text-[10px] font-mono">
+                      <span className="text-[#e9c46a]">Output: {breed?.outputs.name}</span>
+                      <button
+                        onClick={() => setIsGrazingModalOpen(true)}
+                        className="text-[#64b5f6] hover:underline cursor-pointer"
+                      >
+                        Shift Paddock
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {activeBottomTab === 'energy' && (
+          <div className="bg-[#171410] border border-[#332c22] p-4 rounded-xl space-y-3">
+            <div className="flex items-center justify-between border-b border-[#332c22] pb-2">
+              <div className="flex items-center gap-2">
+                <span className="text-xl">⚡</span>
+                <div>
+                  <h3 className="text-sm font-bold font-mono text-[#f4ecd8]">Off-Grid Utilities: Water & Solar Telemetry</h3>
+                  <span className="text-[11px] text-[#8a7f68]">Resilience calculations for cistern storage and LiFePO4 battery balance</span>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsEngineeringModalOpen(true)}
+                className="px-3 py-1 rounded bg-[#c9a227] text-[#171410] font-mono font-bold text-xs cursor-pointer"
+              >
+                + Upgrade Utilities Infrastructure
+              </button>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs font-mono">
+              <div className="bg-[#1e1913] p-3 rounded-lg border border-[#2a241b]">
+                <div className="text-[#8a7f68] text-[10px]">Cistern Reservoir</div>
+                <div className="text-sm font-bold text-[#64b5f6] mt-0.5">{Math.round(waterState.currentStoredGallons)} gal</div>
+                <div className="text-[9.5px] text-[#8a7f68] mt-1">Capacity: {waterState.maxCisternCapacityGallons} gal</div>
+              </div>
+              <div className="bg-[#1e1913] p-3 rounded-lg border border-[#2a241b]">
+                <div className="text-[#8a7f68] text-[10px]">Daily Irrigation Demand</div>
+                <div className="text-sm font-bold text-[#f4ecd8] mt-0.5">{Math.round(waterState.dailyConsumptionGallons)} gal/d</div>
+                <div className="text-[9.5px] text-[#81c784] mt-1">Type: {waterState.irrigationType.toUpperCase()}</div>
+              </div>
+              <div className="bg-[#1e1913] p-3 rounded-lg border border-[#2a241b]">
+                <div className="text-[#8a7f68] text-[10px]">PV Solar Microgrid</div>
+                <div className="text-sm font-bold text-[#e9c46a] mt-0.5">{(solarState.solarArrayWatts / 1000).toFixed(1)} kW Array</div>
+                <div className="text-[9.5px] text-[#8a7f68] mt-1">Daily Gen: +{solarState.dailyGenerationKwh.toFixed(1)} kWh</div>
+              </div>
+              <div className="bg-[#1e1913] p-3 rounded-lg border border-[#2a241b]">
+                <div className="text-[#8a7f68] text-[10px]">LiFePO4 Storage Bank</div>
+                <div className="text-sm font-bold text-[#81c784] mt-0.5">{solarState.currentBatteryStorageKwh.toFixed(1)} / {solarState.maxBatteryStorageKwh.toFixed(1)} kWh</div>
+                <div className="text-[9.5px] text-[#8a7f68] mt-1">Load: {solarState.dailyLoadKwh.toFixed(1)} kWh/d</div>
+              </div>
+            </div>
+          </div>
         )}
 
         {activeBottomTab === 'cellar' && (
@@ -1108,6 +1785,29 @@ export function PlotPlanner() {
       )}
 
       {/* Modals */}
+      <RotationalGrazingModal
+        isOpen={isGrazingModalOpen}
+        onClose={() => setIsGrazingModalOpen(false)}
+        paddocks={paddocks}
+        zones={zones}
+        credits={credits}
+        onAdoptBreed={handleAdoptBreed}
+        onRotatePaddock={handleRotatePaddock}
+        onHarvestLivestockYield={handleHarvestLivestockYield}
+      />
+
+      <HomesteadEngineeringModal
+        isOpen={isEngineeringModalOpen}
+        onClose={() => setIsEngineeringModalOpen(false)}
+        water={waterState}
+        solar={solarState}
+        credits={credits}
+        currentSeason={currentSeason}
+        onUpgradeWater={handleUpgradeWater}
+        onUpgradeSolar={handleUpgradeSolar}
+        onToggleGenerator={handleToggleGenerator}
+      />
+
       <CompanionMatrixModal
         isOpen={isCompanionModalOpen}
         onClose={() => setIsCompanionModalOpen(false)}
