@@ -15,6 +15,16 @@ import { HarvestCellarPanel, PantryItem } from './HarvestCellarPanel';
 import { HomesteadReportModal } from './HomesteadReportModal';
 import { RotationalGrazingModal } from './RotationalGrazingModal';
 import { HomesteadEngineeringModal } from './HomesteadEngineeringModal';
+import {
+  advanceWasteEconomy,
+  initialWasteEconomyState,
+  createCompostBin,
+  isHarvestContaminated,
+  getContaminationPenalty,
+  produceResidue,
+  getResidueProfile,
+} from '../../gameplay/waste-economy/api';
+import type { WasteEconomyState, ZoneRef } from '../../gameplay/waste-economy/api';
 
 const ACRE_SQFT = 43560;
 const COLS = 24;
@@ -108,6 +118,14 @@ export function PlotPlanner() {
     dailyLoadKwh: 18.2,
     isOffGridTied: true,
     backupBiomassGenActive: false
+  });
+
+  // Phase 4: Waste Economy State
+  const [wasteState, setWasteState] = useState<WasteEconomyState>(() => {
+    const initial = { ...initialWasteEconomyState };
+    const compostZones = zones.filter(z => z.type === 'compost');
+    initial.compostBins = compostZones.map(z => createCompostBin(z.id, z.sqft));
+    return initial;
   });
 
   // Modals & Panels
@@ -476,6 +494,71 @@ export function PlotPlanner() {
         });
       }
 
+      // Greywater flow from house
+      if (n.type === 'building' && n.buildingType === 'house' && zone.type === 'crop') {
+        synergies.push({
+          type: 'bonus',
+          title: 'Greywater Irrigation',
+          desc: 'Recycled household water reduces crop water drain by 30%.',
+          source: n.name
+        });
+      }
+      if (n.type === 'building' && n.buildingType === 'house' && zone.type === 'water') {
+        synergies.push({
+          type: 'bonus',
+          title: 'Greywater Recovery',
+          desc: 'Recycled household water supplements cistern storage.',
+          source: n.name
+        });
+      }
+
+      // Direct manure warning (livestock adjacent to crop with no compost buffer)
+      if (n.type === 'livestock' && zone.type === 'crop') {
+        const hasCompostBuffer = zones.some(z =>
+          z.type === 'compost' && z.id !== zone.id && z.id !== n.id &&
+          !(zone.col + zone.w < z.col - 1 || zone.col - 1 > z.col + z.w) &&
+          !(zone.row + zone.h < z.row - 1 || zone.row - 1 > z.row + z.h)
+        );
+        if (!hasCompostBuffer) {
+          const penalty = getContaminationPenalty(zone.id, cycleDay, wasteState.contaminations);
+          if (penalty) {
+            synergies.push({
+              type: 'penalty',
+              title: 'Raw Manure Contamination Risk',
+              desc: `Uncomposted manure applied. Harvest unsafe for ${penalty.daysUntilSafe} more days. Quality penalty if harvested early.`,
+              source: n.name
+            });
+          } else {
+            synergies.push({
+              type: 'info',
+              title: 'Direct Manure Application',
+              desc: 'Raw manure provides NPK but triggers a 120-day food safety hold before harvest.',
+              source: n.name
+            });
+          }
+        }
+      }
+
+      // Compost feed pipeline (livestock → compost)
+      if (n.type === 'livestock' && zone.type === 'compost') {
+        synergies.push({
+          type: 'bonus',
+          title: 'Manure Feed Pipeline',
+          desc: 'Livestock manure (green/nitrogen input) automatically feeds this compost bin.',
+          source: n.name
+        });
+      }
+
+      // Residue feed (crop → compost)
+      if (n.type === 'crop' && zone.type === 'compost' && n.plant?.cropId) {
+        synergies.push({
+          type: 'bonus',
+          title: 'Residue Feed Pipeline',
+          desc: 'Crop residue (brown/carbon input) feeds compost bin on harvest.',
+          source: n.name
+        });
+      }
+
       // Shed proximity
       if (n.type === 'building' && n.buildingType === 'shed') {
         synergies.push({
@@ -571,20 +654,7 @@ export function PlotPlanner() {
       const newBiomass = Math.max(5, p.pastureBiomass - pastureDrain);
       const newCycleProgress = p.cycleProgress + 1;
 
-      // Apply manure NPK to host zone
-      setZones(zPrev => zPrev.map(z => {
-        if (z.id === p.zoneId) {
-          return {
-            ...z,
-            soil: {
-              ...z.soil,
-              nitrogen: Math.min(100, z.soil.nitrogen + Math.round(breed.outputs.manureNpk.n / 4)),
-              organicMatter: Math.min(15, z.soil.organicMatter + 0.1)
-            }
-          };
-        }
-        return z;
-      }));
+      // Manure NPK now handled by waste-economy module via advanceWasteEconomy()
 
       return {
         ...p,
@@ -654,6 +724,67 @@ export function PlotPlanner() {
         }
       };
     }));
+
+    // 4. Advance Waste Economy (byproducts, composting, contamination, greywater)
+    const wasteZoneRefs: ZoneRef[] = zones.map(z => ({
+      id: z.id,
+      type: z.type,
+      col: z.col,
+      row: z.row,
+      w: z.w,
+      h: z.h,
+      sqft: z.sqft,
+      buildingType: z.buildingType ?? undefined,
+    }));
+    const wastePaddockRefs = paddocks.map(p => ({
+      breedId: p.breedId,
+      population: p.population,
+      zoneId: p.zoneId,
+    }));
+    const wasteResult = advanceWasteEconomy(
+      wasteState,
+      wasteZoneRefs,
+      wastePaddockRefs,
+      waterState.dailyConsumptionGallons,
+      nextDay,
+    );
+
+    setWasteState(wasteResult.state);
+
+    // Apply soil deltas from composting and direct manure
+    if (wasteResult.soilDeltas.length > 0) {
+      setZones(prev => prev.map(z => {
+        const delta = wasteResult.soilDeltas.find(d => d.zoneId === z.id);
+        if (!delta) return z;
+        return {
+          ...z,
+          soil: {
+            ...z.soil,
+            nitrogen: Math.min(100, z.soil.nitrogen + delta.nitrogenDelta),
+            phosphorus: Math.min(100, z.soil.phosphorus + delta.phosphorusDelta),
+            potassium: Math.min(100, z.soil.potassium + delta.potassiumDelta),
+            organicMatter: Math.min(15, z.soil.organicMatter + delta.organicMatterDelta),
+          },
+        };
+      }));
+    }
+
+    // Apply greywater water-drain reduction
+    if (wasteResult.waterDelta.reduceConsumptionGallons > 0) {
+      setWaterState(prev => ({
+        ...prev,
+        graywaterRecycledGallons: wasteResult.waterDelta.reduceConsumptionGallons,
+        currentStoredGallons: Math.min(
+          prev.maxCisternCapacityGallons,
+          prev.currentStoredGallons + wasteResult.waterDelta.reduceConsumptionGallons,
+        ),
+      }));
+    }
+
+    // Forward waste economy logs to the activity log
+    for (const log of wasteResult.logs) {
+      addLog(log, log.startsWith('⚠') ? 'alert' : 'bonus');
+    }
 
     addLog(`Advanced to Cycle Day ${nextDay} (${SEASON_METADATA[newSeason].name}). Systems updated.`, 'info');
   };
@@ -870,20 +1001,37 @@ export function PlotPlanner() {
     const plantUnits = Math.max(1, Math.round(targetZone.sqft / spacingSqft));
     const totalHarvestedQty = Math.round(baseYield * Math.min(10, Math.max(1, plantUnits / 50)));
 
-    // Add to pantry
+    // Check contamination penalty (120-day raw manure food safety rule)
+    const contamPenalty = getContaminationPenalty(zoneId, cycleDay, wasteState.contaminations);
+    const qualityMult = contamPenalty ? contamPenalty.qualityMultiplier : 1.0;
+    const priceMult = contamPenalty ? contamPenalty.priceMultiplier : 1.0;
+
     const newItem: PantryItem = {
       id: `p-${Date.now()}`,
       cropId: crop.id,
-      name: crop.harvest.displayName,
+      name: contamPenalty ? `${crop.harvest.displayName} (Contaminated)` : crop.harvest.displayName,
       qty: totalHarvestedQty,
       unit: crop.harvest.unit,
       preservation: 'fresh',
-      quality: 1.2,
-      basePrice: crop.harvest.basePrice,
+      quality: 1.2 * qualityMult,
+      basePrice: Math.round(crop.harvest.basePrice * priceMult),
       harvestDay: cycleDay
     };
 
     setPantry(prev => [newItem, ...prev]);
+
+    // Produce crop residue as brown compost input
+    const residueStack = produceResidue(crop.id, totalHarvestedQty, zoneId, cycleDay);
+    if (residueStack) {
+      setWasteState(prev => ({
+        ...prev,
+        byproducts: [...prev.byproducts, residueStack],
+        ledger: {
+          ...prev.ledger,
+          totalProducedLbs: prev.ledger.totalProducedLbs + residueStack.massLbs,
+        },
+      }));
+    }
 
     // Reset crop or perennial
     setZones(prev => prev.map(z => {
@@ -901,7 +1049,14 @@ export function PlotPlanner() {
       return z;
     }));
 
-    addLog(`🌾 Harvested ${totalHarvestedQty} ${crop.harvest.unit} of ${crop.harvest.displayName} from Zone #${zoneId}! Placed in root pantry.`, 'bonus');
+    if (contamPenalty) {
+      addLog(`⚠️ Harvested ${totalHarvestedQty} ${crop.harvest.unit} of ${crop.harvest.displayName} from Zone #${zoneId} — CONTAMINATED (${contamPenalty.daysUntilSafe} days early). Quality & price reduced.`, 'alert');
+    } else {
+      addLog(`🌾 Harvested ${totalHarvestedQty} ${crop.harvest.unit} of ${crop.harvest.displayName} from Zone #${zoneId}! Placed in root pantry.`, 'bonus');
+    }
+    if (residueStack) {
+      addLog(`♻️ ${Math.round(residueStack.massLbs)} lb of crop residue collected from Zone #${zoneId}.`, 'info');
+    }
   };
 
   const handleLoadPreset = (preset: HomesteadPreset) => {
@@ -1018,6 +1173,12 @@ export function PlotPlanner() {
             <div className="border-l border-[#332c22] pl-3">
               <div className="text-[9.5px] text-[#8a7f68] uppercase">⚡ Battery</div>
               <div className="text-[#e9c46a] font-bold">{solarState.currentBatteryStorageKwh.toFixed(1)} kWh</div>
+            </div>
+            <div className="border-l border-[#332c22] pl-3">
+              <div className="text-[9.5px] text-[#8a7f68] uppercase">♻️ Loop</div>
+              <div className={`font-bold ${wasteState.ledger.closedLoopPercent >= 70 ? 'text-[#81c784]' : wasteState.ledger.closedLoopPercent >= 40 ? 'text-[#e9c46a]' : 'text-[#ef5350]'}`}>
+                {wasteState.ledger.closedLoopPercent.toFixed(0)}%
+              </div>
             </div>
           </div>
 
