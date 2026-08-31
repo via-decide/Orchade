@@ -16,6 +16,7 @@ import {
 import PlantCard from './components/PlantCard';
 import PlantVisualizer from './components/PlantVisualizer';
 import { Encyclopedia } from './components/Encyclopedia';
+import { PlotPlanner } from './components/PlotPlanner';
 import { 
   Sprout, 
   FlaskConical, 
@@ -42,7 +43,9 @@ import {
   CloudLightning,
   Thermometer,
   Cloud,
-  BookOpen
+  BookOpen,
+  LayoutGrid,
+  Compass
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
@@ -180,7 +183,7 @@ const App: React.FC = () => {
     activeOrchardId: 'orchard-1',
     selectedPlantIndex: null,
     upgrades: INITIAL_UPGRADES,
-    activeTab: 'orchard',
+    activeTab: 'plot_planner',
     weather: getRandomWeather(),
     weatherForecast: [getRandomWeather(), getRandomWeather(), getRandomWeather()],
     climateControl: null,
@@ -1099,170 +1102,220 @@ const App: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen p-6 flex flex-col items-center gap-6 max-w-6xl mx-auto">
-      {/* Header Stats */}
-      <div className="w-full flex flex-col md:flex-row justify-between items-center hardware-panel p-4 px-6 md:px-8 gap-4">
-        <div className="flex flex-wrap justify-center md:justify-start gap-4 md:gap-8">
-          <div className="flex flex-col">
-            <span className="text-[10px] font-bold text-text-secondary uppercase tracking-widest">Temporal Cycle</span>
-            <span className="text-lg md:text-xl font-mono font-bold text-leaf-green">DAY {state.day}</span>
-          </div>
-          <div className="flex flex-col">
-            <span className="text-[10px] font-bold text-text-secondary uppercase tracking-widest">Liquid Capital</span>
-            <span className="text-lg md:text-xl font-mono font-bold text-mineral-gold">{state.credits} 🪙</span>
-          </div>
-          <div className="flex flex-col">
-            <span className="text-[10px] font-bold text-text-secondary uppercase tracking-widest">Genetic Data</span>
-            <span className="text-lg md:text-xl font-mono font-bold text-water-blue">{state.dataSeeds} 🧬</span>
-          </div>
-          
-          {/* Weather Indicator */}
-          {state.weather && (
-            <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-              {/* Current Atmosphere */}
-              <div className="flex items-center gap-3 px-4 py-1.5 bg-black/20 rounded-xl border border-bark-brown/30 overflow-hidden">
-                <AnimatePresence mode="wait">
-                  <motion.div 
-                    key={state.weather.type}
-                    initial={{ opacity: 0, x: -10 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    exit={{ opacity: 0, x: 10 }}
-                    transition={{ duration: 0.3, ease: "easeOut" }}
-                    className="flex items-center gap-3"
-                  >
-                    <div className={`p-1.5 rounded-lg ${
-                      state.weather.type === 'clear' ? 'text-mineral-gold bg-mineral-gold/10' :
-                      state.weather.type === 'rain' ? 'text-water-blue bg-water-blue/10' :
-                      state.weather.type === 'storm' ? 'text-violet-400 bg-violet-400/10' :
-                      state.weather.type === 'heatwave' ? 'text-burn-red bg-burn-red/10' :
-                      'text-text-secondary bg-text-secondary/10'
-                    }`}>
-                      {state.weather.type === 'clear' && <Sun size={18} />}
-                      {state.weather.type === 'rain' && <CloudRain size={18} />}
-                      {state.weather.type === 'storm' && <CloudLightning size={18} />}
-                      {state.weather.type === 'heatwave' && <Thermometer size={18} />}
-                      {state.weather.type === 'fog' && <Cloud size={18} />}
-                    </div>
-                    <div className="flex flex-col">
-                      <span className="text-[9px] font-bold text-text-secondary uppercase tracking-widest">Atmosphere</span>
-                      <span className="text-xs font-bold uppercase leading-none">{state.weather.name}</span>
-                    </div>
-                  </motion.div>
-                </AnimatePresence>
-              </div>
-
-              {/* 3-Day Forecast */}
-              <div className="flex items-center gap-2.5 px-3 py-1 bg-black/10 rounded-xl border border-bark-brown/10 relative">
-                <span className="text-[9px] font-bold text-text-secondary uppercase tracking-widest mr-1 sm:block hidden">Forecast</span>
-                <div className="flex gap-2">
-                  {(state.weatherForecast || []).map((w, index) => (
-                    <div 
-                      key={index} 
-                      className="group relative flex flex-col items-center gap-0.5 bg-black/30 hover:bg-black/50 p-1 px-2 rounded-lg border border-white/5 transition-all cursor-help"
-                    >
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-[8px] font-mono text-text-secondary font-bold">D+{index+1}</span>
-                        <div className={`
-                          ${w.type === 'clear' ? 'text-mineral-gold' : ''}
-                          ${w.type === 'rain' ? 'text-water-blue' : ''}
-                          ${w.type === 'storm' ? 'text-violet-400' : ''}
-                          ${w.type === 'heatwave' ? 'text-burn-red' : ''}
-                          ${w.type === 'fog' ? 'text-text-secondary' : ''}
-                        `}>
-                          {w.type === 'clear' && <Sun size={11} />}
-                          {w.type === 'rain' && <CloudRain size={11} />}
-                          {w.type === 'storm' && <CloudLightning size={11} />}
-                          {w.type === 'heatwave' && <Thermometer size={11} />}
-                          {w.type === 'fog' && <Cloud size={11} />}
-                        </div>
-                      </div>
-                      
-                      {/* Rich strategic micro tooltip */}
-                      <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-44 p-2 bg-slate-900 border border-fuchsia-500/20 text-[10px] text-text-secondary rounded-lg opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity z-50 shadow-xl space-y-1">
-                        <div className="flex justify-between font-bold">
-                          <span className="text-text-primary uppercase font-mono">Day {state.day + index + 1}</span>
-                          <span className={`uppercase font-mono ${
-                            w.type === 'clear' ? 'text-mineral-gold' :
-                            w.type === 'rain' ? 'text-water-blue' :
-                            w.type === 'storm' ? 'text-violet-400' :
-                            w.type === 'heatwave' ? 'text-burn-red' :
-                            'text-text-secondary'
-                          }`}>{w.name}</span>
-                        </div>
-                        <p className="font-sans leading-tight text-[9px]">{w.description}</p>
-                        <div className="border-t border-white/5 pt-1 mt-1 flex justify-between font-mono text-[8px]">
-                          <span>STRESS FACTOR:</span>
-                          <span className="text-text-primary">x{w.intensity}</span>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-        <div className="flex items-center gap-3 w-full md:w-auto">
-          {state.user && (
-            <button 
-              onClick={handleLogout}
-              className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-burn-red/10 hover:bg-burn-red/20 px-4 py-2 rounded-lg border border-burn-red/30 transition-all text-[10px] font-bold text-burn-red uppercase tracking-widest"
-            >
-              <LogOut size={14} />
-              LOGOUT
-            </button>
-          )}
-          <button 
-            onClick={nextDay}
-            className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-bark-brown/20 hover:bg-bark-brown/40 px-6 py-2 rounded-lg border border-bark-brown transition-all text-sm font-bold"
+    <div className="min-h-screen p-4 sm:p-6 flex flex-col items-center gap-6 max-w-6xl mx-auto">
+      {/* Top Main Mode Switcher */}
+      <div className="w-full flex flex-wrap items-center justify-between bg-[#1f1b15] border border-[#332c22] p-2 rounded-xl gap-2 shadow-lg">
+        <div className="flex items-center gap-2 flex-wrap">
+          <button
+            onClick={() => setState(p => ({ ...p, activeTab: 'plot_planner' }))}
+            className={`px-4 py-2 rounded-lg text-xs font-mono font-bold flex items-center gap-2 transition-all cursor-pointer ${
+              state.activeTab === 'plot_planner'
+                ? 'bg-[#c9a227] text-[#171410] shadow-[0_2px_0_#8a6f1c]'
+                : 'bg-[#171410] text-[#8a7f68] hover:text-[#f4ecd8] border border-[#332c22]'
+            }`}
           >
-            <RefreshCw size={16} />
-            END CYCLE
+            <LayoutGrid size={15} />
+            <span>🌱 Plot Planner & Homestead Layout</span>
           </button>
+          <button
+            onClick={() => setState(p => ({ ...p, activeTab: 'orchard' }))}
+            className={`px-4 py-2 rounded-lg text-xs font-mono font-bold flex items-center gap-2 transition-all cursor-pointer ${
+              state.activeTab !== 'plot_planner'
+                ? 'bg-leaf-green text-soil-dark shadow-md'
+                : 'bg-[#171410] text-[#8a7f68] hover:text-[#f4ecd8] border border-[#332c22]'
+            }`}
+          >
+            <Sprout size={15} />
+            <span>🧪 Cyber-Orchard Laboratory & Telemetry</span>
+          </button>
+        </div>
+
+        <div className="text-[11px] text-[#8a7f68] font-mono pr-2 hidden sm:block">
+          {state.activeTab === 'plot_planner' ? 'Interactive 24×18 Homestead Grid' : `Cycle Day ${state.day} · ${state.credits} credits`}
         </div>
       </div>
 
-      <div className="w-full grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Navigation Rail */}
-        <div className="lg:col-span-1 flex flex-row lg:flex-col gap-3 md:gap-4 overflow-x-auto pb-2 lg:pb-0 scrollbar-hide">
-          <button 
-            onClick={() => setState(p => ({ ...p, activeTab: 'orchard' }))}
-            className={`flex-1 lg:flex-none p-4 rounded-xl flex items-center justify-center transition-all ${state.activeTab === 'orchard' ? 'bg-leaf-green text-soil-dark' : 'bg-card-bg text-text-secondary hover:text-white'}`}
-          >
-            <Sprout size={24} />
-          </button>
-          <button 
-            onClick={() => setState(p => ({ ...p, activeTab: 'lab' }))}
-            className={`flex-1 lg:flex-none p-4 rounded-xl flex items-center justify-center transition-all ${state.activeTab === 'lab' ? 'bg-water-blue text-soil-dark' : 'bg-card-bg text-text-secondary hover:text-white'}`}
-          >
-            <FlaskConical size={24} />
-          </button>
-          <button 
-            onClick={() => setState(p => ({ ...p, activeTab: 'market' }))}
-            className={`flex-1 lg:flex-none p-4 rounded-xl flex items-center justify-center transition-all ${state.activeTab === 'market' ? 'bg-mineral-gold text-soil-dark' : 'bg-card-bg text-text-secondary hover:text-white'}`}
-          >
-            <Store size={24} />
-          </button>
-          <button 
-            onClick={() => setState(p => ({ ...p, activeTab: 'rankings' }))}
-            className={`flex-1 lg:flex-none p-4 rounded-xl flex items-center justify-center transition-all ${state.activeTab === 'rankings' ? 'bg-burn-red text-soil-dark' : 'bg-card-bg text-text-secondary hover:text-white'}`}
-          >
-            <Trophy size={24} />
-          </button>
-          <button 
-            onClick={() => setState(p => ({ ...p, activeTab: 'archives' }))}
-            className={`flex-1 lg:flex-none p-4 rounded-xl flex items-center justify-center transition-all ${state.activeTab === 'archives' ? 'bg-fuchsia-500 text-soil-dark' : 'bg-card-bg text-text-secondary hover:text-white'}`}
-            title="Botanical Archives & Encyclopedia"
-          >
-            <BookOpen size={24} />
-          </button>
-          <button 
-            onClick={() => setState(p => ({ ...p, activeTab: 'profile' }))}
-            className={`flex-1 lg:flex-none p-4 rounded-xl flex items-center justify-center transition-all ${state.activeTab === 'profile' ? 'bg-text-primary text-soil-dark' : 'bg-card-bg text-text-secondary hover:text-white'}`}
-          >
-            <User size={24} />
-          </button>
+      {state.activeTab === 'plot_planner' ? (
+        <div className="w-full">
+          <PlotPlanner />
         </div>
+      ) : (
+        <>
+          {/* Header Stats */}
+          <div className="w-full flex flex-col md:flex-row justify-between items-center hardware-panel p-4 px-6 md:px-8 gap-4">
+            <div className="flex flex-wrap justify-center md:justify-start gap-4 md:gap-8">
+              <div className="flex flex-col">
+                <span className="text-[10px] font-bold text-text-secondary uppercase tracking-widest">Temporal Cycle</span>
+                <span className="text-lg md:text-xl font-mono font-bold text-leaf-green">DAY {state.day}</span>
+              </div>
+              <div className="flex flex-col">
+                <span className="text-[10px] font-bold text-text-secondary uppercase tracking-widest">Liquid Capital</span>
+                <span className="text-lg md:text-xl font-mono font-bold text-mineral-gold">{state.credits} 🪙</span>
+              </div>
+              <div className="flex flex-col">
+                <span className="text-[10px] font-bold text-text-secondary uppercase tracking-widest">Genetic Data</span>
+                <span className="text-lg md:text-xl font-mono font-bold text-water-blue">{state.dataSeeds} 🧬</span>
+              </div>
+              
+              {/* Weather Indicator */}
+              {state.weather && (
+                <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+                  {/* Current Atmosphere */}
+                  <div className="flex items-center gap-3 px-4 py-1.5 bg-black/20 rounded-xl border border-bark-brown/30 overflow-hidden">
+                    <AnimatePresence mode="wait">
+                      <motion.div 
+                        key={state.weather.type}
+                        initial={{ opacity: 0, x: -10 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        exit={{ opacity: 0, x: 10 }}
+                        transition={{ duration: 0.3, ease: "easeOut" }}
+                        className="flex items-center gap-3"
+                      >
+                        <div className={`p-1.5 rounded-lg ${
+                          state.weather.type === 'clear' ? 'text-mineral-gold bg-mineral-gold/10' :
+                          state.weather.type === 'rain' ? 'text-water-blue bg-water-blue/10' :
+                          state.weather.type === 'storm' ? 'text-violet-400 bg-violet-400/10' :
+                          state.weather.type === 'heatwave' ? 'text-burn-red bg-burn-red/10' :
+                          'text-text-secondary bg-text-secondary/10'
+                        }`}>
+                          {state.weather.type === 'clear' && <Sun size={18} />}
+                          {state.weather.type === 'rain' && <CloudRain size={18} />}
+                          {state.weather.type === 'storm' && <CloudLightning size={18} />}
+                          {state.weather.type === 'heatwave' && <Thermometer size={18} />}
+                          {state.weather.type === 'fog' && <Cloud size={18} />}
+                        </div>
+                        <div className="flex flex-col">
+                          <span className="text-[9px] font-bold text-text-secondary uppercase tracking-widest">Atmosphere</span>
+                          <span className="text-xs font-bold uppercase leading-none">{state.weather.name}</span>
+                        </div>
+                      </motion.div>
+                    </AnimatePresence>
+                  </div>
+
+                  {/* 3-Day Forecast */}
+                  <div className="flex items-center gap-2.5 px-3 py-1 bg-black/10 rounded-xl border border-bark-brown/10 relative">
+                    <span className="text-[9px] font-bold text-text-secondary uppercase tracking-widest mr-1 sm:block hidden">Forecast</span>
+                    <div className="flex gap-2">
+                      {(state.weatherForecast || []).map((w, index) => (
+                        <div 
+                          key={index} 
+                          className="group relative flex flex-col items-center gap-0.5 bg-black/30 hover:bg-black/50 p-1 px-2 rounded-lg border border-white/5 transition-all cursor-help"
+                        >
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-[8px] font-mono text-text-secondary font-bold">D+{index+1}</span>
+                            <div className={`
+                              ${w.type === 'clear' ? 'text-mineral-gold' : ''}
+                              ${w.type === 'rain' ? 'text-water-blue' : ''}
+                              ${w.type === 'storm' ? 'text-violet-400' : ''}
+                              ${w.type === 'heatwave' ? 'text-burn-red' : ''}
+                              ${w.type === 'fog' ? 'text-text-secondary' : ''}
+                            `}>
+                              {w.type === 'clear' && <Sun size={11} />}
+                              {w.type === 'rain' && <CloudRain size={11} />}
+                              {w.type === 'storm' && <CloudLightning size={11} />}
+                              {w.type === 'heatwave' && <Thermometer size={11} />}
+                              {w.type === 'fog' && <Cloud size={11} />}
+                            </div>
+                          </div>
+                          
+                          {/* Rich strategic micro tooltip */}
+                          <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-44 p-2 bg-slate-900 border border-fuchsia-500/20 text-[10px] text-text-secondary rounded-lg opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity z-50 shadow-xl space-y-1">
+                            <div className="flex justify-between font-bold">
+                              <span className="text-text-primary uppercase font-mono">Day {state.day + index + 1}</span>
+                              <span className={`uppercase font-mono ${
+                                w.type === 'clear' ? 'text-mineral-gold' :
+                                w.type === 'rain' ? 'text-water-blue' :
+                                w.type === 'storm' ? 'text-violet-400' :
+                                w.type === 'heatwave' ? 'text-burn-red' :
+                                'text-text-secondary'
+                              }`}>{w.name}</span>
+                            </div>
+                            <p className="font-sans leading-tight text-[9px]">{w.description}</p>
+                            <div className="border-t border-white/5 pt-1 mt-1 flex justify-between font-mono text-[8px]">
+                              <span>STRESS FACTOR:</span>
+                              <span className="text-text-primary">x{w.intensity}</span>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+            <div className="flex items-center gap-3 w-full md:w-auto">
+              {state.user && (
+                <button 
+                  onClick={handleLogout}
+                  className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-burn-red/10 hover:bg-burn-red/20 px-4 py-2 rounded-lg border border-burn-red/30 transition-all text-[10px] font-bold text-burn-red uppercase tracking-widest"
+                >
+                  <LogOut size={14} />
+                  LOGOUT
+                </button>
+              )}
+              <button 
+                onClick={nextDay}
+                className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-bark-brown/20 hover:bg-bark-brown/40 px-6 py-2 rounded-lg border border-bark-brown transition-all text-sm font-bold"
+              >
+                <RefreshCw size={16} />
+                END CYCLE
+              </button>
+            </div>
+          </div>
+
+          <div className="w-full grid grid-cols-1 lg:grid-cols-12 gap-6">
+            {/* Navigation Rail */}
+            <div className="lg:col-span-1 flex flex-row lg:flex-col gap-3 md:gap-4 overflow-x-auto pb-2 lg:pb-0 scrollbar-hide">
+              <button 
+                onClick={() => setState(p => ({ ...p, activeTab: 'plot_planner' }))}
+                className="flex-1 lg:flex-none p-4 rounded-xl flex items-center justify-center transition-all bg-card-bg text-text-secondary hover:text-white"
+                title="Plot Planner"
+              >
+                <LayoutGrid size={24} />
+              </button>
+              <button 
+                onClick={() => setState(p => ({ ...p, activeTab: 'orchard' }))}
+                className={`flex-1 lg:flex-none p-4 rounded-xl flex items-center justify-center transition-all ${state.activeTab === 'orchard' ? 'bg-leaf-green text-soil-dark' : 'bg-card-bg text-text-secondary hover:text-white'}`}
+                title="Orchard"
+              >
+                <Sprout size={24} />
+              </button>
+              <button 
+                onClick={() => setState(p => ({ ...p, activeTab: 'lab' }))}
+                className={`flex-1 lg:flex-none p-4 rounded-xl flex items-center justify-center transition-all ${state.activeTab === 'lab' ? 'bg-water-blue text-soil-dark' : 'bg-card-bg text-text-secondary hover:text-white'}`}
+                title="Laboratory"
+              >
+                <FlaskConical size={24} />
+              </button>
+              <button 
+                onClick={() => setState(p => ({ ...p, activeTab: 'market' }))}
+                className={`flex-1 lg:flex-none p-4 rounded-xl flex items-center justify-center transition-all ${state.activeTab === 'market' ? 'bg-mineral-gold text-soil-dark' : 'bg-card-bg text-text-secondary hover:text-white'}`}
+                title="Market"
+              >
+                <Store size={24} />
+              </button>
+              <button 
+                onClick={() => setState(p => ({ ...p, activeTab: 'rankings' }))}
+                className={`flex-1 lg:flex-none p-4 rounded-xl flex items-center justify-center transition-all ${state.activeTab === 'rankings' ? 'bg-burn-red text-soil-dark' : 'bg-card-bg text-text-secondary hover:text-white'}`}
+                title="Leaderboard"
+              >
+                <Trophy size={24} />
+              </button>
+              <button 
+                onClick={() => setState(p => ({ ...p, activeTab: 'archives' }))}
+                className={`flex-1 lg:flex-none p-4 rounded-xl flex items-center justify-center transition-all ${state.activeTab === 'archives' ? 'bg-fuchsia-500 text-soil-dark' : 'bg-card-bg text-text-secondary hover:text-white'}`}
+                title="Botanical Archives & Encyclopedia"
+              >
+                <BookOpen size={24} />
+              </button>
+              <button 
+                onClick={() => setState(p => ({ ...p, activeTab: 'profile' }))}
+                className={`flex-1 lg:flex-none p-4 rounded-xl flex items-center justify-center transition-all ${state.activeTab === 'profile' ? 'bg-text-primary text-soil-dark' : 'bg-card-bg text-text-secondary hover:text-white'}`}
+                title="Profile"
+              >
+                <User size={24} />
+              </button>
+            </div>
 
         {/* Main Content Area */}
         <div className="lg:col-span-11 space-y-6">
@@ -1992,8 +2045,10 @@ const App: React.FC = () => {
           </div>
         </div>
       </div>
+    </>
+  )}
 
-      {/* Seed Selection Dialog */}
+  {/* Seed Selection Dialog */}
       <AnimatePresence>
         {seedingPlotIndex !== null && (
           <motion.div 

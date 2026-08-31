@@ -68,7 +68,9 @@ class UiLayerManager {
 }
 
 export async function bootstrapOrchadeRuntime() {
-  const layers = collectLayers(); const events = new RuntimeEventHub(); const ui = new UiLayerManager(layers, events); void ui;
+  const layers = collectLayers();
+  if (!layers) return;
+  const events = new RuntimeEventHub(); const ui = new UiLayerManager(layers, events); void ui;
   const started = performance.now(); const seed = localStorage.getItem('orchade.seed') ?? `orchade-${new Date().toISOString().slice(0, 10)}`;
   layers.loading.querySelector('[data-runtime-version]')!.textContent = `v${'0.0.0'}`; layers.loading.querySelector('[data-runtime-seed]')!.textContent = `seed: ${seed}`;
   setInterval(() => { const elapsed = ((performance.now() - started) / 1000).toFixed(1); layers.loading.querySelector('[data-elapsed]')!.textContent = `${elapsed}s`; }, 100);
@@ -80,4 +82,26 @@ export async function bootstrapOrchadeRuntime() {
   setInterval(() => { layers.performance.textContent = `FPS 60 | Frame 16.6ms | Sim 2.1ms | Render 4.3ms | AI 0.8ms | Navigation 0.4ms | Chunks 32 | Memory ${(performance as any).memory ? Math.round((performance as any).memory.usedJSHeapSize / 1048576) : 'n/a'}MB | Entities 128 | NPCs 3 | Animals 12 | Crops 81 | Events/sec 24 | Commands/sec 5`; }, 500);
 }
 
-function collectLayers(): LayerMap { return { loading: document.getElementById('loading-screen')!, viewport: document.getElementById('game-viewport')!, canvas: document.getElementById('render-canvas') as HTMLCanvasElement, hud: document.getElementById('hud')!, debug: document.getElementById('debug-overlay')!, modal: document.getElementById('modal-layer')!, notifications: document.getElementById('notification-layer')!, tooltip: document.getElementById('tooltip-layer')!, contextMenu: document.getElementById('context-menu-layer')!, developer: document.getElementById('developer-console')!, performance: document.getElementById('performance-overlay')!, audio: document.getElementById('audio-layer')!, accessibility: document.getElementById('accessibility-layer')!, mobile: document.getElementById('mobile-controls')! }; }
+function collectLayers(): LayerMap | null {
+  const loading = document.getElementById('loading-screen');
+  const viewport = document.getElementById('game-viewport');
+  const canvas = document.getElementById('render-canvas') as HTMLCanvasElement;
+  const hud = document.getElementById('hud');
+  if (!loading || !viewport || !canvas || !hud) return null;
+  return {
+    loading,
+    viewport,
+    canvas,
+    hud,
+    debug: document.getElementById('debug-overlay')!,
+    modal: document.getElementById('modal-layer')!,
+    notifications: document.getElementById('notification-layer')!,
+    tooltip: document.getElementById('tooltip-layer')!,
+    contextMenu: document.getElementById('context-menu-layer')!,
+    developer: document.getElementById('developer-console')!,
+    performance: document.getElementById('performance-overlay')!,
+    audio: document.getElementById('audio-layer')!,
+    accessibility: document.getElementById('accessibility-layer')!,
+    mobile: document.getElementById('mobile-controls')!
+  };
+}

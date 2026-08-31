@@ -33,7 +33,7 @@ export type CropInstance = {
   health: number;
   water: number;
   nutrients: SoilNutrients;
-  genetics: CropDefinition['genetics'];
+  genetics: { yield: number; vigor: number; quality: number; droughtTolerance: number; pestResistance: number };
   disease: Partial<Record<DiseaseType, number>>;
   pests: Partial<Record<PestType, number>>;
   harvestRemaining: number;

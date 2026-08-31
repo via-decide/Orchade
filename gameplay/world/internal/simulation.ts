@@ -59,22 +59,23 @@ export const plantCropFromInventory = (world: WorldState, inventory: InventorySt
   const definition = getCropDefinition(definitionId);
   if (!tile) return { world, inventory, reason: 'Tile not found' };
   if (tile.plantedCropId) return { world, inventory, reason: 'Tile already planted' };
-  if (!definition.seasons.includes(world.clock.season)) return { world, inventory, reason: `${definition.displayName} is not compatible with ${world.clock.season}` };
+  if (definition && !definition.seasons.includes(world.clock.season)) return { world, inventory, reason: `${definition.displayName} is not compatible with ${world.clock.season}` };
   const consumed = removeItem(inventory, inventory.backpack.id, seedItemId, 1);
   if (consumed.removed !== 1) return { world, inventory, reason: 'Seed not available in inventory' };
+  const avgYield = definition ? (definition.harvest.minYield + definition.harvest.maxYield) / 2 : 2;
   const crop: CropInstance = {
-    id: cropId(definition.id, tile.position.x, tile.position.y, world.clock.tick),
-    definitionId: definition.id,
+    id: cropId(definition?.id ?? definitionId, tile.position.x, tile.position.y, world.clock.tick),
+    definitionId: definition?.id ?? definitionId,
     plantedAt: world.clock.tick,
     growthProgress: 0,
     growthStage: 0,
     health: 100,
     water: tile.moisture,
     nutrients: { ...tile.nutrients },
-    genetics: { ...definition.genetics },
+    genetics: { yield: avgYield, vigor: 1.0, quality: 1.0, droughtTolerance: 1.0, pestResistance: 1.0 },
     disease: {},
     pests: {},
-    harvestRemaining: definition.harvests,
+    harvestRemaining: definition?.isPerennial ? 5 : 1,
     owner,
     tile: { ...tile.position },
     readyToHarvest: false,
@@ -86,20 +87,24 @@ export const plantCropFromInventory = (world: WorldState, inventory: InventorySt
 
 const updateCrop = (world: WorldState, tile: FarmTile, crop: CropInstance): { tile: FarmTile; crop: CropInstance } => {
   const definition = getCropDefinition(crop.definitionId);
-  const compatible = definition.seasons.includes(world.clock.season);
+  const compatible = definition ? definition.seasons.includes(world.clock.season) : true;
   const moistureScore = 1 - Math.abs(tile.moisture - 62) / 100;
   const nutrientScore = Math.max(0.55, (tile.nutrients.nitrogen + tile.nutrients.phosphorus + tile.nutrients.potassium) / 300);
   const fertilizerBoost = tile.fertilizer ? 1 + tile.fertilizer.potency / 100 : 1;
   const diseaseLoad = Object.values(crop.disease).reduce((sum, value) => sum + (value ?? 0), 0);
   const pestLoad = Object.values(crop.pests).reduce((sum, value) => sum + (value ?? 0), 0);
-  const growth = (100 / (definition.baseGrowthDays * world.clock.ticksPerDay)) * definition.genetics.vigor * seasonMultiplier[world.clock.season] * weatherGrowth[world.weather.current] * moistureScore * nutrientScore * fertilizerBoost * (compatible ? 1 : 0.25);
+  const baseGrowthDays = definition && definition.growthStages?.length 
+    ? definition.growthStages.reduce((acc, st) => acc + st.days, 0) 
+    : 60;
+  const growth = (100 / (baseGrowthDays * world.clock.ticksPerDay)) * (crop.genetics?.vigor ?? 1) * seasonMultiplier[world.clock.season] * weatherGrowth[world.weather.current] * moistureScore * nutrientScore * fertilizerBoost * (compatible ? 1 : 0.25);
   const progress = crop.readyToHarvest ? crop.growthProgress : clamp(crop.growthProgress + growth, 0, 100);
   const health = clamp(crop.health - diseaseLoad * 0.02 - pestLoad * 0.015 + (compatible ? 0.02 : -0.1));
   const readyToHarvest = progress >= 100;
-  const nutrientDrain = definition.soil.nutrientUse / world.clock.ticksPerDay;
+  const nutrientDrain = 12 / world.clock.ticksPerDay;
+  const waterUse = (definition?.water?.max ?? 80) * 0.1;
   const nextTile = {
     ...tile,
-    moisture: clamp(tile.moisture + weatherMoisture[world.weather.current] * 0.1 + (tile.irrigation.enabled ? tile.irrigation.efficiency * 4 : 0) - definition.soil.waterUse / world.clock.ticksPerDay),
+    moisture: clamp(tile.moisture + weatherMoisture[world.weather.current] * 0.1 + (tile.irrigation.enabled ? tile.irrigation.efficiency * 4 : 0) - waterUse / world.clock.ticksPerDay),
     nutrients: {
       nitrogen: clamp(tile.nutrients.nitrogen - nutrientDrain * 0.45 + (tile.fertilizer?.type === 'organic' ? 0.25 : 0)),
       phosphorus: clamp(tile.nutrients.phosphorus - nutrientDrain * 0.25 + (tile.fertilizer?.type === 'mineral' ? 0.3 : 0)),
@@ -140,8 +145,9 @@ export const harvestCropToInventory = (world: WorldState, inventory: InventorySt
   if (!crop || !crop.readyToHarvest) return { world, inventory, quantity: 0, overflow: 0, reason: 'Crop is not ready' };
   const definition = getCropDefinition(crop.definitionId);
   const quality = clamp(crop.health, 1, 100) / 100;
-  const quantity = Math.max(1, Math.round(2 * definition.genetics.yield * quality));
-  const itemId = `${definition.id}-crop`;
+  const yieldMultiplier = crop.genetics?.yield ?? (definition ? (definition.harvest.minYield + definition.harvest.maxYield) / 2 : 2);
+  const quantity = Math.max(1, Math.round(2 * yieldMultiplier * quality));
+  const itemId = `${crop.definitionId}-crop`;
   const added = addItem(inventory, inventory.backpack.id, itemId, quantity);
   const overflow = added.remainder;
   const tile = world.tiles.find(candidate => candidate.plantedCropId === crop.id);

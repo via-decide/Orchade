@@ -58,7 +58,7 @@ export type GameState = {
   activeOrchardId: string;
   selectedPlantIndex: number | null;
   upgrades: GlobalUpgrades;
-  activeTab: 'orchard' | 'lab' | 'market' | 'rankings' | 'profile' | 'archives';
+  activeTab: 'plot_planner' | 'orchard' | 'lab' | 'market' | 'rankings' | 'profile' | 'archives';
   weather?: Weather;
   weatherForecast?: Weather[];
   climateControl?: {

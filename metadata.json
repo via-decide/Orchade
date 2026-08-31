@@ -1,6 +1,6 @@
 {
-  "name": "Orchade: Homestead Agronomic & Orchard Engine",
-  "description": "A multi-layered agronomic and ecosystem simulation featuring research-grounded per-crop growth lifecycles, resource management, and zone planning.",
+  "name": "Plot Planner — Homestead Zone Layout & Agronomic Engine",
+  "description": "Move it, tend it, watch it respond. Drag zones anywhere on the plot, assign researched crops, inspect individual plant instances, water ranges, nutrient drivers, and placement neighbor synergies.",
   "requestFramePermissions": [],
   "majorCapabilities": [
     "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
