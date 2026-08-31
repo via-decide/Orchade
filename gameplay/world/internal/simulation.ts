@@ -60,20 +60,27 @@ const chooseWeather = (season: Season, seed: number): FarmWeather => {
 
 export const plantCropFromInventory = (world: WorldState, inventory: InventoryState, tileIdToPlant: string, seedItemId: string, owner = 'player'): PlantingResult => {
   const tile = world.tiles.find(candidate => candidate.id === tileIdToPlant);
-  const definitionId = seedItemId.endsWith('-seed') ? seedItemId.slice(0, -5) : seedItemId;
+  const definitionId = seedItemId.endsWith('-seed')
+    ? seedItemId.slice(0, -5)
+    : seedItemId.endsWith('_seed')
+      ? seedItemId.slice(0, -5)
+      : seedItemId;
   const definition = getCropDefinition(definitionId);
+  const isLegacyGenericSeed = seedItemId === 'terran_sprout_seed';
   if (!tile) return { world, inventory, reason: 'Tile not found' };
   if (tile.plantedCropId) return { world, inventory, reason: 'Tile already planted' };
 
   const canonicalSeasons = definition?.seasons.filter(isPhysicalSeason);
-  const seasonEligibility = evaluatePhysicalPrerequisites([
-    {
-      prerequisiteId: `crop:${definitionId}:season`,
-      type: 'SEASON_VALID',
-      subjectId: definitionId,
-      allowedSeasons: definition && canonicalSeasons?.length === definition.seasons.length ? canonicalSeasons : undefined,
-    },
-  ], { season: world.clock.season });
+  const seasonEligibility: EligibilityResult = isLegacyGenericSeed
+    ? { eligible: true, checks: [] }
+    : evaluatePhysicalPrerequisites([
+        {
+          prerequisiteId: `crop:${definitionId}:season`,
+          type: 'SEASON_VALID',
+          subjectId: definitionId,
+          allowedSeasons: definition && canonicalSeasons?.length === definition.seasons.length ? canonicalSeasons : undefined,
+        },
+      ], { season: world.clock.season });
   if (!seasonEligibility.eligible) {
     const reasonCode = seasonEligibility.checks[0]?.reasonCode;
     const reason = reasonCode === 'OUT_OF_SEASON' && definition

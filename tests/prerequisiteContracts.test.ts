@@ -89,6 +89,11 @@ export function runPrerequisiteContractTests(): { passed: number; failed: number
   ], baseFacts);
   assert(resourceAvailable.eligible, 'Known sufficient physical resource inventory should satisfy RESOURCE_AVAILABLE.');
 
+  const resourceInsufficient = evaluatePhysicalPrerequisites([
+    { prerequisiteId: 'stored-water-short', type: 'RESOURCE_AVAILABLE', resourceId: 'water:stored', minimum: 2000, unit: 'L' },
+  ], baseFacts);
+  assert(resourceInsufficient.checks[0]?.reasonCode === 'INSUFFICIENT_RESOURCE', 'Known quantitative resource shortfalls must be distinct from missing resources.');
+
   const resourceUnknown = evaluatePhysicalPrerequisites([
     { prerequisiteId: 'steel-stock', type: 'RESOURCE_AVAILABLE', resourceId: 'material:steel', minimum: 4, unit: 'kg' },
   ], baseFacts);
@@ -190,6 +195,17 @@ export function runPrerequisiteContractTests(): { passed: number; failed: number
   const unknownCrop = plantCropFromInventory(springWorld, unknownSeedInventory, 'tile-0-0', 'mystery-seed');
   assert(unknownCrop.eligibility?.checks[0]?.reasonCode === 'OBSERVABLE_MISSING', 'Unknown crop definitions must fail closed because canonical season data is unavailable.');
   assert(JSON.stringify(unknownCrop.inventory) === unknownBefore && unknownCrop.world === springWorld, 'Unknown crop rejection must not consume inventory or mutate the world.');
+
+  const legacySeedInventory = {
+    ...initialInventoryState,
+    backpack: {
+      ...initialInventoryState.backpack,
+      stacks: [{ stackId: 'terran-sprout-seed-stack', itemId: 'terran_sprout_seed', quantity: 1 }],
+    },
+  };
+  const legacyGeneric = plantCropFromInventory(winterWorld, legacySeedInventory, 'tile-0-0', 'terran_sprout_seed');
+  assert(legacyGeneric.eligibility?.eligible === true && legacyGeneric.eligibility.checks.length === 0, 'Canonical legacy Terran Sprout seed must retain the generic non-crop planting path without invented season data.');
+  assert(Boolean(legacyGeneric.crop) && legacyGeneric.crop?.definitionId === 'terran_sprout', 'Legacy underscore seed ids must resolve to the existing generic definition id format.');
 
   return { passed, failed, errors };
 }

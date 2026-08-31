@@ -93,7 +93,7 @@ const evaluateOne = (prerequisite: PhysicalPrerequisite, facts: PhysicalPrerequi
         : 'OBSERVABLE_MISSING';
       return result(prerequisite, false, reason, { resourceId: prerequisite.resourceId, minimum: prerequisite.minimum, unit: prerequisite.unit });
     }
-    return evaluateMeasurement(prerequisite, measurement, 'OBSERVABLE_MISSING', 'RESOURCE_MISSING');
+    return evaluateMeasurement(prerequisite, measurement, 'OBSERVABLE_MISSING', 'INSUFFICIENT_RESOURCE');
   }
 
   if (prerequisite.type === 'ENTITY_EXISTS') {
