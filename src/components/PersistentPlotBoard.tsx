@@ -20,6 +20,7 @@ interface PersistentPlotBoardProps {
   gridContainerRef: React.RefObject<HTMLDivElement>;
   onZoneMouseDown: (e: React.MouseEvent, zone: ZoneData) => void;
   onZoneMouseEnter: (zone: ZoneData) => void;
+  onZoneTouchStart?: (e: React.TouchEvent, zone: ZoneData) => void;
 }
 
 export function PersistentPlotBoard({
@@ -39,6 +40,7 @@ export function PersistentPlotBoard({
   gridContainerRef,
   onZoneMouseDown,
   onZoneMouseEnter,
+  onZoneTouchStart,
 }: PersistentPlotBoardProps) {
   return (
     <div className="orchade-board bg-[#1f1b15] border border-[#332c22] p-2.5 rounded-xl shadow-lg relative font-sans text-[#f4ecd8]">
@@ -111,7 +113,7 @@ export function PersistentPlotBoard({
       {/* Grid Container */}
       <div
         ref={gridContainerRef}
-        style={{ backgroundColor: themeBg }}
+        style={{ backgroundColor: themeBg, touchAction: 'none' }}
         className={`orchade-board-grid border-2 border-[#3d3323] rounded-lg relative overflow-hidden select-none shadow-inner mx-auto ${
           toolMode === 'select' ? 'cursor-default' : 'cursor-crosshair'
         }`}
@@ -159,6 +161,7 @@ export function PersistentPlotBoard({
               key={z.id}
               onMouseDown={(e) => onZoneMouseDown(e, z)}
               onMouseEnter={() => onZoneMouseEnter(z)}
+              onTouchStart={onZoneTouchStart ? (e) => onZoneTouchStart(e, z) : undefined}
               style={{
                 left: `${leftPct}%`,
                 top: `${topPct}%`,

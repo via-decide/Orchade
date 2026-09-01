@@ -416,25 +416,51 @@ export function PlotPlanner() {
     setDragHasCollision(false);
   }, []);
 
+  const handleZoneTouchStart = useCallback((e: React.TouchEvent, zone: ZoneData) => {
+    if (e.touches.length !== 1) return;
+    const touch = e.touches[0];
+    const syntheticMouseEvent = { stopPropagation: () => {}, clientX: touch.clientX, clientY: touch.clientY } as unknown as React.MouseEvent;
+    handleZoneMouseDown(syntheticMouseEvent, zone);
+  }, [toolMode, researchState]);
+
+  const handleTouchMove = useCallback((e: TouchEvent) => {
+    if (draggingZoneIdRef.current === null) return;
+    e.preventDefault();
+    const touch = e.touches[0];
+    handleMouseMove({ clientX: touch.clientX, clientY: touch.clientY } as MouseEvent);
+  }, [handleMouseMove]);
+
+  const handleTouchEnd = useCallback(() => {
+    handleMouseUp();
+  }, [handleMouseUp]);
+
   useEffect(() => {
     const onGlobalMouseUp = () => {
       isMouseDownRef.current = false;
       lastTendedZoneIdRef.current = null;
     };
     window.addEventListener('mouseup', onGlobalMouseUp);
-    return () => window.removeEventListener('mouseup', onGlobalMouseUp);
+    window.addEventListener('touchend', onGlobalMouseUp);
+    return () => {
+      window.removeEventListener('mouseup', onGlobalMouseUp);
+      window.removeEventListener('touchend', onGlobalMouseUp);
+    };
   }, []);
 
   useEffect(() => {
     if (draggingZoneId !== null) {
       window.addEventListener('mousemove', handleMouseMove);
       window.addEventListener('mouseup', handleMouseUp);
+      window.addEventListener('touchmove', handleTouchMove, { passive: false });
+      window.addEventListener('touchend', handleTouchEnd);
       return () => {
         window.removeEventListener('mousemove', handleMouseMove);
         window.removeEventListener('mouseup', handleMouseUp);
+        window.removeEventListener('touchmove', handleTouchMove);
+        window.removeEventListener('touchend', handleTouchEnd);
       };
     }
-  }, [draggingZoneId, handleMouseMove, handleMouseUp]);
+  }, [draggingZoneId, handleMouseMove, handleMouseUp, handleTouchMove, handleTouchEnd]);
 
   // Neighbor Synergies Evaluator (Enhanced with Animal Silvopasture & Pollination)
   const getZoneSynergies = (zone: ZoneData) => {
@@ -968,6 +994,7 @@ export function PlotPlanner() {
         gridContainerRef={gridContainerRef}
         onZoneMouseDown={handleZoneMouseDown}
         onZoneMouseEnter={handleZoneMouseEnter}
+        onZoneTouchStart={handleZoneTouchStart}
       />
 
       <PlannerTabBar active={activePrimaryTab} onChange={setActivePrimaryTab} />
