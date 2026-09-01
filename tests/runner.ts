@@ -14,6 +14,9 @@ import { runProgressionContractTests } from './progressionContracts.test';
 import { runSystemPerformanceTests } from './systemPerformance.test';
 import { runDirectorTests } from '../gameplay/director/tests/director.test';
 import { runSitePlannerTests } from '../gameplay/site-planner/tests/sitePlanner.test';
+import { runPropertyRealityTests } from './propertyReality.test';
+import { runEquipmentTwinTests } from './equipmentTwin.test';
+import { runEquipmentCandidateTestTests } from './equipmentCandidateTest.test';
 
 console.log('🧪 Starting Orchade Test Runner...\n');
 
@@ -50,6 +53,15 @@ console.log(`[New Game Director] Passed: ${directorResults.passed}, Failed: ${di
 const sitePlannerResults = runSitePlannerTests();
 console.log(`[Site Planner] Passed: ${sitePlannerResults.passed}, Failed: ${sitePlannerResults.failed}`);
 
+const propertyRealityResults = runPropertyRealityTests();
+console.log(`[Property Reality] Passed: ${propertyRealityResults.passed}, Failed: ${propertyRealityResults.failed}`);
+
+const equipmentTwinResults = runEquipmentTwinTests();
+console.log(`[Equipment Twin] Passed: ${equipmentTwinResults.passed}, Failed: ${equipmentTwinResults.failed}`);
+
+const equipmentCandidateTestResults = runEquipmentCandidateTestTests();
+console.log(`[Equipment Candidate Test] Passed: ${equipmentCandidateTestResults.passed}, Failed: ${equipmentCandidateTestResults.failed}`);
+
 const totalPassed = cropResults.passed
   + farmLoopResults.passed
   + determinismResults.passed
@@ -60,7 +72,10 @@ const totalPassed = cropResults.passed
   + prerequisiteResults.passed
   + digitalTwinResults.passed
   + directorResults.passed
-  + sitePlannerResults.passed;
+  + sitePlannerResults.passed
+  + propertyRealityResults.passed
+  + equipmentTwinResults.passed
+  + equipmentCandidateTestResults.passed;
 const totalFailed = cropResults.failed
   + farmLoopResults.failed
   + determinismResults.failed
@@ -71,7 +86,10 @@ const totalFailed = cropResults.failed
   + prerequisiteResults.failed
   + digitalTwinResults.failed
   + directorResults.failed
-  + sitePlannerResults.failed;
+  + sitePlannerResults.failed
+  + propertyRealityResults.failed
+  + equipmentTwinResults.failed
+  + equipmentCandidateTestResults.failed;
 
 console.log(`\n========================================`);
 console.log(`Total Passed: ${totalPassed} | Total Failed: ${totalFailed}`);
