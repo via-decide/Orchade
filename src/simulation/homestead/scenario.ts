@@ -2,7 +2,7 @@ export type HomesteadControllerMode = 'manual' | 'deterministic' | 'ai-shadow';
 export type HomesteadTimestep = 'day';
 export type HomesteadUnitSystem = 'metric';
 export type HomesteadSeasonName = 'winter' | 'spring' | 'summer' | 'autumn';
-export type FoodProducerType = 'vegetable-bed' | 'staple-field' | 'orchard' | 'greenhouse';
+export type FoodProducerType = 'vegetable-bed' | 'staple-field' | 'orchard' | 'greenhouse' | 'nursery';
 export type RevenueActivityType = 'PRODUCE' | 'EDUCATION' | 'CONSULTING' | 'FARM_STAY' | 'EXPERIENCE' | 'CONTENT' | 'KNOWLEDGE_PRODUCT' | 'MEMBERSHIP' | 'OTHER';
 
 export interface ScenarioRevisionDefinition {
@@ -21,9 +21,16 @@ export interface ScenarioChange {
   operation: 'add' | 'replace' | 'remove';
 }
 
+export type LandPlacementType =
+  | 'house' | 'vegetable-bed' | 'staple-field' | 'orchard' | 'greenhouse' | 'nursery'
+  | 'livestock' | 'compost' | 'vermicompost' | 'biogas'
+  | 'water' | 'solar' | 'battery' | 'grid'
+  | 'shed' | 'food-storage' | 'equipment-storage'
+  | 'road' | 'path' | 'service-area';
+
 export interface LandPlacementDefinition {
   id: string;
-  type: 'house' | 'vegetable-bed' | 'staple-field' | 'orchard' | 'greenhouse' | 'livestock' | 'compost' | 'water' | 'solar' | 'shed';
+  type: LandPlacementType;
   areaM2: number;
 }
 

@@ -13,6 +13,7 @@ import { runProject001Tests } from './project001.test';
 import { runProgressionContractTests } from './progressionContracts.test';
 import { runSystemPerformanceTests } from './systemPerformance.test';
 import { runDirectorTests } from '../gameplay/director/tests/director.test';
+import { runSitePlannerTests } from '../gameplay/site-planner/tests/sitePlanner.test';
 
 console.log('🧪 Starting Orchade Test Runner...\n');
 
@@ -46,6 +47,9 @@ console.log(`[True Number / Digital Twin] Passed: ${digitalTwinResults.passed}, 
 const directorResults = runDirectorTests();
 console.log(`[New Game Director] Passed: ${directorResults.passed}, Failed: ${directorResults.failed}`);
 
+const sitePlannerResults = runSitePlannerTests();
+console.log(`[Site Planner] Passed: ${sitePlannerResults.passed}, Failed: ${sitePlannerResults.failed}`);
+
 const totalPassed = cropResults.passed
   + farmLoopResults.passed
   + determinismResults.passed
@@ -55,7 +59,8 @@ const totalPassed = cropResults.passed
   + systemPerformanceResults.passed
   + prerequisiteResults.passed
   + digitalTwinResults.passed
-  + directorResults.passed;
+  + directorResults.passed
+  + sitePlannerResults.passed;
 const totalFailed = cropResults.failed
   + farmLoopResults.failed
   + determinismResults.failed
@@ -65,7 +70,8 @@ const totalFailed = cropResults.failed
   + systemPerformanceResults.failed
   + prerequisiteResults.failed
   + digitalTwinResults.failed
-  + directorResults.failed;
+  + directorResults.failed
+  + sitePlannerResults.failed;
 
 console.log(`\n========================================`);
 console.log(`Total Passed: ${totalPassed} | Total Failed: ${totalFailed}`);

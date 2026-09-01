@@ -22,13 +22,17 @@ export type ConvertiblePhysicalUnit =
   | 'gal_us'
   | 'in'
   | 'Wh'
-  | 'gal_us/min';
+  | 'gal_us/min'
+  | 'guntha';
 
 export const SQUARE_METRES_PER_ACRE = 4046.8564224;
 export const SQUARE_METRES_PER_SQUARE_FOOT = 0.09290304;
 export const LITRES_PER_US_GALLON = 3.785411784;
 export const MILLIMETRES_PER_INCH = 25.4;
 export const KWH_PER_WH = 0.001;
+/** 1 acre = 40 guntha (Indian land-measurement convention). Vigha is deliberately excluded: its size varies by region. */
+export const GUNTHA_PER_ACRE = 40;
+export const SQUARE_METRES_PER_GUNTHA = SQUARE_METRES_PER_ACRE / GUNTHA_PER_ACRE;
 
 const finite = (value: number): number => {
   if (!Number.isFinite(value)) throw new Error('Physical unit conversion requires a finite numeric value.');
@@ -37,6 +41,8 @@ const finite = (value: number): number => {
 
 export const acreToM2 = (acre: number): number => finite(acre) * SQUARE_METRES_PER_ACRE;
 export const m2ToAcre = (m2: number): number => finite(m2) / SQUARE_METRES_PER_ACRE;
+export const gunthaToM2 = (guntha: number): number => finite(guntha) * SQUARE_METRES_PER_GUNTHA;
+export const m2ToGuntha = (m2: number): number => finite(m2) / SQUARE_METRES_PER_GUNTHA;
 export const sqftToM2 = (sqft: number): number => finite(sqft) * SQUARE_METRES_PER_SQUARE_FOOT;
 export const m2ToSqft = (m2: number): number => finite(m2) / SQUARE_METRES_PER_SQUARE_FOOT;
 export const usGallonToL = (gallons: number): number => finite(gallons) * LITRES_PER_US_GALLON;
@@ -65,6 +71,8 @@ export function normalizeUnitToken(unit: string): ConvertiblePhysicalUnit | stri
     'gallon': 'gal_us',
     'gallons': 'gal_us',
     'gal_us': 'gal_us',
+    'guntha': 'guntha',
+    'gunthas': 'guntha',
     'mm': 'mm',
     'in': 'in',
     'inch': 'in',
@@ -108,6 +116,8 @@ export function convertPhysicalUnit(
   if (from === 'm2' && to === 'acre') return m2ToAcre(value);
   if (from === 'sqft' && to === 'm2') return sqftToM2(value);
   if (from === 'm2' && to === 'sqft') return m2ToSqft(value);
+  if (from === 'guntha' && to === 'm2') return gunthaToM2(value);
+  if (from === 'm2' && to === 'guntha') return m2ToGuntha(value);
   if (from === 'gal_us' && to === 'L') return usGallonToL(value);
   if (from === 'L' && to === 'gal_us') return lToUsGallon(value);
   if (from === 'in' && to === 'mm') return inchToMm(value);
