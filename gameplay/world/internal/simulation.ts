@@ -1,8 +1,13 @@
 import { addItem, removeItem, type InventoryState } from '../../inventory/api';
 import { getCropDefinition } from '../../farming/api';
+import {
+  evaluatePhysicalPrerequisites,
+  isPhysicalSeason,
+  type EligibilityResult,
+} from '../../prerequisites/api';
 import { initialWorldState, type CropInstance, type FarmTile, type FarmWeather, type Season, type SoilNutrients, type WorldState } from '../state';
 
-export type PlantingResult = { world: WorldState; inventory: InventoryState; crop?: CropInstance; reason?: string };
+export type PlantingResult = { world: WorldState; inventory: InventoryState; crop?: CropInstance; reason?: string; eligibility?: EligibilityResult };
 export type HarvestResult = { world: WorldState; inventory: InventoryState; itemId?: string; quantity: number; overflow: number; reason?: string };
 
 const clamp = (value: number, min = 0, max = 100) => Math.max(min, Math.min(max, value));
@@ -55,13 +60,37 @@ const chooseWeather = (season: Season, seed: number): FarmWeather => {
 
 export const plantCropFromInventory = (world: WorldState, inventory: InventoryState, tileIdToPlant: string, seedItemId: string, owner = 'player'): PlantingResult => {
   const tile = world.tiles.find(candidate => candidate.id === tileIdToPlant);
-  const definitionId = seedItemId.endsWith('-seed') ? seedItemId.slice(0, -5) : seedItemId;
+  const definitionId = seedItemId.endsWith('-seed')
+    ? seedItemId.slice(0, -5)
+    : seedItemId.endsWith('_seed')
+      ? seedItemId.slice(0, -5)
+      : seedItemId;
   const definition = getCropDefinition(definitionId);
+  const isLegacyGenericSeed = seedItemId === 'terran_sprout_seed';
   if (!tile) return { world, inventory, reason: 'Tile not found' };
   if (tile.plantedCropId) return { world, inventory, reason: 'Tile already planted' };
-  if (definition && !definition.seasons.includes(world.clock.season)) return { world, inventory, reason: `${definition.displayName} is not compatible with ${world.clock.season}` };
+
+  const canonicalSeasons = definition?.seasons.filter(isPhysicalSeason);
+  const seasonEligibility: EligibilityResult = isLegacyGenericSeed
+    ? { eligible: true, checks: [] }
+    : evaluatePhysicalPrerequisites([
+        {
+          prerequisiteId: `crop:${definitionId}:season`,
+          type: 'SEASON_VALID',
+          subjectId: definitionId,
+          allowedSeasons: definition && canonicalSeasons?.length === definition.seasons.length ? canonicalSeasons : undefined,
+        },
+      ], { season: world.clock.season });
+  if (!seasonEligibility.eligible) {
+    const reasonCode = seasonEligibility.checks[0]?.reasonCode;
+    const reason = reasonCode === 'OUT_OF_SEASON' && definition
+      ? `${definition.displayName} is not compatible with ${world.clock.season}`
+      : `Season eligibility is unavailable for ${definitionId}`;
+    return { world, inventory, reason, eligibility: seasonEligibility };
+  }
+
   const consumed = removeItem(inventory, inventory.backpack.id, seedItemId, 1);
-  if (consumed.removed !== 1) return { world, inventory, reason: 'Seed not available in inventory' };
+  if (consumed.removed !== 1) return { world, inventory, reason: 'Seed not available in inventory', eligibility: seasonEligibility };
   const avgYield = definition ? (definition.harvest.minYield + definition.harvest.maxYield) / 2 : 2;
   const crop: CropInstance = {
     id: cropId(definition?.id ?? definitionId, tile.position.x, tile.position.y, world.clock.tick),
@@ -82,7 +111,7 @@ export const plantCropFromInventory = (world: WorldState, inventory: InventorySt
     regenerationProgress: 0,
   };
   const tiles = world.tiles.map(candidate => candidate.id === tile.id ? { ...candidate, plantedCropId: crop.id, growthStage: 0 } : candidate);
-  return { world: { ...world, tiles, crops: { ...world.crops, [crop.id]: crop }, updatedAt: new Date().toISOString() }, inventory: consumed.state, crop };
+  return { world: { ...world, tiles, crops: { ...world.crops, [crop.id]: crop }, updatedAt: new Date().toISOString() }, inventory: consumed.state, crop, eligibility: seasonEligibility };
 };
 
 const updateCrop = (world: WorldState, tile: FarmTile, crop: CropInstance): { tile: FarmTile; crop: CropInstance } => {
@@ -93,8 +122,8 @@ const updateCrop = (world: WorldState, tile: FarmTile, crop: CropInstance): { ti
   const fertilizerBoost = tile.fertilizer ? 1 + tile.fertilizer.potency / 100 : 1;
   const diseaseLoad = Object.values(crop.disease).reduce((sum, value) => sum + (value ?? 0), 0);
   const pestLoad = Object.values(crop.pests).reduce((sum, value) => sum + (value ?? 0), 0);
-  const baseGrowthDays = definition && definition.growthStages?.length 
-    ? definition.growthStages.reduce((acc, st) => acc + st.days, 0) 
+  const baseGrowthDays = definition && definition.growthStages?.length
+    ? definition.growthStages.reduce((acc, st) => acc + st.days, 0)
     : 60;
   const growth = (100 / (baseGrowthDays * world.clock.ticksPerDay)) * (crop.genetics?.vigor ?? 1) * seasonMultiplier[world.clock.season] * weatherGrowth[world.weather.current] * moistureScore * nutrientScore * fertilizerBoost * (compatible ? 1 : 0.25);
   const progress = crop.readyToHarvest ? crop.growthProgress : clamp(crop.growthProgress + growth, 0, 100);
