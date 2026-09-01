@@ -34,6 +34,13 @@ import {
   getStarterUnlocks,
   type ResearchCreditsState,
 } from '../../gameplay/research-credits/api';
+import {
+  createNewGameState,
+  deriveNextPlayerObjective,
+  deriveAvailablePlayerActions,
+  OBJECTIVE_GRAPH,
+} from '../../gameplay/director/api';
+import { ObjectiveBanner } from './ObjectiveBanner';
 
 const ACRE_SQFT = 43560;
 const COLS = 24;
@@ -79,6 +86,11 @@ export function PlotPlanner() {
     return grantCredit(initial, 420, { gameId: 'orchade', action: 'initial_grant', tick: 0 });
   });
   const credits = researchState.balance;
+
+  const [newGameState] = useState(() => createNewGameState({ seed: 'orchade-session', runId: 'session-run' }));
+  const currentObjective = deriveNextPlayerObjective(newGameState, currentSeason);
+  const currentActions = deriveAvailablePlayerActions(newGameState, currentSeason);
+
   const [selectedZoneId, setSelectedZoneId] = useState<number>(2); // Default to Tomato guild
 
   // Phase 3 Systems State: Livestock Paddocks
@@ -975,6 +987,14 @@ export function PlotPlanner() {
         selectedZoneLabel={`#${selectedZone.id} ${selectedZone.name}`}
         selectedZoneType={selectedZone.type}
         onAdvanceDay={handleAdvanceDay}
+      />
+
+      <ObjectiveBanner
+        objective={currentObjective}
+        phase={newGameState.phase}
+        completedCount={newGameState.completedObjectiveIds.length}
+        totalCount={OBJECTIVE_GRAPH.length}
+        actions={currentActions}
       />
 
       <PersistentPlotBoard
