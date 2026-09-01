@@ -2075,9 +2075,9 @@ const App: React.FC = () => {
         )}
       </AnimatePresence>
 
-      {/* Auth Overlay */}
+      {/* Auth Overlay — skipped for Plot Planner (no account needed) */}
       <AnimatePresence>
-        {(!state.user && state.isAuthReady) && (
+        {(!state.user && state.isAuthReady && !isPlotPlannerTab) && (
           <motion.div 
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -2160,8 +2160,8 @@ const App: React.FC = () => {
         )}
       </AnimatePresence>
 
-      {/* Loading State */}
-      {!state.isAuthReady && (
+      {/* Loading State — skipped for Plot Planner (no auth dependency) */}
+      {!state.isAuthReady && !isPlotPlannerTab && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-soil-dark">
           <RefreshCw className="animate-spin text-leaf-green" size={40} />
         </div>
