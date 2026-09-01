@@ -27,6 +27,13 @@ import {
   advanceHomesteadDay,
   DEFAULT_PLOT_PLANNER_SCENARIO,
 } from '../simulation/homestead';
+import {
+  credit as grantCredit,
+  debit as spendCredit,
+  createResearchCreditsState,
+  getStarterUnlocks,
+  type ResearchCreditsState,
+} from '../../gameplay/research-credits/api';
 
 const ACRE_SQFT = 43560;
 const COLS = 24;
@@ -67,7 +74,11 @@ export function PlotPlanner() {
   const [totalAcreage, setTotalAcreage] = useState<number>(0.75);
   const [currentSeason, setCurrentSeason] = useState<'spring' | 'summer' | 'autumn' | 'winter'>('spring');
   const [cycleDay, setCycleDay] = useState<number>(DEFAULT_PLOT_PLANNER_SCENARIO.startDay);
-  const [credits, setCredits] = useState<number>(420);
+  const [researchState, setResearchState] = useState<ResearchCreditsState>(() => {
+    const initial = createResearchCreditsState(getStarterUnlocks());
+    return grantCredit(initial, 420, { gameId: 'orchade', action: 'initial_grant', tick: 0 });
+  });
+  const credits = researchState.balance;
   const [selectedZoneId, setSelectedZoneId] = useState<number>(2); // Default to Tomato guild
 
   // Phase 3 Systems State: Livestock Paddocks
@@ -564,9 +575,13 @@ export function PlotPlanner() {
   // Phase 3 Livestock Handlers
   const handleAdoptBreed = (targetZone: number, breedId: string) => {
     const breed = LIVESTOCK_BREEDS[breedId];
-    if (!breed || credits < breed.cost) return;
+    if (!breed || researchState.balance < breed.cost) return;
 
-    setCredits(prev => prev - breed.cost);
+    if (breed.cost > 0) {
+      const result = spendCredit(researchState, breed.cost, { gameId: 'orchade', action: 'adopt_breed', contentId: breedId, tick: cycleDay });
+      if (!result.ok) return;
+      setResearchState(result.state);
+    }
     const newPaddock: PaddockState = {
       id: `pad-${Date.now()}`,
       zoneId: targetZone,
@@ -625,15 +640,21 @@ export function PlotPlanner() {
       return p;
     }));
 
-    addLog(`Harvested ${breed.outputs.qtyPerCycle} ${breed.outputs.unit} of ${breed.outputs.name}!`, 'bonus');
+    const livestockCredits = Math.max(1, Math.ceil(breed.outputs.basePrice / 8));
+    setResearchState(prev => grantCredit(prev, livestockCredits, { gameId: 'orchade', action: 'harvest_livestock', tick: cycleDay }));
+    addLog(`Harvested ${breed.outputs.qtyPerCycle} ${breed.outputs.unit} of ${breed.outputs.name}! +${livestockCredits} research credits.`, 'bonus');
   };
 
   // Phase 3 Water & Solar Upgrade Handlers
   const handleUpgradeWater = (upgradeId: string) => {
     const up = WATER_INFRASTRUCTURE_UPGRADES.find(u => u.id === upgradeId);
-    if (!up || credits < up.cost) return;
+    if (!up || researchState.balance < up.cost) return;
 
-    setCredits(prev => prev - up.cost);
+    if (up.cost > 0) {
+      const result = spendCredit(researchState, up.cost, { gameId: 'orchade', action: 'upgrade_water', contentId: upgradeId, tick: cycleDay });
+      if (!result.ok) return;
+      setResearchState(result.state);
+    }
     setWaterState(prev => ({
       ...prev,
       maxCisternCapacityGallons: prev.maxCisternCapacityGallons + (up.storageBonusGallons || 0),
@@ -644,9 +665,13 @@ export function PlotPlanner() {
 
   const handleUpgradeSolar = (upgradeId: string) => {
     const up = ENERGY_INFRASTRUCTURE_UPGRADES.find(u => u.id === upgradeId);
-    if (!up || credits < up.cost) return;
+    if (!up || researchState.balance < up.cost) return;
 
-    setCredits(prev => prev - up.cost);
+    if (up.cost > 0) {
+      const result = spendCredit(researchState, up.cost, { gameId: 'orchade', action: 'upgrade_energy', contentId: upgradeId, tick: cycleDay });
+      if (!result.ok) return;
+      setResearchState(result.state);
+    }
     setSolarState(prev => ({
       ...prev,
       solarArrayWatts: prev.solarArrayWatts + (up.wattsBonus || 0),
@@ -738,9 +763,13 @@ export function PlotPlanner() {
 
   const handleApplyAmendment = (amendmentId: string) => {
     const am = SOIL_AMENDMENTS.find(a => a.id === amendmentId);
-    if (!am || credits < am.cost) return;
+    if (!am || researchState.balance < am.cost) return;
 
-    setCredits(prev => prev - am.cost);
+    if (am.cost > 0) {
+      const result = spendCredit(researchState, am.cost, { gameId: 'orchade', action: 'apply_amendment', contentId: amendmentId, tick: cycleDay });
+      if (!result.ok) return;
+      setResearchState(result.state);
+    }
     setZones(prev => prev.map(z => {
       if (z.id === selectedZoneId) {
         return {
@@ -767,6 +796,12 @@ export function PlotPlanner() {
 
     const crop = EXPANDED_CROP_CATALOG[targetZone.plant.cropId];
     if (!crop) return;
+
+    if (crop.seasons && !crop.seasons.includes(currentSeason)) {
+      addLog(`Cannot harvest ${crop.displayName} — out of season (${currentSeason}). Valid: ${crop.seasons.join(', ')}.`, 'alert');
+      triggerZoneEffect(zoneId, 'Out of Season', '❄️', '#e57373');
+      return;
+    }
 
     const baseYield = Math.floor(Math.random() * (crop.harvest.maxYield - crop.harvest.minYield + 1)) + crop.harvest.minYield;
     const spacingSqft = crop.spacing.sqft;
@@ -804,15 +839,26 @@ export function PlotPlanner() {
       return z;
     }));
 
-    addLog(`🌾 Harvested ${totalHarvestedQty} ${crop.harvest.unit} of ${crop.harvest.displayName} from Zone #${zoneId}! Placed in root pantry.`, 'bonus');
+    const harvestCredits = Math.max(1, Math.ceil(crop.harvest.basePrice / 10));
+    setResearchState(prev => grantCredit(prev, harvestCredits, { gameId: 'orchade', action: 'harvest_crop', tick: cycleDay }));
+    addLog(`🌾 Harvested ${totalHarvestedQty} ${crop.harvest.unit} of ${crop.harvest.displayName} from Zone #${zoneId}! +${harvestCredits} research credits.`, 'bonus');
   };
 
   const handleLoadPreset = (preset: HomesteadPreset) => {
     setTotalAcreage(preset.acreage);
     const tileSqft = (preset.acreage * ACRE_SQFT) / (COLS * ROWS);
+    const skippedCrops: string[] = [];
 
     const newZones: ZoneData[] = preset.zones.map((bz, index) => {
-      const isCrop = bz.type === 'crop' || (bz.cropId && bz.cropId !== null);
+      let assignedCropId = bz.cropId || null;
+      if (assignedCropId) {
+        const cropDef = EXPANDED_CROP_CATALOG[assignedCropId];
+        if (cropDef?.seasons && !cropDef.seasons.includes(currentSeason)) {
+          skippedCrops.push(cropDef.displayName);
+          assignedCropId = null;
+        }
+      }
+      const isCrop = bz.type === 'crop' || (assignedCropId !== null);
       return {
         id: index + 1,
         name: bz.name,
@@ -835,7 +881,7 @@ export function PlotPlanner() {
         },
         rotationSequence: ['clover', 'lettuce', 'tomato', 'carrot'],
         plant: {
-          cropId: bz.cropId || null,
+          cropId: assignedCropId,
           water: 65,
           nutrients: 75,
           pests: 0,
@@ -851,11 +897,16 @@ export function PlotPlanner() {
     setZones(newZones);
     setSelectedZoneId(newZones[0]?.id || 1);
     addLog(`Loaded Homestead Blueprint: "${preset.name}" (${preset.acreage} Acres).`, 'bonus');
+    if (skippedCrops.length > 0) {
+      addLog(`Season gate: ${skippedCrops.join(', ')} skipped — not plantable in ${currentSeason}.`, 'alert');
+    }
   };
 
   const handleSellPantryItem = (itemId: string, qty: number, pricePerUnit: number) => {
-    const totalEarnings = qty * pricePerUnit;
-    setCredits(prev => prev + totalEarnings);
+    const totalEarnings = Math.round(qty * pricePerUnit);
+    if (totalEarnings > 0) {
+      setResearchState(prev => grantCredit(prev, totalEarnings, { gameId: 'orchade', action: 'sell_produce', tick: cycleDay }));
+    }
 
     setPantry(prev => prev.map(p => {
       if (p.id === itemId) {
