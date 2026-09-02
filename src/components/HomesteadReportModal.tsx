@@ -82,10 +82,10 @@ export function HomesteadReportModal({
             <span className="text-2xl">📋</span>
             <div>
               <h2 className="text-lg font-bold text-[#f4ecd8] font-mono flex items-center gap-2">
-                Homestead Permaculture Master Audit & Agronomic Blueprint
+                Orchade Property / Homestead Simulation Report
               </h2>
               <p className="text-xs text-[#b8ab8e]">
-                Comprehensive land survey, botanical inventory, and agronomic spatial report.
+                A snapshot of this plan's current zones and plant assignments under the active simulation model.
               </p>
             </div>
           </div>
@@ -213,11 +213,31 @@ export function HomesteadReportModal({
               ))}
             </div>
           </div>
+
+          {/* Model Boundary */}
+          <div className="p-4 bg-[#221c15] border border-[#3d3323] rounded-lg">
+            <h3 className="text-sm font-bold font-mono text-[#e9c46a] mb-2 uppercase tracking-wider">
+              Model Boundary
+            </h3>
+            <div className="text-[11px] text-[#8a7f68] font-mono space-y-1">
+              <div>Simulation day: {cycleDay} · Season: {currentSeason}</div>
+              <div>Scientifically certified: NO</div>
+              <div>Engineering certified: NO</div>
+              <div>Agronomic/legal/commercial certification: NO</div>
+            </div>
+            <p className="text-[11px] text-[#8a7f68] mt-2 leading-relaxed">
+              This report reflects zone assignments and plant data entered into this plan, under
+              the crop/harvest models Orchade currently simulates. It is not a survey, an
+              agronomic assessment, or a certification of any kind. Reproducibility of a
+              simulation run does not establish agronomic, engineering, structural, legal, or
+              commercial certification.
+            </p>
+          </div>
         </div>
 
         {/* Footer */}
         <div className="p-3 bg-[#171410] border-t border-[#332c22] flex items-center justify-between text-xs text-[#8a7f68] font-mono">
-          <span>Orchade Homestead Engine · Certified Permaculture Blueprint</span>
+          <span>Orchade Homestead Simulation · Not a certified report</span>
           <button
             onClick={onClose}
             className="px-4 py-1.5 rounded bg-[#c9a227] text-[#171410] font-bold hover:bg-[#e0b738] transition-all cursor-pointer"

@@ -22,7 +22,7 @@ import { PlannerPlanPanel } from './PlannerPlanPanel';
 import { PlannerOperatePanel, OperateSubView } from './PlannerOperatePanel';
 import { PlannerSystemPanel } from './PlannerSystemPanel';
 import { PlannerEvidencePanel } from './PlannerEvidencePanel';
-import { hashSeed } from '../engine/random/rng';
+import { hashSeed, DeterministicRandom } from '../engine/random/rng';
 import {
   advanceHomesteadDay,
   DEFAULT_PLOT_PLANNER_SCENARIO,
@@ -175,7 +175,10 @@ export function PlotPlanner() {
 
   // Notification / Activity Log
   const [activityLogs, setActivityLogs] = useState<{ id: string; time: string; message: string; type: 'info' | 'bonus' | 'alert' }[]>([
-    { id: '1', time: 'Day 1 · Spring', message: 'Homestead Site Plan initialized. 3.5 Acres calculated (152,460 sq ft).', type: 'info' },
+    // Was a hardcoded "3.5 Acres (152,460 sq ft)" -- contradicted the real
+    // totalAcreage state below. Derived from that state instead so this
+    // can't silently go stale again if the starting acreage ever changes.
+    { id: '1', time: 'Day 1 · Spring', message: `Homestead Site Plan initialized. ${totalAcreage} Acres calculated (${Math.round(totalAcreage * ACRE_SQFT).toLocaleString()} sq ft).`, type: 'info' },
     { id: '2', time: 'Day 1 · Spring', message: 'Heritage Chickens & Italian Bee Colony active in rotational silvopasture.', type: 'bonus' },
     { id: '3', time: 'Day 1 · Spring', message: 'Off-grid 6.4kW PV Solar microgrid & 6,000 gal rainwater catchment online.', type: 'bonus' }
   ]);
@@ -641,7 +644,9 @@ export function PlotPlanner() {
       setResearchState(result.state);
     }
     const newPaddock: PaddockState = {
-      id: `pad-${Date.now()}`,
+      // Deterministic: (day, zone, breed) instead of Date.now() -- this is a
+      // simulation-affecting entity, not just a UI event.
+      id: `pad-${cycleDay}-${targetZone}-${breed.id}`,
       zoneId: targetZone,
       breedId: breed.id,
       population: breed.species === 'poultry' ? 18 : breed.species === 'apiculture' ? 35000 : 4,
@@ -679,7 +684,8 @@ export function PlotPlanner() {
     if (!breed) return;
 
     const newItem: PantryItem = {
-      id: `livestock-${Date.now()}`,
+      // Deterministic: (day, paddock) instead of Date.now().
+      id: `livestock-${cycleDay}-${paddockId}`,
       cropId: breed.outputs.resourceId,
       name: breed.outputs.name,
       qty: breed.outputs.qtyPerCycle,
@@ -861,14 +867,28 @@ export function PlotPlanner() {
       return;
     }
 
-    const baseYield = Math.floor(Math.random() * (crop.harvest.maxYield - crop.harvest.minYield + 1)) + crop.harvest.minYield;
+    // Deterministic: consumes and advances the same seeded RNG state
+    // advanceHomesteadDay() reads/writes (simulationRngStateRef, line ~265).
+    // Was Math.random() -- two identical runs (same scenario, same seed,
+    // same action sequence) could yield different harvest quantities,
+    // breaking the same-seed-same-result replay guarantee. Restoring a
+    // DeterministicRandom from the current ref value and writing its
+    // post-draw state back keeps this harvest in the same deterministic
+    // sequence as the daily tick, not a separate untracked stream.
+    const harvestRng = new DeterministicRandom(simulationRngStateRef.current);
+    const baseYield = harvestRng.integer(crop.harvest.minYield, crop.harvest.maxYield);
+    simulationRngStateRef.current = harvestRng.snapshot();
+
     const spacingSqft = crop.spacing.sqft;
     const plantUnits = Math.max(1, Math.round(targetZone.sqft / spacingSqft));
     const totalHarvestedQty = Math.round(baseYield * Math.min(10, Math.max(1, plantUnits / 50)));
 
     // Add to pantry
     const newItem: PantryItem = {
-      id: `p-${Date.now()}`,
+      // Deterministic: derived from the harvest's own inputs (day, zone,
+      // post-draw RNG state) instead of Date.now(), which cannot replay
+      // identically and must not participate in simulation-affecting identity.
+      id: `p-${cycleDay}-${zoneId}-${simulationRngStateRef.current}`,
       cropId: crop.id,
       name: crop.harvest.displayName,
       qty: totalHarvestedQty,
