@@ -173,6 +173,10 @@ export function proposeRealityTransition(
 }
 
 export function appendRealitySnapshot(history: PropertyRealityHistory, snapshot: PropertyRealitySnapshot): PropertyRealityHistory {
+  const existingPropertyId = history[0]?.propertyId;
+  if (existingPropertyId !== undefined && existingPropertyId !== snapshot.propertyId) {
+    throw new Error(`Cannot append a snapshot for property ${snapshot.propertyId} to a history belonging to property ${existingPropertyId}.`);
+  }
   if (history.some(item => item.propertyRevisionId === snapshot.propertyRevisionId)) {
     throw new Error(`Property revision ${snapshot.propertyRevisionId} already has a recorded reality snapshot.`);
   }

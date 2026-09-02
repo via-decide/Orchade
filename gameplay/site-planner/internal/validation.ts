@@ -220,6 +220,24 @@ export function validateSiteProject(project: SiteProject): SiteValidationFailure
       evidence: {},
     });
   }
+  project.geometry.excludedZones.forEach(zone => {
+    if (zone.polygon.length < 3 || isPolygonSelfIntersecting(zone.polygon)) {
+      failures.push({
+        type: 'INVALID_SITE_GEOMETRY',
+        reason: `Excluded zone ${zone.id} is degenerate or self-intersecting.`,
+        evidence: { zoneId: zone.id },
+      });
+    }
+  });
+  project.geometry.existingStructures.forEach(structure => {
+    if (structure.polygon.length < 3 || isPolygonSelfIntersecting(structure.polygon)) {
+      failures.push({
+        type: 'INVALID_SITE_GEOMETRY',
+        reason: `Existing structure ${structure.id} is degenerate or self-intersecting.`,
+        evidence: { structureId: structure.id },
+      });
+    }
+  });
   failures.push(...duplicateModuleIdFailures(project.modules));
   failures.push(...invalidDimensionsFailures(project.modules));
   failures.push(...outsideBoundaryFailures(project));

@@ -167,8 +167,25 @@ function projectPolygon(polygon: SitePoint2D[], axis: SitePoint2D): [number, num
 }
 
 /** True only if every vertex of the footprint lies inside (or on) the boundary polygon. */
+/**
+ * True only if the whole footprint -- not just its vertices -- lies inside
+ * the boundary. Checking vertices alone is insufficient for a concave
+ * boundary: a rectangular footprint can have all four corners inside while
+ * one of its edges crosses a boundary indentation and travels outside, so
+ * this also rejects any footprint edge that crosses a boundary edge.
+ */
 export function polygonFullyInside(footprint: SitePoint2D[], boundary: SitePoint2D[]): boolean {
-  return footprint.every(point => isPointInPolygon(point, boundary));
+  if (!footprint.every(point => isPointInPolygon(point, boundary))) return false;
+  for (let i = 0; i < footprint.length; i += 1) {
+    const f1 = footprint[i];
+    const f2 = footprint[(i + 1) % footprint.length];
+    for (let j = 0; j < boundary.length; j += 1) {
+      const b1 = boundary[j];
+      const b2 = boundary[(j + 1) % boundary.length];
+      if (segmentsIntersect(f1, f2, b1, b2)) return false;
+    }
+  }
+  return true;
 }
 
 const UNION_AREA_GRID_RESOLUTION_M = 0.5;

@@ -65,7 +65,11 @@ export const OBJECTIVE_GRAPH: ObjectiveDefinition[] = [
     title: 'Advance Your First Day',
     reason: 'Run the homestead simulation for one day to see how weather, water, and crops respond.',
     permittedIntentTypes: ['ADVANCE_DAY'],
-    isComplete: (state) => state.simulation.day >= 1,
+    // state.day (not simulation.day) is the player-facing counter: it starts at 0 and
+    // only becomes >=1 once advanceNewGameDay actually runs. simulation.day starts at
+    // 1 unconditionally (validateHomesteadScenario requires startDay >= 1), so using it
+    // here would report this objective complete before the player ever advances a day.
+    isComplete: (state) => state.day >= 1,
     getBlockers: (state) => {
       if (state.planning.placements.length === 0) return [{ type: 'BLOCKED_STATE', reason: 'Place at least one food-producing zone before advancing time.' }];
       return [];

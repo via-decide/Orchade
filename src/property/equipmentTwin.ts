@@ -367,13 +367,20 @@ const TRANSITIONS_REQUIRING_EVIDENCE = new Set<EquipmentTwinLifecycleStatus>(['B
 /**
  * The only sanctioned way to change lifecycleStatus. Every transition is
  * explicit and one step at a time (never DRAFT -> FIELD_VERIFIED, never
- * SIMULATION_READY -> BENCH_VERIFIED without evidence). Returns a new twin
- * revision object; the input twin is untouched.
+ * SIMULATION_READY -> BENCH_VERIFIED without evidence).
+ *
+ * Always allocates a brand-new revision, chained via parentRevisionId to
+ * the twin being promoted -- it never reuses the input twin's revisionId.
+ * Reusing the id would either collide as a duplicate when registered
+ * (`registerEquipmentTwinRevision` rejects it) or, if a caller replaced
+ * the old entry in place instead, silently rewrite the exact revision
+ * historical `PropertyEquipmentInstance`s are pinned to.
  */
 export function promoteEquipmentTwinLifecycle(
   twin: EquipmentTwinDefinition,
   nextStatus: EquipmentTwinLifecycleStatus,
   evidenceRefs: string[],
+  nextRevisionId: string,
 ): EquipmentTwinDefinition {
   const allowed = ALLOWED_LIFECYCLE_TRANSITIONS[twin.lifecycleStatus];
   if (!allowed.includes(nextStatus)) {
@@ -382,8 +389,13 @@ export function promoteEquipmentTwinLifecycle(
   if (TRANSITIONS_REQUIRING_EVIDENCE.has(nextStatus) && evidenceRefs.length === 0) {
     throw new Error(`Promoting to ${nextStatus} requires at least one evidence reference.`);
   }
+  if (nextRevisionId === twin.revisionId) {
+    throw new Error(`Lifecycle promotion requires a new revisionId (got the same id as the current revision: ${twin.revisionId}).`);
+  }
   return {
     ...twin,
+    revisionId: nextRevisionId,
+    parentRevisionId: twin.revisionId,
     lifecycleStatus: nextStatus,
     evidenceRefs: [...new Set([...twin.evidenceRefs, ...evidenceRefs])],
   };

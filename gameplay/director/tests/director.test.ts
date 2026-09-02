@@ -213,5 +213,18 @@ export function runDirectorTests(): { passed: number; failed: number; errors: st
     assert(!ids.includes('craft_item') && !ids.includes('complete_quest'), '14. No planned-module objectives');
   }
 
+  // 15. Day-gated objectives do not auto-complete before the player ever advances a day
+  {
+    const state = freshGame();
+    // simulation.day starts at 1 (validateHomesteadScenario requires startDay >= 1),
+    // while state.day starts at 0 -- objectives must gate on state.day, not
+    // simulation.day, or they report complete at creation with no player action.
+    assert(state.day === 0 && state.simulation.day === 1, '15. Fresh state has day=0 while simulation.day=1 (the gap these objectives must respect)');
+    assert(!state.completedObjectiveIds.includes('advance_first_day'), '15. advance_first_day is not auto-completed at game creation');
+    assert(!state.completedObjectiveIds.includes('establish_water_source'), '15. establish_water_source is not auto-completed at game creation');
+    const advanceFirstDayDef = OBJECTIVE_GRAPH.find(o => o.id === 'advance_first_day')!;
+    assert(!advanceFirstDayDef.isComplete(state), '15. advance_first_day.isComplete reads false for a state that has never advanced');
+  }
+
   return { passed, failed, errors };
 }

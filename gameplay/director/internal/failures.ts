@@ -21,7 +21,7 @@ export function detectFailure(
     );
   }
 
-  if (state.simulation.day > 0) {
+  if (state.day > 0) {
     const waterShort = state.simulation.zones.every(z => z.plant.cropId && z.plant.water < 15);
     if (waterShort && state.simulation.water.currentStoredGallons < 10) {
       const waterUnlocks = getAvailableUnlocks(state.planning.research, state.planning.progression.level, season)
@@ -37,11 +37,11 @@ export function detectFailure(
     }
   }
 
-  if (state.planning.research.balance < 5 && state.planning.placements.length > 0 && state.simulation.day > 30) {
+  if (state.planning.research.balance < 5 && state.planning.placements.length > 0 && state.day > 30) {
     const noHarvestable = !state.simulation.zones.some(z => z.plant.isHarvestable);
     if (noHarvestable) {
       return makeFailure('INSUFFICIENT_RESOURCE', 'Low research credits and no harvestable crops. Continue advancing days until crops mature.',
-        { balance: state.planning.research.balance, day: state.simulation.day },
+        { balance: state.planning.research.balance, day: state.day },
         [{ intentType: 'ADVANCE_DAY', description: 'Advance days to let crops grow to harvest.' }],
       );
     }

@@ -118,15 +118,19 @@ function autoCompleteObjectives(state: NewGameState, season: UnlockSeason): NewG
     current = completeObjective(current, 'place_first_food_producer');
   }
 
-  if (!current.completedObjectiveIds.includes('establish_water_source') && current.simulation.day >= 1) {
+  // Use state.day (the player-facing day counter, starts at 0) rather than
+  // state.simulation.day (which is always >= 1, per validateHomesteadScenario's
+  // startDay requirement, even before the player ever advances a day) --
+  // otherwise these objectives auto-complete at game creation.
+  if (!current.completedObjectiveIds.includes('establish_water_source') && current.day >= 1) {
     current = completeObjective(current, 'establish_water_source');
   }
 
-  if (!current.completedObjectiveIds.includes('advance_first_day') && current.simulation.day >= 1) {
+  if (!current.completedObjectiveIds.includes('advance_first_day') && current.day >= 1) {
     current = completeObjective(current, 'advance_first_day');
   }
 
-  if (!current.completedObjectiveIds.includes('respond_to_consequence') && current.simulation.day >= 2) {
+  if (!current.completedObjectiveIds.includes('respond_to_consequence') && current.day >= 2) {
     current = completeObjective(current, 'respond_to_consequence');
   }
 

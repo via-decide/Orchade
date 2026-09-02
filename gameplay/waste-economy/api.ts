@@ -84,7 +84,10 @@ export function advanceWasteEconomy(
   currentDay: number,
 ): AdvanceDayResult {
   let { byproducts, compostBins, contaminations, greywaterFlows, ledger } = {
-    byproducts: [...prevState.byproducts],
+    // Stack objects are mutated in place below (massLbs deductions), so each
+    // stack must be its own copy -- spreading only the array would leave these
+    // mutations reaching back into prevState.byproducts.
+    byproducts: prevState.byproducts.map(s => ({ ...s })),
     compostBins: prevState.compostBins.map(b => ({ ...b })),
     contaminations: [...prevState.contaminations],
     greywaterFlows: [...prevState.greywaterFlows],
@@ -191,18 +194,37 @@ export function advanceWasteEconomy(
   }
 
   // 6. Direct manure application (shortcut path — with contamination)
+  // A single livestock zone can have manure_direct routes to several crop zones.
+  // Routes sharing a fromZoneId must split that zone's manure between them --
+  // applying it in full to the first route and leaving nothing for the rest.
   const directManureRoutes = routes.filter(r => r.kind === 'manure_direct');
+  const directRoutesByFromZone = new Map<number, typeof directManureRoutes>();
   for (const route of directManureRoutes) {
+    const existing = directRoutesByFromZone.get(route.fromZoneId);
+    if (existing) existing.push(route);
+    else directRoutesByFromZone.set(route.fromZoneId, [route]);
+  }
+
+  for (const [fromZoneId, routesFromZone] of directRoutesByFromZone) {
     const manureStacks = byproducts.filter(
-      s => s.kind === 'manure' && s.sourceZoneId === route.fromZoneId && s.massLbs > 0,
+      s => s.kind === 'manure' && s.sourceZoneId === fromZoneId && s.massLbs > 0,
     );
-    let totalApplied = 0;
+    const totalAvailable = manureStacks.reduce((sum, s) => sum + s.massLbs, 0);
+    if (totalAvailable <= 0) continue;
+
+    const perRouteLbs = totalAvailable / routesFromZone.length;
+    let remainingToDeduct = totalAvailable;
     for (const stack of manureStacks) {
-      totalApplied += stack.massLbs;
-      stack.massLbs = 0;
+      if (remainingToDeduct <= 0) break;
+      const take = Math.min(stack.massLbs, remainingToDeduct);
+      stack.massLbs -= take;
+      remainingToDeduct -= take;
     }
 
-    if (totalApplied > 0) {
+    for (const route of routesFromZone) {
+      const totalApplied = perRouteLbs;
+      if (totalApplied <= 0) continue;
+
       ledger = recordReuse(ledger, totalApplied);
       const record = applyRawManure(route.toZoneId, totalApplied, currentDay);
       contaminations.push(record);

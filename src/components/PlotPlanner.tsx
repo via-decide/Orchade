@@ -38,6 +38,8 @@ import {
   createNewGameState,
   deriveNextPlayerObjective,
   deriveAvailablePlayerActions,
+  advanceNewGameDay,
+  processSimulationConsequences,
   OBJECTIVE_GRAPH,
 } from '../../gameplay/director/api';
 import { ObjectiveBanner } from './ObjectiveBanner';
@@ -87,7 +89,17 @@ export function PlotPlanner() {
   });
   const credits = researchState.balance;
 
-  const [newGameState] = useState(() => createNewGameState({ seed: 'orchade-session', runId: 'session-run' }));
+  // NOTE: PlotPlanner runs its own long-standing ZoneData simulation (zones, credits,
+  // researchCredits) that predates the director module and is not itself expressed as
+  // director PlacementIntent/HomesteadPlanningState. Full objective wiring (e.g.
+  // place_first_food_producer, choose_starter_plan) would require translating real
+  // zone/crop assignments into director placements, which is a larger design decision
+  // deferred beyond this fix. What IS wired here: day-advancement is a natural 1:1
+  // concept between both systems, so handleAdvanceDay below also drives the director's
+  // own day counter and consequence pipeline, so day-gated objectives (advance_first_day,
+  // establish_water_source, respond_to_consequence) progress in step with real play
+  // instead of being permanently stuck at day 0.
+  const [newGameState, setNewGameState] = useState(() => createNewGameState({ seed: 'orchade-session', runId: 'session-run' }));
   const currentObjective = deriveNextPlayerObjective(newGameState, currentSeason);
   const currentActions = deriveAvailablePlayerActions(newGameState, currentSeason);
 
@@ -598,6 +610,14 @@ export function PlotPlanner() {
     setSolarState(result.state.solar);
     setPaddocks(result.state.paddocks);
     setZones(result.state.zones);
+
+    const dayAdvance = advanceNewGameDay(newGameState);
+    const { state: nextDirectorState } = processSimulationConsequences(
+      dayAdvance.state,
+      dayAdvance.simulationEvents,
+      result.state.season,
+    );
+    setNewGameState(nextDirectorState);
 
     if (result.events.some(event => event.type === 'SEASON_CHANGED')) {
       addLog(`🍂 Season shifted to ${SEASON_METADATA[result.state.season].name.toUpperCase()}! Temperature and solar radiation updated.`, 'bonus');

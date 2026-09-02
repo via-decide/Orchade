@@ -384,7 +384,8 @@ const App: React.FC = () => {
             ...prev,
             day: data.day ?? prev.day,
             credits: data.credits ?? prev.credits,
-            researchCredits: data.researchCredits ?? prev.researchCredits,
+            // Legacy saves from before the dataSeeds -> researchCredits rename only have `dataSeeds`.
+            researchCredits: data.researchCredits ?? data.dataSeeds ?? prev.researchCredits,
             orchards: data.orchards ?? prev.orchards,
             upgrades: data.upgrades ?? prev.upgrades,
             weather: data.weather ?? prev.weather,
@@ -409,7 +410,8 @@ const App: React.FC = () => {
           ...prev,
           day: data.day ?? prev.day,
           credits: data.credits ?? prev.credits,
-          researchCredits: data.researchCredits ?? prev.researchCredits,
+          // Legacy Firestore profiles from before the dataSeeds -> researchCredits rename only have `dataSeeds`.
+          researchCredits: data.researchCredits ?? data.dataSeeds ?? prev.researchCredits,
           orchards: data.orchards ?? prev.orchards,
           upgrades: data.upgrades ?? prev.upgrades,
           weather: data.weather ?? prev.weather,

@@ -6,11 +6,13 @@
 import { runCompostingTests } from './composting.test';
 import { runContaminationTests } from './contamination.test';
 import { runRoutingTests } from './routing.test';
+import { runApiTests } from './api.test';
 
 const suites = [
   { name: 'Composting', run: runCompostingTests },
   { name: 'Contamination', run: runContaminationTests },
   { name: 'Routing', run: runRoutingTests },
+  { name: 'Api', run: runApiTests },
 ];
 
 let totalPassed = 0;

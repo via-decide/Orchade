@@ -104,12 +104,16 @@ export function runEquipmentTwinTests(): { passed: number; failed: number; error
   {
     let twin = createEquipmentTwinRevision(minimalTwinInput({ lifecycleStatus: 'DRAFT' }));
     let registry: EquipmentTwinRegistry = registerEquipmentTwinRevision({}, twin);
-    twin = promoteEquipmentTwinLifecycle(twin, 'SIMULATION_READY', []);
-    twin = promoteEquipmentTwinLifecycle(twin, 'BENCH_VERIFIED', ['evidence:bench-1']);
-    twin = promoteEquipmentTwinLifecycle(twin, 'FIELD_VERIFIED', ['evidence:field-1']);
-    twin = promoteEquipmentTwinLifecycle(twin, 'RETIRED', []);
+    twin = promoteEquipmentTwinLifecycle(twin, 'SIMULATION_READY', [], 'v2');
+    registry = registerEquipmentTwinRevision(registry, twin);
+    twin = promoteEquipmentTwinLifecycle(twin, 'BENCH_VERIFIED', ['evidence:bench-1'], 'v3');
+    registry = registerEquipmentTwinRevision(registry, twin);
+    twin = promoteEquipmentTwinLifecycle(twin, 'FIELD_VERIFIED', ['evidence:field-1'], 'v4');
+    registry = registerEquipmentTwinRevision(registry, twin);
+    twin = promoteEquipmentTwinLifecycle(twin, 'RETIRED', [], 'v5-retired');
+    registry = registerEquipmentTwinRevision(registry, twin);
     assert(twin.lifecycleStatus === 'RETIRED', '16. Twin reaches RETIRED through explicit one-step promotions');
-    registry = registerEquipmentTwinRevision(registry, { ...twin, revisionId: 'v1-retired' });
+    assert(twin.revisionId === 'v5-retired' && twin.parentRevisionId === 'v4', '16. Each promotion allocates a genuinely new, parent-chained revision id');
     const retrieved = getEquipmentTwinRevision(registry, twin.twinId, 'v1');
     assert(!!retrieved, '16. The original (pre-retirement) revision remains retrievable from the registry for historical replay');
   }
