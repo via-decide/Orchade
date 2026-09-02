@@ -17,15 +17,20 @@ export function PlannerEvidencePanel({ activityLogs, onOpenReportModal }: Planne
     <div className="space-y-3 font-sans text-[#f4ecd8]">
       <div className="bg-[#171410] border border-[#332c22] p-3 rounded-xl flex items-center justify-between">
         <div>
-          <h3 className="text-sm font-bold font-mono text-[#f4ecd8]">Homestead Agronomic Audit</h3>
-          <span className="text-[11px] text-[#8a7f68]">Export or print a full evidence report</span>
+          {/* Not "Evidence" -- this panel only shows the session's own
+              activity log (operator/UI events), not accepted observations,
+              provenance, or validated evidence records. Renamed per closeout
+              review until real evidence integration (ObservationRecord,
+              DeviceSource, provenance) is wired into this UI. */}
+          <h3 className="text-sm font-bold font-mono text-[#f4ecd8]">Homestead Activity Log</h3>
+          <span className="text-[11px] text-[#8a7f68]">Export or print this session's activity log</span>
         </div>
         <button
           onClick={onOpenReportModal}
           className="px-3 py-2 rounded-lg text-xs font-mono font-bold bg-[#262016] hover:bg-[#3d3323] text-[#b8ab8e] border border-[#332c22] flex items-center gap-1.5 transition-all cursor-pointer"
           style={{ minHeight: '44px' }}
         >
-          <span>📋 Open Audit</span>
+          <span>📋 Open Activity Log</span>
         </button>
       </div>
 

@@ -11,7 +11,11 @@ const TABS: Array<{ id: PlannerPrimaryTab; icon: string; label: string }> = [
   { id: 'plan', icon: '🗺', label: 'Plan' },
   { id: 'operate', icon: '🌱', label: 'Operate' },
   { id: 'system', icon: '📊', label: 'System' },
-  { id: 'evidence', icon: '📜', label: 'Evidence' },
+  // Internal id stays 'evidence' (matches PlannerPrimaryTab and every
+  // consumer of it) -- only the user-facing label changes. This panel shows
+  // the session's own activity log, not accepted observations/provenance/
+  // validated evidence, so labeling it "Evidence" overclaimed what it is.
+  { id: 'evidence', icon: '📜', label: 'Activity' },
 ];
 
 export function PlannerTabBar({ active, onChange }: PlannerTabBarProps) {
