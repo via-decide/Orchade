@@ -192,9 +192,57 @@ function collectResourceConnectionNotes(revision: PropertyRevision, operationalE
   return notes;
 }
 
-function numericConfig(configuration: Record<string, unknown>, key: string): number {
-  const value = configuration[key];
-  return typeof value === 'number' && Number.isFinite(value) ? value : 0;
+/** The only configuration keys the compiler reads off an equipment instance; every one is a non-negative magnitude (see docs/EQUIPMENT_TEST_WORKFLOW.md). */
+const EQUIPMENT_CONFIG_KEYS = [
+  'energyConsumptionKwhPerDay',
+  'energyProductionKwhPerDay',
+  'waterProductionLitresPerDay',
+  'waterConsumptionLitresPerDay',
+  'labourMinutesPerDay',
+  'purchaseCostINR',
+  'dailyOperatingCostINR',
+] as const;
+
+/**
+ * Reads a documented equipment configuration lever. Every lever is a
+ * magnitude (a cost, a consumption rate, a production rate, a labour
+ * requirement) -- never itself signed -- so a negative value can only be
+ * malformed or adversarial input (e.g. a negative purchaseCostINR that would
+ * increase cash, or a negative labourMinutesPerDay that would create free
+ * labour). Fails closed rather than silently producing a falsely beneficial
+ * scenario.
+ */
+function nonNegativeNumericConfig(instance: PropertyEquipmentInstance, key: (typeof EQUIPMENT_CONFIG_KEYS)[number]): number {
+  const value = instance.configuration[key];
+  if (value === undefined) return 0;
+  if (typeof value !== 'number' || !Number.isFinite(value)) return 0;
+  if (value < 0) {
+    throw new Error(`PropertyEquipmentInstance ${instance.instanceId} configuration.${key} must be non-negative (got ${value}).`);
+  }
+  return value;
+}
+
+interface EquipmentInstanceDeltas {
+  netEnergyKwhPerDay: number;
+  netWaterSupplyLPerDay: number;
+  netLabourMinutesPerDay: number;
+  purchaseCostINR: number;
+  dailyOperatingCostINR: number;
+}
+
+function computeEquipmentInstanceDeltas(instance: PropertyEquipmentInstance): EquipmentInstanceDeltas {
+  const quantity = instance.quantity;
+  // farmBaseLoadKwhPerDay is a DEMAND quantity: consumption adds to it, production offsets it.
+  const netEnergyKwhPerDay = (nonNegativeNumericConfig(instance, 'energyConsumptionKwhPerDay') - nonNegativeNumericConfig(instance, 'energyProductionKwhPerDay')) * quantity;
+  // externalWaterLPerDay is a SUPPLY quantity: production adds to it, consumption offsets it (opposite convention from energy).
+  const netWaterSupplyLPerDay = (nonNegativeNumericConfig(instance, 'waterProductionLitresPerDay') - nonNegativeNumericConfig(instance, 'waterConsumptionLitresPerDay')) * quantity;
+  return {
+    netEnergyKwhPerDay,
+    netWaterSupplyLPerDay,
+    netLabourMinutesPerDay: nonNegativeNumericConfig(instance, 'labourMinutesPerDay') * quantity,
+    purchaseCostINR: nonNegativeNumericConfig(instance, 'purchaseCostINR') * quantity,
+    dailyOperatingCostINR: nonNegativeNumericConfig(instance, 'dailyOperatingCostINR') * quantity,
+  };
 }
 
 /**
@@ -211,25 +259,41 @@ export function applyEquipmentInstanceDeltas(
   scenario: HomesteadScenarioDefinition,
   instance: PropertyEquipmentInstance,
 ): HomesteadScenarioDefinition {
-  const quantity = instance.quantity;
-  const cfg = instance.configuration;
-  // farmBaseLoadKwhPerDay is a DEMAND quantity: consumption adds to it, production offsets it.
-  const netEnergyKwhPerDay = (numericConfig(cfg, 'energyConsumptionKwhPerDay') - numericConfig(cfg, 'energyProductionKwhPerDay')) * quantity;
-  // externalWaterLPerDay is a SUPPLY quantity: production adds to it, consumption offsets it (opposite convention from energy).
-  const netWaterSupplyLPerDay = (numericConfig(cfg, 'waterProductionLitresPerDay') - numericConfig(cfg, 'waterConsumptionLitresPerDay')) * quantity;
-  const netLabourMinutesPerDay = numericConfig(cfg, 'labourMinutesPerDay') * quantity;
-  const purchaseCostINR = numericConfig(cfg, 'purchaseCostINR') * quantity;
-  const dailyOperatingCostINR = numericConfig(cfg, 'dailyOperatingCostINR') * quantity;
+  return applyEquipmentInstancesDeltas(scenario, [instance]);
+}
+
+/**
+ * Folds a whole set of PropertyEquipmentInstances onto an already-compiled
+ * scenario in one step. Deltas are summed across every instance BEFORE the
+ * zero floor on energy/water is applied, so an offsetting pair (e.g. a
+ * producer and a consumer of the same magnitude) always nets out the same
+ * way regardless of array order -- clamping after each instance instead
+ * would make the compiled result order-dependent.
+ */
+function applyEquipmentInstancesDeltas(
+  scenario: HomesteadScenarioDefinition,
+  instances: readonly PropertyEquipmentInstance[],
+): HomesteadScenarioDefinition {
+  const totals = instances.reduce<EquipmentInstanceDeltas>((sum, instance) => {
+    const delta = computeEquipmentInstanceDeltas(instance);
+    return {
+      netEnergyKwhPerDay: sum.netEnergyKwhPerDay + delta.netEnergyKwhPerDay,
+      netWaterSupplyLPerDay: sum.netWaterSupplyLPerDay + delta.netWaterSupplyLPerDay,
+      netLabourMinutesPerDay: sum.netLabourMinutesPerDay + delta.netLabourMinutesPerDay,
+      purchaseCostINR: sum.purchaseCostINR + delta.purchaseCostINR,
+      dailyOperatingCostINR: sum.dailyOperatingCostINR + delta.dailyOperatingCostINR,
+    };
+  }, { netEnergyKwhPerDay: 0, netWaterSupplyLPerDay: 0, netLabourMinutesPerDay: 0, purchaseCostINR: 0, dailyOperatingCostINR: 0 });
 
   return {
     ...scenario,
-    energy: { ...scenario.energy, farmBaseLoadKwhPerDay: Math.max(0, scenario.energy.farmBaseLoadKwhPerDay + netEnergyKwhPerDay) },
-    water: { ...scenario.water, externalWaterLPerDay: Math.max(0, scenario.water.externalWaterLPerDay + netWaterSupplyLPerDay) },
-    household: { ...scenario.household, labourMinutesAvailablePerDay: scenario.household.labourMinutesAvailablePerDay - netLabourMinutesPerDay },
+    energy: { ...scenario.energy, farmBaseLoadKwhPerDay: Math.max(0, scenario.energy.farmBaseLoadKwhPerDay + totals.netEnergyKwhPerDay) },
+    water: { ...scenario.water, externalWaterLPerDay: Math.max(0, scenario.water.externalWaterLPerDay + totals.netWaterSupplyLPerDay) },
+    household: { ...scenario.household, labourMinutesAvailablePerDay: scenario.household.labourMinutesAvailablePerDay - totals.netLabourMinutesPerDay },
     economy: {
       ...scenario.economy,
-      initialCash: scenario.economy.initialCash - purchaseCostINR,
-      dailyPropertyOperatingCost: scenario.economy.dailyPropertyOperatingCost + dailyOperatingCostINR,
+      initialCash: scenario.economy.initialCash - totals.purchaseCostINR,
+      dailyPropertyOperatingCost: scenario.economy.dailyPropertyOperatingCost + totals.dailyOperatingCostINR,
     },
   };
 }
@@ -389,8 +453,20 @@ export function compilePropertyRevisionToHomesteadScenario(
     metadata: { name: revision.intent.name, description: `Compiled from Property ${revision.propertyId} revision ${revision.revisionId}.` },
   };
 
-  const equipmentInstances = options.equipmentInstances ?? [];
-  const finalScenario = equipmentInstances.reduce(applyEquipmentInstanceDeltas, scenario);
+  const suppliedEquipmentInstances = options.equipmentInstances ?? [];
+  // Instances are explicitly revision-pinned (see propertyEquipment.ts): one
+  // for another property or another property revision must never fold its
+  // effects into this compilation, even if a caller mistakenly passes it in.
+  const mismatched = suppliedEquipmentInstances.find(
+    instance => instance.propertyId !== revision.propertyId || instance.propertyRevisionId !== revision.revisionId,
+  );
+  if (mismatched) {
+    throw new Error(
+      `PropertyEquipmentInstance ${mismatched.instanceId} is pinned to property ${mismatched.propertyId} revision ${mismatched.propertyRevisionId}, not ${revision.propertyId} revision ${revision.revisionId}.`,
+    );
+  }
+  const equipmentInstances = suppliedEquipmentInstances.filter(instance => instance.active);
+  const finalScenario = applyEquipmentInstancesDeltas(scenario, equipmentInstances);
 
   validateHomesteadScenario(finalScenario);
   return { scenario: finalScenario, notes: collectResourceConnectionNotes(revision, operationalEntities) };

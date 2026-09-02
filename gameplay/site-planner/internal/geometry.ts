@@ -166,13 +166,33 @@ function projectPolygon(polygon: SitePoint2D[], axis: SitePoint2D): [number, num
   return [min, max];
 }
 
-/** True only if every vertex of the footprint lies inside (or on) the boundary polygon. */
+/**
+ * True only if a footprint edge properly crosses a boundary edge -- i.e.
+ * passes from one side to the other -- as opposed to merely touching it or
+ * running along it collinearly. A module edge placed flush against the
+ * parcel boundary (a completely legal, common placement) is collinear with
+ * and overlaps the boundary edge there; that must never count as "leaving"
+ * the parcel the way an edge that actually crosses a concave indentation does.
+ */
+function segmentsProperlyCross(p1: SitePoint2D, p2: SitePoint2D, p3: SitePoint2D, p4: SitePoint2D): boolean {
+  const direction = (a: SitePoint2D, b: SitePoint2D, c: SitePoint2D) =>
+    (c.xM - a.xM) * (b.yM - a.yM) - (b.xM - a.xM) * (c.yM - a.yM);
+  const d1 = direction(p3, p4, p1);
+  const d2 = direction(p3, p4, p2);
+  const d3 = direction(p1, p2, p3);
+  const d4 = direction(p1, p2, p4);
+  return ((d1 > 0 && d2 < 0) || (d1 < 0 && d2 > 0)) && ((d3 > 0 && d4 < 0) || (d3 < 0 && d4 > 0));
+}
+
 /**
  * True only if the whole footprint -- not just its vertices -- lies inside
  * the boundary. Checking vertices alone is insufficient for a concave
  * boundary: a rectangular footprint can have all four corners inside while
  * one of its edges crosses a boundary indentation and travels outside, so
- * this also rejects any footprint edge that crosses a boundary edge.
+ * this also rejects any footprint edge that properly crosses a boundary
+ * edge. A footprint edge that merely runs along (collinear with) a boundary
+ * edge -- e.g. a module built flush against the parcel line -- is not a
+ * crossing and must still be accepted.
  */
 export function polygonFullyInside(footprint: SitePoint2D[], boundary: SitePoint2D[]): boolean {
   if (!footprint.every(point => isPointInPolygon(point, boundary))) return false;
@@ -182,7 +202,7 @@ export function polygonFullyInside(footprint: SitePoint2D[], boundary: SitePoint
     for (let j = 0; j < boundary.length; j += 1) {
       const b1 = boundary[j];
       const b2 = boundary[(j + 1) % boundary.length];
-      if (segmentsIntersect(f1, f2, b1, b2)) return false;
+      if (segmentsProperlyCross(f1, f2, b1, b2)) return false;
     }
   }
   return true;

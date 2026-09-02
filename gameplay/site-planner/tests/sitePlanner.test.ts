@@ -14,6 +14,7 @@ import {
   estimateUnionFootprintAreaM2,
   isPolygonSelfIntersecting,
   moduleFootprintPolygon,
+  polygonFullyInside,
   siteAreaM2,
   validateSiteGeometry,
 } from '../internal/geometry';
@@ -282,6 +283,52 @@ export function runSitePlannerTests(): { passed: number; failed: number; errors:
     const scenario = compileSiteProjectToHomesteadScenario(disabledProject).scenario;
     assert(scenario.livestock.length === 0, '25. Disabled chicken coop contributes no livestock');
     assert(scenario.land.placements.some(p => p.id === 'chicken-coop'), '25. Disabled module still occupies its land placement');
+  }
+
+  // 26. Placement colliding with an existing structure is rejected.
+  {
+    const geometry = createRectangularSiteGeometry({
+      siteGeometryId: 'with-existing-structure',
+      widthM: 10,
+      depthM: 10,
+      existingStructures: [{ id: 'old-well', label: 'Existing well', polygon: [
+        { xM: 4, yM: 4 }, { xM: 6, yM: 4 }, { xM: 6, yM: 6 }, { xM: 4, yM: 6 },
+      ] }],
+    });
+    const project = createBlankSiteProject({ geometry });
+    const result = applySitePlacementIntent(project, { type: 'PLACE_MODULE', moduleId: 'shed', moduleType: 'SHED', anchor: { xM: 3, yM: 3 }, widthM: 3, depthM: 3 });
+    assert(!result.accepted, '26. Module colliding with an existing structure is rejected');
+    assert(result.failures.some(f => f.type === 'EXISTING_STRUCTURE_COLLISION'), '26. Rejection reports EXISTING_STRUCTURE_COLLISION');
+
+    const clearResult = applySitePlacementIntent(project, { type: 'PLACE_MODULE', moduleId: 'shed-clear', moduleType: 'SHED', anchor: { xM: 0, yM: 0 }, widthM: 2, depthM: 2 });
+    assert(clearResult.accepted, '26. Module clear of the existing structure is accepted');
+  }
+
+  // 27. polygonFullyInside rejects a footprint edge crossing a concave boundary indentation, but accepts one flush against a straight boundary edge.
+  {
+    // A "C"-shaped (concave) 10x10 boundary with a notch cut out of its right side.
+    const concaveBoundary = [
+      { xM: 0, yM: 0 }, { xM: 10, yM: 0 }, { xM: 10, yM: 4 },
+      { xM: 5, yM: 4 }, { xM: 5, yM: 6 }, { xM: 10, yM: 6 },
+      { xM: 10, yM: 10 }, { xM: 0, yM: 10 },
+    ];
+    // All four corners lie inside the boundary, but the footprint spans the
+    // notch: its right edge (running through the notch's open air at x=8)
+    // crosses two boundary edges of the indentation.
+    const spanningNotch = [{ xM: 2, yM: 3 }, { xM: 8, yM: 3 }, { xM: 8, yM: 7 }, { xM: 2, yM: 7 }];
+    assert(!polygonFullyInside(spanningNotch, concaveBoundary), '27. Footprint spanning a concave boundary notch is rejected even though all corners are inside');
+
+    // A footprint built flush against the boundary's outer edge (collinear
+    // overlap, not a crossing) must still be accepted.
+    const flushAgainstEdge = [{ xM: 0, yM: 0 }, { xM: 2, yM: 0 }, { xM: 2, yM: 2 }, { xM: 0, yM: 2 }];
+    assert(polygonFullyInside(flushAgainstEdge, concaveBoundary), '27. Footprint edge running flush along a straight boundary edge is accepted, not treated as a crossing');
+  }
+
+  // 28. A module placed flush against the parcel boundary is accepted (regression for the concave-boundary fix above).
+  {
+    const project = smallBlankProject(10, 10);
+    const result = applySitePlacementIntent(project, { type: 'PLACE_MODULE', moduleId: 'edge-shed', moduleType: 'SHED', anchor: { xM: 0, yM: 0 }, widthM: 2, depthM: 2 });
+    assert(result.accepted, '28. A module flush against the parcel boundary is accepted');
   }
 
   // Geometry helper sanity: union-area estimate does not double-count legal overlaps.

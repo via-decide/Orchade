@@ -252,9 +252,14 @@ export function advanceWasteEconomy(
   for (const flow of greywaterFlows) {
     totalGreywaterProduced += flow.dailyGallons;
     if (flow.connectedToZoneId !== null) {
-      totalGreywaterReused += flow.dailyGallons;
       const targetZone = zones.find(z => z.id === flow.connectedToZoneId);
-      if (targetZone?.type === 'water') {
+      // Greywater routed to a crop zone offsets that crop's irrigation demand
+      // the same way routing it to a water zone offsets stored-water draw --
+      // both reduce the fresh water otherwise needed, so both count as reuse.
+      // A flow with no such target (e.g. no adjacent water/crop zone at all)
+      // is not actually reused and must not claim closed-loop credit.
+      if (targetZone?.type === 'water' || targetZone?.type === 'crop') {
+        totalGreywaterReused += flow.dailyGallons;
         waterReduction += flow.dailyGallons;
       }
     }

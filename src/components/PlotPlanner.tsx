@@ -256,6 +256,14 @@ export function PlotPlanner() {
 
   const zonesRef = useRef<ZoneData[]>(zones);
   zonesRef.current = zones;
+  // Mirrors researchState for synchronous reads inside spend handlers below.
+  // Two purchases fired before React re-renders would otherwise both read the
+  // same stale pre-purchase balance from the `researchState` closure and both
+  // succeed while only the last setResearchState call sticks -- paying once
+  // for two items. Handlers read/write this ref immediately (not just
+  // researchState) so a second purchase in the same tick sees the first's debit.
+  const researchStateRef = useRef<ResearchCreditsState>(researchState);
+  researchStateRef.current = researchState;
   const draggingZoneIdRef = useRef<number | null>(null);
   const dragPreviewPosRef = useRef<{ col: number; row: number } | null>(null);
   const dragOffsetRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
@@ -633,11 +641,12 @@ export function PlotPlanner() {
   // Phase 3 Livestock Handlers
   const handleAdoptBreed = (targetZone: number, breedId: string) => {
     const breed = LIVESTOCK_BREEDS[breedId];
-    if (!breed || researchState.balance < breed.cost) return;
+    if (!breed || researchStateRef.current.balance < breed.cost) return;
 
     if (breed.cost > 0) {
-      const result = spendCredit(researchState, breed.cost, { gameId: 'orchade', action: 'adopt_breed', contentId: breedId, tick: cycleDay });
+      const result = spendCredit(researchStateRef.current, breed.cost, { gameId: 'orchade', action: 'adopt_breed', contentId: breedId, tick: cycleDay });
       if (!result.ok) return;
+      researchStateRef.current = result.state;
       setResearchState(result.state);
     }
     const newPaddock: PaddockState = {
@@ -706,11 +715,12 @@ export function PlotPlanner() {
   // Phase 3 Water & Solar Upgrade Handlers
   const handleUpgradeWater = (upgradeId: string) => {
     const up = WATER_INFRASTRUCTURE_UPGRADES.find(u => u.id === upgradeId);
-    if (!up || researchState.balance < up.cost) return;
+    if (!up || researchStateRef.current.balance < up.cost) return;
 
     if (up.cost > 0) {
-      const result = spendCredit(researchState, up.cost, { gameId: 'orchade', action: 'upgrade_water', contentId: upgradeId, tick: cycleDay });
+      const result = spendCredit(researchStateRef.current, up.cost, { gameId: 'orchade', action: 'upgrade_water', contentId: upgradeId, tick: cycleDay });
       if (!result.ok) return;
+      researchStateRef.current = result.state;
       setResearchState(result.state);
     }
     setWaterState(prev => ({
@@ -723,11 +733,12 @@ export function PlotPlanner() {
 
   const handleUpgradeSolar = (upgradeId: string) => {
     const up = ENERGY_INFRASTRUCTURE_UPGRADES.find(u => u.id === upgradeId);
-    if (!up || researchState.balance < up.cost) return;
+    if (!up || researchStateRef.current.balance < up.cost) return;
 
     if (up.cost > 0) {
-      const result = spendCredit(researchState, up.cost, { gameId: 'orchade', action: 'upgrade_energy', contentId: upgradeId, tick: cycleDay });
+      const result = spendCredit(researchStateRef.current, up.cost, { gameId: 'orchade', action: 'upgrade_energy', contentId: upgradeId, tick: cycleDay });
       if (!result.ok) return;
+      researchStateRef.current = result.state;
       setResearchState(result.state);
     }
     setSolarState(prev => ({
@@ -821,11 +832,12 @@ export function PlotPlanner() {
 
   const handleApplyAmendment = (amendmentId: string) => {
     const am = SOIL_AMENDMENTS.find(a => a.id === amendmentId);
-    if (!am || researchState.balance < am.cost) return;
+    if (!am || researchStateRef.current.balance < am.cost) return;
 
     if (am.cost > 0) {
-      const result = spendCredit(researchState, am.cost, { gameId: 'orchade', action: 'apply_amendment', contentId: amendmentId, tick: cycleDay });
+      const result = spendCredit(researchStateRef.current, am.cost, { gameId: 'orchade', action: 'apply_amendment', contentId: amendmentId, tick: cycleDay });
       if (!result.ok) return;
+      researchStateRef.current = result.state;
       setResearchState(result.state);
     }
     setZones(prev => prev.map(z => {
@@ -855,12 +867,10 @@ export function PlotPlanner() {
     const crop = EXPANDED_CROP_CATALOG[targetZone.plant.cropId];
     if (!crop) return;
 
-    if (crop.seasons && !crop.seasons.includes(currentSeason)) {
-      addLog(`Cannot harvest ${crop.displayName} — out of season (${currentSeason}). Valid: ${crop.seasons.join(', ')}.`, 'alert');
-      triggerZoneEffect(zoneId, 'Out of Season', '❄️', '#e57373');
-      return;
-    }
-
+    // Season eligibility (crop.seasons) gates planting/growth, not collection: a
+    // crop planted in a valid season commonly matures into a later season (e.g.
+    // tomato stages total 76 days), so an already-ripe crop must stay harvestable
+    // regardless of the current season.
     const baseYield = Math.floor(Math.random() * (crop.harvest.maxYield - crop.harvest.minYield + 1)) + crop.harvest.minYield;
     const spacingSqft = crop.spacing.sqft;
     const plantUnits = Math.max(1, Math.round(targetZone.sqft / spacingSqft));

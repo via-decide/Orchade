@@ -76,6 +76,29 @@ function excludedZoneFailures(project: SiteProject): SiteValidationFailure[] {
   return failures;
 }
 
+/**
+ * Existing structures are already counted as reserved land by the site
+ * compiler, so a new module must not overlap one -- the same rule that
+ * already applies to declared excluded zones.
+ */
+function existingStructureCollisionFailures(project: SiteProject): SiteValidationFailure[] {
+  const failures: SiteValidationFailure[] = [];
+  project.modules.forEach(module => {
+    const footprint = moduleFootprintPolygon(module.geometry, module.rotationDegrees);
+    project.geometry.existingStructures.forEach(structure => {
+      if (polygonsOverlap(footprint, structure.polygon)) {
+        failures.push({
+          type: 'EXISTING_STRUCTURE_COLLISION',
+          moduleId: module.moduleId,
+          reason: `Module ${module.moduleId} collides with existing structure ${structure.id} (${structure.label}).`,
+          evidence: { structureId: structure.id },
+        });
+      }
+    });
+  });
+  return failures;
+}
+
 function overlapFailures(modules: SiteModuleDefinition[]): SiteValidationFailure[] {
   const failures: SiteValidationFailure[] = [];
   const enabled = modules.filter(m => m.enabled);
@@ -242,6 +265,7 @@ export function validateSiteProject(project: SiteProject): SiteValidationFailure
   failures.push(...invalidDimensionsFailures(project.modules));
   failures.push(...outsideBoundaryFailures(project));
   failures.push(...excludedZoneFailures(project));
+  failures.push(...existingStructureCollisionFailures(project));
   failures.push(...overlapFailures(project.modules));
   failures.push(...insufficientAreaFailures(project));
   failures.push(...circularDependencyFailures(project.modules));

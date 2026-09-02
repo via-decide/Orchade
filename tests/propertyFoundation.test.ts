@@ -13,6 +13,7 @@ import {
 } from '../src/property/fixtures/demoProperties';
 import { createPropertyRevision, deriveNextPropertyRevision, type PropertyRevision } from '../src/property/revision';
 import { compilePropertyRevisionToHomesteadScenario } from '../src/property/scenarioCompiler';
+import type { PropertyEquipmentInstance } from '../src/property/propertyEquipment';
 
 const CREATED_AT = '2026-08-31T00:00:00.000Z';
 
@@ -254,6 +255,82 @@ export function runPropertyFoundationTests(): { passed: number; failed: number; 
     const compiled = compilePropertyRevisionToHomesteadScenario(revision);
     assert(compiled.scenario.foodProducers.length === 1 && compiled.scenario.foodProducers[0].placementId === 'bed-active', '23. An INACTIVE entity contributes no food production');
     assert(compiled.scenario.land.placements.some(p => p.id === 'bed-inactive'), '23. An INACTIVE entity still occupies its land placement (land-use accounting is unaffected by operational status)');
+  }
+
+  function makeEquipmentInstance(revision: PropertyRevision, overrides: Partial<PropertyEquipmentInstance> = {}): PropertyEquipmentInstance {
+    return {
+      instanceId: 'instance-1',
+      propertyId: revision.propertyId,
+      propertyRevisionId: revision.revisionId,
+      equipmentTwinId: 'twin-1',
+      equipmentTwinRevisionId: 'v1',
+      realityStatus: 'VIRTUAL',
+      quantity: 1,
+      configuration: {},
+      resourceConnectionRefs: [],
+      deviceSourceRefs: [],
+      active: true,
+      evidenceRefs: [],
+      ...overrides,
+    };
+  }
+
+  // 24. A negative equipment configuration quantity is rejected rather than silently applied.
+  {
+    const revision = baseRevision('prop-24', 'rev-1');
+    const negativeCostInstance = makeEquipmentInstance(revision, { configuration: { purchaseCostINR: -100000 } });
+    let threw = false;
+    try {
+      compilePropertyRevisionToHomesteadScenario(revision, { equipmentInstances: [negativeCostInstance] });
+    } catch { threw = true; }
+    assert(threw, '24. A negative purchaseCostINR is rejected instead of increasing cash');
+
+    const negativeLabourInstance = makeEquipmentInstance(revision, { configuration: { labourMinutesPerDay: -60 } });
+    let threwLabour = false;
+    try {
+      compilePropertyRevisionToHomesteadScenario(revision, { equipmentInstances: [negativeLabourInstance] });
+    } catch { threwLabour = true; }
+    assert(threwLabour, '24. A negative labourMinutesPerDay is rejected instead of creating free labour');
+  }
+
+  // 25. Equipment deltas are aggregated before the zero floor, so equivalent sets compile identically regardless of order.
+  {
+    const revision = baseRevision('prop-25', 'rev-1');
+    const producer = makeEquipmentInstance(revision, { instanceId: 'producer', configuration: { energyProductionKwhPerDay: 10 } });
+    const consumer = makeEquipmentInstance(revision, { instanceId: 'consumer', configuration: { energyConsumptionKwhPerDay: 10 } });
+    const forward = compilePropertyRevisionToHomesteadScenario(revision, { equipmentInstances: [producer, consumer] });
+    const reversed = compilePropertyRevisionToHomesteadScenario(revision, { equipmentInstances: [consumer, producer] });
+    assert(
+      forward.scenario.energy.farmBaseLoadKwhPerDay === reversed.scenario.energy.farmBaseLoadKwhPerDay,
+      '25. Offsetting equipment deltas net out the same regardless of array order',
+    );
+    assert(forward.scenario.energy.farmBaseLoadKwhPerDay === 0, '25. A fully offsetting producer/consumer pair nets to zero load, not a clamped positive residual');
+  }
+
+  // 26. Equipment instances pinned to another property/revision, or inactive, never fold into compilation.
+  {
+    const revision = baseRevision('prop-26', 'rev-1');
+    const mismatchedProperty = makeEquipmentInstance(revision, { propertyId: 'some-other-property', configuration: { purchaseCostINR: 500 } });
+    let threwMismatch = false;
+    try {
+      compilePropertyRevisionToHomesteadScenario(revision, { equipmentInstances: [mismatchedProperty] });
+    } catch { threwMismatch = true; }
+    assert(threwMismatch, '26. An instance pinned to a different propertyId is rejected rather than folded in');
+
+    const mismatchedRevision = makeEquipmentInstance(revision, { propertyRevisionId: 'some-other-revision', configuration: { purchaseCostINR: 500 } });
+    let threwRevisionMismatch = false;
+    try {
+      compilePropertyRevisionToHomesteadScenario(revision, { equipmentInstances: [mismatchedRevision] });
+    } catch { threwRevisionMismatch = true; }
+    assert(threwRevisionMismatch, '26. An instance pinned to a different propertyRevisionId is rejected rather than folded in');
+
+    const baseline = compilePropertyRevisionToHomesteadScenario(revision);
+    const inactiveInstance = makeEquipmentInstance(revision, { active: false, configuration: { purchaseCostINR: 500 } });
+    const withInactive = compilePropertyRevisionToHomesteadScenario(revision, { equipmentInstances: [inactiveInstance] });
+    assert(
+      withInactive.scenario.economy.initialCash === baseline.scenario.economy.initialCash,
+      '26. An inactive equipment instance contributes no cost or resource effect',
+    );
   }
 
   return { passed, failed, errors };
