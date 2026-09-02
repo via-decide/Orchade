@@ -2,18 +2,16 @@
  * Property Reality contract (Parts 2-4 of ORCHADE P0).
  *
  * This answers "what relationship does this property have to physical
- * reality?" -- a question orthogonal to PR #53's PLAN / SIMULATE / LIVE /
- * COMPARE / CALIBRATE, which answer "what is Orchade doing with this
- * property right now?" The two must never be merged into one enum.
+ * reality?" -- a question orthogonal to "what is Orchade doing with this
+ * property right now?" (PLAN / SIMULATE / LIVE / COMPARE / CALIBRATE). The
+ * two must never be merged into one enum. Note: that second question has no
+ * corresponding enum in this codebase either -- PLAN/SIMULATE/LIVE/COMPARE/
+ * CALIBRATE exist only as prose headings in docs/true-number-digital-twin.md,
+ * not as real code. Don't assume it's an importable PR #53 type.
  *
- * There is no separate "Property" aggregate type in this codebase yet, and
- * this task does not introduce one: `HomesteadScenarioDefinition.id` is
- * already the stable identity that survives across revisions (see
- * `createScenarioRevision` in `src/simulation/homestead/revision.ts`,
- * which clones a scenario and only replaces `.revision`), and
- * `scenario.revision.id` is already the per-revision identity. This module
- * treats those two existing fields as `propertyId` / `propertyRevisionId`
- * rather than inventing a parallel Property wrapper.
+ * `Property` (property.ts, added alongside this module) is now the real
+ * top-level aggregate; `propertyId`/`propertyRevisionId` in this file refer
+ * to `Property.propertyId` / `PropertyRevision.revisionId`.
  */
 
 export type PropertyRealityMode = 'VIRTUAL' | 'REAL' | 'HYBRID';

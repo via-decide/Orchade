@@ -197,8 +197,36 @@ function numericConfig(configuration: Record<string, unknown>, key: string): num
   return typeof value === 'number' && Number.isFinite(value) ? value : 0;
 }
 
+interface EquipmentInstanceDelta {
+  netEnergyKwhPerDay: number;
+  netWaterSupplyLPerDay: number;
+  netLabourMinutesPerDay: number;
+  purchaseCostINR: number;
+  dailyOperatingCostINR: number;
+}
+
 /**
- * Folds one PropertyEquipmentInstance's declared resource/labour/cost
+ * Raw, unclamped per-instance delta. Pure, no scenario involved -- kept
+ * separate from applyEquipmentInstanceDeltas so summing across instances
+ * happens before any floor is applied (see that function's doc comment for
+ * why order matters here).
+ */
+function computeEquipmentInstanceDelta(instance: PropertyEquipmentInstance): EquipmentInstanceDelta {
+  const quantity = instance.quantity;
+  const cfg = instance.configuration;
+  return {
+    // farmBaseLoadKwhPerDay is a DEMAND quantity: consumption adds to it, production offsets it.
+    netEnergyKwhPerDay: (numericConfig(cfg, 'energyConsumptionKwhPerDay') - numericConfig(cfg, 'energyProductionKwhPerDay')) * quantity,
+    // externalWaterLPerDay is a SUPPLY quantity: production adds to it, consumption offsets it (opposite convention from energy).
+    netWaterSupplyLPerDay: (numericConfig(cfg, 'waterProductionLitresPerDay') - numericConfig(cfg, 'waterConsumptionLitresPerDay')) * quantity,
+    netLabourMinutesPerDay: numericConfig(cfg, 'labourMinutesPerDay') * quantity,
+    purchaseCostINR: numericConfig(cfg, 'purchaseCostINR') * quantity,
+    dailyOperatingCostINR: numericConfig(cfg, 'dailyOperatingCostINR') * quantity,
+  };
+}
+
+/**
+ * Folds every PropertyEquipmentInstance's declared resource/labour/cost
  * deltas additively onto an already-compiled scenario (section 37: "Pinned
  * EquipmentTwin revisions" is one of the compiler's own inputs; section 42:
  * "equipment effects -> only supported existing scenario fields/models").
@@ -206,30 +234,57 @@ function numericConfig(configuration: Record<string, unknown>, key: string): num
  * `instance.configuration`, never the twin's descriptive/commercial fields
  * (name, source, listed price), so no equipment source or listing can ever
  * receive privileged physics.
+ *
+ * Sums every instance's raw delta BEFORE applying the >=0 floor, not once
+ * per instance. Found live: folding instances one at a time with a floor
+ * applied after each step is order-dependent -- a large production
+ * instance processed before a consumption instance can clamp a genuine
+ * negative contribution to zero before the consumption instance ever gets
+ * to use it, producing a different (wrong) total than summing first. The
+ * floor represents "a farm can't have negative energy demand," a property
+ * of the total, not of any single piece of equipment in isolation.
+ *
+ * Also rejects any instance that does not belong to the property/revision
+ * being compiled -- an instance from a different property or a stale
+ * revision must never silently contribute physics to this one.
  */
 export function applyEquipmentInstanceDeltas(
   scenario: HomesteadScenarioDefinition,
-  instance: PropertyEquipmentInstance,
+  instances: PropertyEquipmentInstance[],
+  propertyId: string,
+  propertyRevisionId: string,
 ): HomesteadScenarioDefinition {
-  const quantity = instance.quantity;
-  const cfg = instance.configuration;
-  // farmBaseLoadKwhPerDay is a DEMAND quantity: consumption adds to it, production offsets it.
-  const netEnergyKwhPerDay = (numericConfig(cfg, 'energyConsumptionKwhPerDay') - numericConfig(cfg, 'energyProductionKwhPerDay')) * quantity;
-  // externalWaterLPerDay is a SUPPLY quantity: production adds to it, consumption offsets it (opposite convention from energy).
-  const netWaterSupplyLPerDay = (numericConfig(cfg, 'waterProductionLitresPerDay') - numericConfig(cfg, 'waterConsumptionLitresPerDay')) * quantity;
-  const netLabourMinutesPerDay = numericConfig(cfg, 'labourMinutesPerDay') * quantity;
-  const purchaseCostINR = numericConfig(cfg, 'purchaseCostINR') * quantity;
-  const dailyOperatingCostINR = numericConfig(cfg, 'dailyOperatingCostINR') * quantity;
+  for (const instance of instances) {
+    if (instance.propertyId !== propertyId || instance.propertyRevisionId !== propertyRevisionId) {
+      throw new Error(
+        `Equipment instance ${instance.instanceId} belongs to property ${instance.propertyId} revision ${instance.propertyRevisionId}, not the revision being compiled (${propertyId} / ${propertyRevisionId}).`,
+      );
+    }
+  }
+
+  const totals = instances.reduce<EquipmentInstanceDelta>(
+    (acc, instance) => {
+      const d = computeEquipmentInstanceDelta(instance);
+      return {
+        netEnergyKwhPerDay: acc.netEnergyKwhPerDay + d.netEnergyKwhPerDay,
+        netWaterSupplyLPerDay: acc.netWaterSupplyLPerDay + d.netWaterSupplyLPerDay,
+        netLabourMinutesPerDay: acc.netLabourMinutesPerDay + d.netLabourMinutesPerDay,
+        purchaseCostINR: acc.purchaseCostINR + d.purchaseCostINR,
+        dailyOperatingCostINR: acc.dailyOperatingCostINR + d.dailyOperatingCostINR,
+      };
+    },
+    { netEnergyKwhPerDay: 0, netWaterSupplyLPerDay: 0, netLabourMinutesPerDay: 0, purchaseCostINR: 0, dailyOperatingCostINR: 0 },
+  );
 
   return {
     ...scenario,
-    energy: { ...scenario.energy, farmBaseLoadKwhPerDay: Math.max(0, scenario.energy.farmBaseLoadKwhPerDay + netEnergyKwhPerDay) },
-    water: { ...scenario.water, externalWaterLPerDay: Math.max(0, scenario.water.externalWaterLPerDay + netWaterSupplyLPerDay) },
-    household: { ...scenario.household, labourMinutesAvailablePerDay: scenario.household.labourMinutesAvailablePerDay - netLabourMinutesPerDay },
+    energy: { ...scenario.energy, farmBaseLoadKwhPerDay: Math.max(0, scenario.energy.farmBaseLoadKwhPerDay + totals.netEnergyKwhPerDay) },
+    water: { ...scenario.water, externalWaterLPerDay: Math.max(0, scenario.water.externalWaterLPerDay + totals.netWaterSupplyLPerDay) },
+    household: { ...scenario.household, labourMinutesAvailablePerDay: scenario.household.labourMinutesAvailablePerDay - totals.netLabourMinutesPerDay },
     economy: {
       ...scenario.economy,
-      initialCash: scenario.economy.initialCash - purchaseCostINR,
-      dailyPropertyOperatingCost: scenario.economy.dailyPropertyOperatingCost + dailyOperatingCostINR,
+      initialCash: scenario.economy.initialCash - totals.purchaseCostINR,
+      dailyPropertyOperatingCost: scenario.economy.dailyPropertyOperatingCost + totals.dailyOperatingCostINR,
     },
   };
 }
@@ -390,7 +445,7 @@ export function compilePropertyRevisionToHomesteadScenario(
   };
 
   const equipmentInstances = options.equipmentInstances ?? [];
-  const finalScenario = equipmentInstances.reduce(applyEquipmentInstanceDeltas, scenario);
+  const finalScenario = applyEquipmentInstanceDeltas(scenario, equipmentInstances, revision.propertyId, revision.revisionId);
 
   validateHomesteadScenario(finalScenario);
   return { scenario: finalScenario, notes: collectResourceConnectionNotes(revision, operationalEntities) };

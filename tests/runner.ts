@@ -18,6 +18,8 @@ import { runPropertyRealityTests } from './propertyReality.test';
 import { runPropertyFoundationTests } from './propertyFoundation.test';
 import { runEquipmentTwinTests } from './equipmentTwin.test';
 import { runEquipmentCandidateTestTests } from './equipmentCandidateTest.test';
+import { runFeatureContractTests } from './featureContract.test';
+import { runScenarioCompilerEquipmentTests } from './scenarioCompilerEquipment.test';
 
 console.log('🧪 Starting Orchade Test Runner...\n');
 
@@ -66,6 +68,12 @@ console.log(`[Equipment Twin] Passed: ${equipmentTwinResults.passed}, Failed: ${
 const equipmentCandidateTestResults = runEquipmentCandidateTestTests();
 console.log(`[Equipment Candidate Test] Passed: ${equipmentCandidateTestResults.passed}, Failed: ${equipmentCandidateTestResults.failed}`);
 
+const featureContractResults = runFeatureContractTests();
+console.log(`[Feature Contract] Passed: ${featureContractResults.passed}, Failed: ${featureContractResults.failed}`);
+
+const scenarioCompilerEquipmentResults = runScenarioCompilerEquipmentTests();
+console.log(`[Scenario Compiler Equipment] Passed: ${scenarioCompilerEquipmentResults.passed}, Failed: ${scenarioCompilerEquipmentResults.failed}`);
+
 const totalPassed = cropResults.passed
   + farmLoopResults.passed
   + determinismResults.passed
@@ -80,7 +88,9 @@ const totalPassed = cropResults.passed
   + propertyRealityResults.passed
   + propertyFoundationResults.passed
   + equipmentTwinResults.passed
-  + equipmentCandidateTestResults.passed;
+  + equipmentCandidateTestResults.passed
+  + featureContractResults.passed
+  + scenarioCompilerEquipmentResults.passed;
 const totalFailed = cropResults.failed
   + farmLoopResults.failed
   + determinismResults.failed
@@ -95,7 +105,9 @@ const totalFailed = cropResults.failed
   + propertyRealityResults.failed
   + propertyFoundationResults.failed
   + equipmentTwinResults.failed
-  + equipmentCandidateTestResults.failed;
+  + equipmentCandidateTestResults.failed
+  + featureContractResults.failed
+  + scenarioCompilerEquipmentResults.failed;
 
 console.log(`\n========================================`);
 console.log(`Total Passed: ${totalPassed} | Total Failed: ${totalFailed}`);
