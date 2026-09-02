@@ -37,9 +37,16 @@ The following distinctions are load-bearing and must never be collapsed
 into each other:
 
 - **Orchade = one property model.** Every feature reads and writes the
-  same canonical `HomesteadScenarioDefinition` + revision chain, never a
-  parallel schema of its own (Site Planner's compiler, for example, maps
-  into this schema rather than replacing it).
+  same canonical `Property` / `PropertyRevision` entity graph
+  (`src/property/`, `docs/PROPERTY_MODEL.md`) -- persistent world/user
+  state -- and that graph compiles, through exactly one boundary
+  (`compilePropertyRevisionToHomesteadScenario`, `docs/PROPERTY_SCENARIO_COMPILER.md`),
+  into `HomesteadScenarioDefinition`, immutable simulation input. The two
+  are never collapsed into one mutable object, and no feature constructs
+  its own parallel schema of either (Site Planner still compiles
+  independently for now -- a deliberately deferred migration, see
+  `docs/PROPERTY_MODEL_MIGRATION.md`'s Wave 11 note -- but maps into the
+  same `HomesteadScenarioDefinition`, never a schema of its own).
 - **Gameplay UX ≠ game physics.** A reference product's interaction
   pattern (an overlay, a catalog browser, a build-preview) may be copied;
   its physics never are.

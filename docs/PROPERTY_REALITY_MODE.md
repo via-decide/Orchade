@@ -14,14 +14,21 @@ planned against before any physical change happens. The two axes are
 never merged into one enum, and no function in this codebase reads one to
 infer the other.
 
-## No new Property aggregate
+## Now attaches to the real Property aggregate
 
-There is no separate `Property` wrapper type in this codebase, and this
-task does not introduce one. `HomesteadScenarioDefinition.id` is already
-the stable identity that survives across revisions (`createScenarioRevision`
-clones a scenario and only replaces `.revision`), and
-`scenario.revision.id` is already the per-revision identity. `reality.ts`
-treats those two existing fields as `propertyId` / `propertyRevisionId`.
+An earlier revision of this doc decided *not* to introduce a `Property`
+wrapper type, treating `HomesteadScenarioDefinition.id`/`.revision.id` as
+`propertyId`/`propertyRevisionId` directly. The ORCHADE P0 master task
+explicitly superseded that decision and mandated a real, persistent
+`Property` aggregate, distinct from simulation input (see
+`docs/PROPERTY_MODEL.md`, `docs/PROPERTY_MODEL_MIGRATION.md`). `reality.ts`
+itself is unchanged by that shift -- its contracts (below) are exactly as
+correct standing alone as they are attached to a `Property`. What changed
+is *where they live*: `PropertyRealityDeclaration` is now
+`Property.realityDeclaration` / `PropertyRevision.realityDeclaration`, and
+`EntityRealityStatus` is now `PropertyEntity.realityStatus`, rather than
+sitting on the freestanding `PropertyRealitySnapshot` described further
+below (which is superseded, kept only for its own passing tests).
 
 ## The three modes
 
@@ -64,20 +71,32 @@ property is, by definition, in a transitional state -- even "REAL
 property + candidate Daxini pump" is a HYBRID case (Part 2's own Case 3).
 
 This is unrelated to running an ephemeral `EquipmentCandidateTest`
-(`equipmentCandidateTest.ts`): that workflow clones a disposable scenario
-revision purely to compare simulation outcomes, and never touches, reads,
-or writes a `PropertyRealitySnapshot`. A VIRTUAL or REAL property can
-freely test equipment candidates without ever declaring them here.
+(`equipmentCandidateTest.ts`): that workflow clones a disposable
+`PropertyRevision` purely to compare simulation outcomes, and never
+touches or changes the property's own reality declaration. A VIRTUAL or
+REAL property can freely test equipment candidates without ever declaring
+them PHYSICAL.
 
 ## Explicit transitions only
 
-`proposeRealityTransition(current, input)` is the only sanctioned way to
-change a property's mode. It always requires a new `propertyRevisionId`
-(rejects reuse of the current one) and always produces a brand-new,
-independent `PropertyRealitySnapshot` -- it never mutates the current
-snapshot. Every earlier snapshot in a property's `PropertyRealityHistory`
-keeps reading back exactly as it was declared
-(`getRealitySnapshotAtRevision`), even after a later transition.
+Changing a property's mode always means creating a brand-new
+`PropertyRevision` (`docs/PROPERTY_REVISIONS.md`) with a different
+`realityDeclaration.mode` -- there is no in-place mutation path.
+`advancePropertyToRevision(property, nextRevision)` then moves the
+property's "current" pointer forward, requiring `nextRevision` to chain
+from the property's actual current revision (never a stale or unrelated
+parent). Every earlier `PropertyRevision` keeps reading back exactly as it
+was declared (`docs/PROPERTY_MODEL_MIGRATION.md`'s fixtures demonstrate
+this directly: `createHybridBenchDemoProperty()` derives a HYBRID revision
+from a VIRTUAL one, and the original VIRTUAL revision object is
+unaffected).
+
+`reality.ts`'s own `proposeRealityTransition(current, input)` remains the
+transition mechanism for the freestanding `PropertyRealitySnapshot`/
+`PropertyRealityHistory` types (below) if anything still uses them
+directly; new code building a real `Property` uses
+`deriveNextPropertyRevision` + `advancePropertyToRevision` instead, which
+compose the same `reality.ts` validation functions under the hood.
 
 ## Independence from provenance
 

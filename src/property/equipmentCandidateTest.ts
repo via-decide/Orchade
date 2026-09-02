@@ -1,14 +1,20 @@
 /**
- * Equipment candidate test workflow (Parts 15, 16, 18, 19 of ORCHADE P0).
+ * Equipment candidate test workflow (Parts 15, 16, 18, 19 / sections 40-41
+ * of ORCHADE P0).
  *
- * "Test before buy / build": clones the baseline scenario, adds one
- * candidate PropertyEquipmentInstance, and reruns the SAME existing
- * Project 001 engine under the SAME seed. Never a second simulation path.
- * The baseline is never mutated. Commerce (Daxini) and engineering
- * provenance (LogicHub) never receive privileged physics -- the only
- * inputs that affect the result are the twin's declared resource/labour/
- * cost numbers, applied through the same scenario fields any other
- * equipment would use.
+ * "Test before buy / build" (section 40's mandated flow):
+ *
+ *   BASELINE REVISION -> CLONE CANDIDATE REVISION -> ADD CANDIDATE EQUIPMENT
+ *   INSTANCE -> CONNECT RESOURCE PORTS -> VALIDATE -> CAPABILITY CHECK ->
+ *   SCENARIO COMPILER -> SAME PROJECT 001 ENGINE -> SAME SEED -> COMPARE
+ *
+ * The candidate is a brand-new PropertyRevision derived from the baseline
+ * (same entity graph, same intent/seed) plus one extra PropertyEquipmentInstance
+ * folded in by the scenario compiler -- never a second simulation path, and
+ * the baseline PropertyRevision is never mutated. Commerce (Daxini) and
+ * engineering provenance (LogicHub) never receive privileged physics: the
+ * compiler reads only `instance.configuration`'s resource/labour/cost
+ * numbers, never the twin's descriptive/commercial fields.
  */
 import { checksum } from '../engine/replay/checksum';
 import {
@@ -16,11 +22,14 @@ import {
   runProject001Scenario,
   type Project001Comparison,
 } from '../simulation/homestead/projectRun';
-import { validateHomesteadScenario, type HomesteadScenarioDefinition } from '../simulation/homestead/scenario';
+import type { HomesteadScenarioDefinition } from '../simulation/homestead/scenario';
 import type { HomesteadFailureType } from '../simulation/homestead/projectState';
 import type { EquipmentTwinDefinition, EquipmentTwinRegistry } from './equipmentTwin';
 import { getEquipmentTwinRevision } from './equipmentTwin';
-import { createPropertyEquipmentInstance, type PropertyEquipmentInstance } from './propertyEquipment';
+import { createPropertyEquipmentInstance } from './propertyEquipment';
+import type { PropertyRevision } from './revision';
+import { deriveNextPropertyRevision } from './revision';
+import { compilePropertyRevisionToHomesteadScenario } from './scenarioCompiler';
 
 export interface EquipmentCandidateTestIntent {
   propertyId: string;
@@ -73,6 +82,7 @@ export interface EquipmentCandidateTestResult {
   baselineRunRef: string;
   candidateRunRef: string;
   equipmentInstanceRef: string;
+  candidateRevisionId: string;
   changedMetrics: EquipmentImpactMetric[];
   changedFailures: FailureDelta[];
   unresolvedCapabilities: string[];
@@ -147,64 +157,19 @@ function computeEvidenceCoverage(twin: EquipmentTwinDefinition): EvidenceCoverag
   };
 }
 
-function numericConfig(configuration: Record<string, unknown>, key: string): number {
-  const value = configuration[key];
-  return typeof value === 'number' && Number.isFinite(value) ? value : 0;
+/** Overrides only the run-length knob for this one test; never mutates the property's own planningHorizonDays. */
+function withTestDuration(scenario: HomesteadScenarioDefinition, simulationDurationDays: number): HomesteadScenarioDefinition {
+  return { ...scenario, durationDays: simulationDurationDays };
 }
 
 /**
- * Additively applies one equipment instance's declared resource/labour/cost
- * deltas onto a cloned scenario. Pure: never mutates `baseline`. This is
- * intentionally generic (reads named configuration keys, not
- * equipment-class-specific fields) so no equipment source or class ever
- * receives special-cased physics.
- */
-export function applyEquipmentInstanceToScenario(
-  baseline: HomesteadScenarioDefinition,
-  instance: PropertyEquipmentInstance,
-  candidateRevisionId: string,
-): HomesteadScenarioDefinition {
-  const quantity = instance.quantity;
-  const cfg = instance.configuration;
-  // farmBaseLoadKwhPerDay is a DEMAND quantity: consumption adds to it, production offsets it.
-  const netEnergyKwhPerDay = (numericConfig(cfg, 'energyConsumptionKwhPerDay') - numericConfig(cfg, 'energyProductionKwhPerDay')) * quantity;
-  // externalWaterLPerDay is a SUPPLY quantity: production adds to it, consumption offsets it (opposite convention from energy).
-  const netWaterSupplyLPerDay = (numericConfig(cfg, 'waterProductionLitresPerDay') - numericConfig(cfg, 'waterConsumptionLitresPerDay')) * quantity;
-  const netLabourMinutesPerDay = numericConfig(cfg, 'labourMinutesPerDay') * quantity;
-  const purchaseCostINR = numericConfig(cfg, 'purchaseCostINR') * quantity;
-  const dailyOperatingCostINR = numericConfig(cfg, 'dailyOperatingCostINR') * quantity;
-
-  const candidate: HomesteadScenarioDefinition = {
-    ...baseline,
-    revision: {
-      id: candidateRevisionId,
-      parentRevisionId: baseline.revision.id,
-      changeSet: [],
-      reason: `Equipment candidate test: ${instance.equipmentTwinId}@${instance.equipmentTwinRevisionId} x${quantity}`,
-      evidenceRefs: [...instance.evidenceRefs],
-      createdAt: baseline.revision.createdAt,
-    },
-    energy: { ...baseline.energy, farmBaseLoadKwhPerDay: baseline.energy.farmBaseLoadKwhPerDay + netEnergyKwhPerDay },
-    water: { ...baseline.water, externalWaterLPerDay: Math.max(0, baseline.water.externalWaterLPerDay + netWaterSupplyLPerDay) },
-    household: { ...baseline.household, labourMinutesAvailablePerDay: baseline.household.labourMinutesAvailablePerDay - netLabourMinutesPerDay },
-    economy: {
-      ...baseline.economy,
-      initialCash: baseline.economy.initialCash - purchaseCostINR,
-      dailyPropertyOperatingCost: baseline.economy.dailyPropertyOperatingCost + dailyOperatingCostINR,
-    },
-  };
-  validateHomesteadScenario(candidate);
-  return candidate;
-}
-
-/**
- * Runs the full candidate-test pipeline (Part 18) and returns a trade-off
- * report (Part 19) -- never a single "recommended" score. `result` is
- * derived only from measured metric/failure deltas:
+ * Runs the full candidate-test pipeline (section 40) and returns a
+ * trade-off report (section 41) -- never a single "recommended" score.
+ * `result` is derived only from measured metric/failure deltas:
  *
- * - INFEASIBLE: a required resource port is left unconnected, or applying
- *   the equipment makes the scenario invalid (e.g. cannot afford the
- *   purchase, or consumes more labour than the household has).
+ * - INFEASIBLE: a required resource port is left unconnected, or compiling
+ *   the candidate revision fails (e.g. cannot afford the purchase, or
+ *   consumes more labour than the household has).
  * - UNKNOWN: the twin's performance model is NOT_MODELED, so no claim
  *   about physical effect can be made.
  * - BENEFICIAL: failures (shortage days) net decrease. This wins even if a
@@ -216,14 +181,13 @@ export function applyEquipmentInstanceToScenario(
  * - NO_MEANINGFUL_CHANGE: failures unchanged and metrics wash out.
  */
 export function runEquipmentCandidateTest(
-  baselineScenario: HomesteadScenarioDefinition,
+  baselineRevision: PropertyRevision,
   twinRegistry: EquipmentTwinRegistry,
   intent: EquipmentCandidateTestIntent,
 ): EquipmentCandidateTestResult {
-  if (intent.propertyId !== baselineScenario.id) throw new Error('Equipment candidate test propertyId must match the baseline scenario id.');
-  if (intent.baselineRevisionId !== baselineScenario.revision.id) throw new Error('Equipment candidate test baselineRevisionId must match the baseline scenario revision id.');
+  if (intent.propertyId !== baselineRevision.propertyId) throw new Error('Equipment candidate test propertyId must match the baseline revision propertyId.');
+  if (intent.baselineRevisionId !== baselineRevision.revisionId) throw new Error('Equipment candidate test baselineRevisionId must match the baseline revision id.');
   if (intent.seedPolicy !== 'SAME_AS_BASELINE') throw new Error('Equipment candidate tests currently only support SAME_AS_BASELINE seed policy.');
-
   if (!Number.isInteger(intent.simulationDurationDays) || intent.simulationDurationDays < 1) {
     throw new Error('Equipment candidate test requires a positive integer simulationDurationDays.');
   }
@@ -231,12 +195,16 @@ export function runEquipmentCandidateTest(
   const twin = getEquipmentTwinRevision(twinRegistry, intent.equipmentTwinId, intent.equipmentTwinRevisionId);
   if (!twin) throw new Error(`Unknown equipment twin revision: ${intent.equipmentTwinId}@${intent.equipmentTwinRevisionId}.`);
 
-  // Pin the run duration explicitly so the baseline run used for a
-  // short-circuit result (below) and the baseline run inside the full
-  // comparison (further below) are always identical in duration.
-  const effectiveBaselineScenario: HomesteadScenarioDefinition = { ...baselineScenario, durationDays: intent.simulationDurationDays };
+  const candidateRevisionId = `${baselineRevision.revisionId}:candidate:${twin.twinId}:${twin.revisionId}`;
+  // Clone candidate revision: same graph/intent/reality declaration as baseline (same seed by construction), new id.
+  const candidateRevision = deriveNextPropertyRevision(baselineRevision, {
+    revisionId: candidateRevisionId,
+    createdAt: baselineRevision.createdAt,
+    createdBy: 'system:equipment-candidate-test',
+    rationale: `Equipment candidate test: ${twin.twinId}@${twin.revisionId} x${intent.quantity}`,
+    changeSet: [{ description: `Candidate equipment ${twin.twinId}@${twin.revisionId}`, entityRefs: intent.targetEntityRefs }],
+  });
 
-  const candidateRevisionId = `${baselineScenario.revision.id}:candidate:${twin.twinId}:${twin.revisionId}`;
   const instance = createPropertyEquipmentInstance({
     instanceId: `instance:${candidateRevisionId}`,
     propertyId: intent.propertyId,
@@ -256,49 +224,36 @@ export function runEquipmentCandidateTest(
 
   const evidenceCoverage = computeEvidenceCoverage(twin);
 
-  if (unresolvedCapabilities.length > 0) {
-    const baselineRun = runProject001Scenario(effectiveBaselineScenario);
+  const emptyResult = (result: EquipmentCandidateTestOutcome, capabilities: string[]): EquipmentCandidateTestResult => {
+    const baselineRun = runProject001Scenario(withTestDuration(compilePropertyRevisionToHomesteadScenario(baselineRevision).scenario, intent.simulationDurationDays));
     return {
       baselineRunRef: baselineRun.finalStateHash,
       candidateRunRef: '',
       equipmentInstanceRef: instance.instanceId,
+      candidateRevisionId,
       changedMetrics: [],
       changedFailures: [],
-      unresolvedCapabilities,
+      unresolvedCapabilities: capabilities,
       evidenceCoverage,
-      result: 'INFEASIBLE',
+      result,
     };
+  };
+
+  if (unresolvedCapabilities.length > 0) return emptyResult('INFEASIBLE', unresolvedCapabilities);
+  if (twin.performanceModel.modelType === 'NOT_MODELED') {
+    return emptyResult('UNKNOWN', [`Performance model NOT_MODELED for ${twin.twinId}@${twin.revisionId}: ${twin.performanceModel.limitations.join('; ')}`]);
   }
 
-  if (twin.performanceModel.modelType === 'NOT_MODELED') {
-    const baselineRun = runProject001Scenario(effectiveBaselineScenario);
-    return {
-      baselineRunRef: baselineRun.finalStateHash,
-      candidateRunRef: '',
-      equipmentInstanceRef: instance.instanceId,
-      changedMetrics: [],
-      changedFailures: [],
-      unresolvedCapabilities: [`Performance model NOT_MODELED for ${twin.twinId}@${twin.revisionId}: ${twin.performanceModel.limitations.join('; ')}`],
-      evidenceCoverage,
-      result: 'UNKNOWN',
-    };
-  }
+  const effectiveBaselineScenario = withTestDuration(compilePropertyRevisionToHomesteadScenario(baselineRevision).scenario, intent.simulationDurationDays);
 
   let candidateScenario: HomesteadScenarioDefinition;
   try {
-    candidateScenario = applyEquipmentInstanceToScenario(effectiveBaselineScenario, instance, candidateRevisionId);
+    candidateScenario = withTestDuration(
+      compilePropertyRevisionToHomesteadScenario(candidateRevision, { equipmentInstances: [instance] }).scenario,
+      intent.simulationDurationDays,
+    );
   } catch (error) {
-    const baselineRun = runProject001Scenario(effectiveBaselineScenario);
-    return {
-      baselineRunRef: baselineRun.finalStateHash,
-      candidateRunRef: '',
-      equipmentInstanceRef: instance.instanceId,
-      changedMetrics: [],
-      changedFailures: [],
-      unresolvedCapabilities: [`Candidate scenario is infeasible: ${error instanceof Error ? error.message : String(error)}`],
-      evidenceCoverage,
-      result: 'INFEASIBLE',
-    };
+    return emptyResult('INFEASIBLE', [`Candidate revision is infeasible: ${error instanceof Error ? error.message : String(error)}`]);
   }
 
   const comparison = compareProject001Scenarios(effectiveBaselineScenario, candidateScenario);
@@ -325,6 +280,7 @@ export function runEquipmentCandidateTest(
     baselineRunRef: checksum({ scenarioHash: comparison.baseline.scenarioHash, finalStateHash: comparison.baseline.finalStateHash }),
     candidateRunRef: checksum({ scenarioHash: comparison.intervention.scenarioHash, finalStateHash: comparison.intervention.finalStateHash }),
     equipmentInstanceRef: instance.instanceId,
+    candidateRevisionId,
     changedMetrics,
     changedFailures,
     unresolvedCapabilities,

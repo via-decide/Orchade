@@ -22,11 +22,13 @@ export interface ScenarioChange {
 }
 
 export type LandPlacementType =
-  | 'house' | 'vegetable-bed' | 'staple-field' | 'orchard' | 'greenhouse' | 'nursery'
-  | 'livestock' | 'compost' | 'vermicompost' | 'biogas'
-  | 'water' | 'solar' | 'battery' | 'grid'
+  | 'house' | 'workshop' | 'vegetable-bed' | 'staple-field' | 'orchard' | 'greenhouse' | 'nursery'
+  | 'livestock' | 'feed-storage' | 'compost' | 'vermicompost' | 'biogas' | 'nutrient-store'
+  | 'water' | 'water-source' | 'pump' | 'irrigation-zone'
+  | 'solar' | 'battery' | 'grid' | 'energy-load'
   | 'shed' | 'food-storage' | 'equipment-storage'
-  | 'road' | 'path' | 'service-area';
+  | 'road' | 'path' | 'service-area'
+  | 'revenue-activity' | 'cost-activity';
 
 export interface LandPlacementDefinition {
   id: string;

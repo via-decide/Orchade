@@ -1,27 +1,37 @@
 # Equipment Test Workflow (Test Before Buy / Build)
 
-`src/property/equipmentCandidateTest.ts`. Parts 15, 16, 18, 19 of ORCHADE P0.
+`src/property/equipmentCandidateTest.ts`. Parts 15, 16, 18, 19 / sections
+40-41 of ORCHADE P0.
 
-## Pipeline
+## Pipeline (section 40's mandated flow)
 
 ```
-BASELINE SCENARIO (an existing HomesteadScenarioDefinition)
+BASELINE PropertyRevision
   -> resolve EquipmentTwinDefinition@revision from the registry
+  -> deriveNextPropertyRevision(baseline)        <- CLONE CANDIDATE REVISION
+       same graph, same intent (so: same seed), new revisionId
+  -> createPropertyEquipmentInstance(..., realityStatus: 'CANDIDATE')
   -> check every REQUIRED resource port is in intent.connectedPortIds
        unconnected required port -> INFEASIBLE (stop)
   -> check performanceModel.modelType
        NOT_MODELED -> UNKNOWN (stop)
-  -> clone scenario, additively apply the instance's configuration deltas
-       (applyEquipmentInstanceToScenario) -- invalid result (e.g. cannot
-       afford the purchase) -> INFEASIBLE (stop)
-  -> compareProject001Scenarios(baseline, candidate)   <- THE existing engine,
-                                                           same seed, enforced
+  -> compilePropertyRevisionToHomesteadScenario(baseline)              <- SCENARIO COMPILER
+  -> compilePropertyRevisionToHomesteadScenario(candidate, { equipmentInstances: [instance] })
+       invalid result (e.g. cannot afford the purchase) -> INFEASIBLE (stop)
+  -> compareProject001Scenarios(baselineScenario, candidateScenario)   <- SAME PROJECT 001 ENGINE, SAME SEED
   -> classify BENEFICIAL / HARMFUL / NO_MEANINGFUL_CHANGE from the deltas
 ```
 
-There is no second simulation path. `compareProject001Scenarios` already
-runs `runProject001Scenario` on both scenarios under the same seed and
-duration; this module never calls a day-transition function directly.
+There is no second simulation path, and no second scenario-construction
+path: both the baseline and candidate scenarios go through the exact same
+`compilePropertyRevisionToHomesteadScenario()` (`docs/PROPERTY_SCENARIO_COMPILER.md`)
+that every other feature must use. The candidate `PropertyEquipmentInstance`
+is never written into the candidate revision's own entity graph -- Part 35
+keeps `PropertyEntity` and `PropertyEquipmentInstance` strictly separate,
+so it is passed to the compiler as a sibling input instead.
+`compareProject001Scenarios` runs `runProject001Scenario` on both compiled
+scenarios under the same seed and duration; this module never calls a
+day-transition function directly.
 
 ## Commerce and simulation are separate
 
@@ -42,8 +52,11 @@ determinism tests in `tests/equipmentCandidateTest.test.ts`).
 ## Configuration levers
 
 `intent.configuration` is a flat, documented, equipment-class-agnostic set
-of optional numeric keys (`applyEquipmentInstanceToScenario`). Any key not
-present contributes zero. All deltas scale by `instance.quantity`.
+of optional numeric keys, applied by `applyEquipmentInstanceDeltas`
+(`src/property/scenarioCompiler.ts` -- folded into the compiler itself, so
+any caller compiling with `equipmentInstances` gets the same behavior,
+not just this workflow). Any key not present contributes zero. All deltas
+scale by `instance.quantity`.
 
 | Key | Applied to | Direction |
 |---|---|---|
@@ -97,6 +110,7 @@ It is presentation evidence, not an input to the classification above.
 ## What this does not do
 
 No marketplace checkout, no automatic purchase, no installation, no
-mutation of the baseline scenario (verified by test: running any number of
-candidate tests never changes the baseline's own replay checksum), and no
-privileged physics for any `source.type`.
+mutation of the baseline `PropertyRevision` or the scenario compiled from
+it (verified by test: running any number of candidate tests never changes
+the baseline's own replay checksum), and no privileged physics for any
+`source.type`.
