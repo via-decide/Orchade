@@ -1,0 +1,14 @@
+{
+  "system": "ORCHADE",
+  "buildSha": "c492d806a5147c9083afd47d2971272808673dd7",
+  "environment": "production",
+  "contractVersions": ["KUP_INTEROP_V1"],
+  "schemaHashes": {
+    "canonical-ref": "sha256:89901c34f200e5d00d1f7a323fca1962f78c7ca0e1dab7ade5507bf3855b5d37",
+    "interop-envelope": "sha256:f595347307501aad81fb1a60d806156d9081dce4f8c569d63631a8949a2d6e88"
+  },
+  "readCapabilities": [],
+  "writeIntentCapabilities": [],
+  "canonicalBaseUrl": "https://daxini.xyz/games/orchade",
+  "_status": "KUP-STACK-001C: contracts pinned, no adapters wired yet. readCapabilities/writeIntentCapabilities are honestly empty -- SIMULATION_RUN_RECEIPT (KUP-STACK-001F) and IMPORT_ENGINEERING_REVISION/CREATE_CANDIDATE_SYSTEM (KUP-STACK-001D/E) get added here when those adapters are real, not before."
+}
