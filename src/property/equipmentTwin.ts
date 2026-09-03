@@ -38,6 +38,16 @@ export type EquipmentTwinSourceType = 'LOGICHUB' | 'DAXINI' | 'EXTERNAL' | 'USER
 export interface EquipmentTwinSource {
   type: EquipmentTwinSourceType;
   logicHubProjectRef?: string;
+  /**
+   * Set when this twin came through the real KUP-STACK-001D import adapter
+   * (src/property/logicHubImport.ts): the exact LogicHub Revision id and
+   * EngineeringArtifactExport contentHash the import was pinned to, so a
+   * later LogicHub revision can never be mistaken for the one this twin was
+   * actually built from. Absent on twins created any other way (including
+   * fixtures that only set logicHubProjectRef by hand).
+   */
+  logicHubRevisionId?: string;
+  logicHubContentHash?: string;
   daxiniProductRef?: string;
   externalProductRef?: string;
   manufacturer?: string;

@@ -18,6 +18,7 @@ import { runEquipmentTwinTests } from './equipmentTwin.test';
 import { runEquipmentCandidateTestTests } from './equipmentCandidateTest.test';
 import { runFeatureContractTests } from './featureContract.test';
 import { runScenarioCompilerEquipmentTests } from './scenarioCompilerEquipment.test';
+import { runLogicHubImportTests } from './logicHubImport.test';
 
 console.log('🧪 Starting Orchade Test Runner...\n');
 
@@ -66,6 +67,9 @@ console.log(`[Feature Contract] Passed: ${featureContractResults.passed}, Failed
 const scenarioCompilerEquipmentResults = runScenarioCompilerEquipmentTests();
 console.log(`[Scenario Compiler Equipment] Passed: ${scenarioCompilerEquipmentResults.passed}, Failed: ${scenarioCompilerEquipmentResults.failed}`);
 
+const logicHubImportResults = await runLogicHubImportTests();
+console.log(`[LogicHub Import (KUP-STACK-001D)] Passed: ${logicHubImportResults.passed}, Failed: ${logicHubImportResults.failed}`);
+
 const totalPassed = cropResults.passed
   + farmLoopResults.passed
   + determinismResults.passed
@@ -80,7 +84,8 @@ const totalPassed = cropResults.passed
   + equipmentTwinResults.passed
   + equipmentCandidateTestResults.passed
   + featureContractResults.passed
-  + scenarioCompilerEquipmentResults.passed;
+  + scenarioCompilerEquipmentResults.passed
+  + logicHubImportResults.passed;
 const totalFailed = cropResults.failed
   + farmLoopResults.failed
   + determinismResults.failed
@@ -95,7 +100,8 @@ const totalFailed = cropResults.failed
   + equipmentTwinResults.failed
   + equipmentCandidateTestResults.failed
   + featureContractResults.failed
-  + scenarioCompilerEquipmentResults.failed;
+  + scenarioCompilerEquipmentResults.failed
+  + logicHubImportResults.failed;
 
 console.log(`\n========================================`);
 console.log(`Total Passed: ${totalPassed} | Total Failed: ${totalFailed}`);

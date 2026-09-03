@@ -1,0 +1,17 @@
+{
+  "contract": "KUP_STACK_V1",
+  "sourceRepo": "via-decide/kup-program",
+  "sourceCommit": "49aa61d6c89bbece1b927a4bf212822be3fa98ba",
+  "sourcePath": "contracts/stack/v1",
+  "pinnedAt": "2026-09-03T05:49:35.008Z",
+  "schemaHashes": {
+    "canonical-ref": "sha256:89901c34f200e5d00d1f7a323fca1962f78c7ca0e1dab7ade5507bf3855b5d37",
+    "engineering-artifact-export": "sha256:308e4106d5cda5dc142d33416abafc49728775517aa51ed8ebc26a34f0b9fa5e",
+    "interop-envelope": "sha256:9643c0015427db68597114399c3de5e379de2114c5b3bd7c77be3188e38cc0b4"
+  },
+  "generatedTypes": [
+    "interop/generated/canonical-ref.ts",
+    "interop/generated/engineering-artifact-export.ts",
+    "interop/generated/interop-envelope.ts"
+  ]
+}
