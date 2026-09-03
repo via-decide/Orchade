@@ -180,5 +180,52 @@ export async function runLogicHubImportTests(): Promise<{ passed: number; failed
     assert(instance.equipmentTwinId === 'twin-accept-flow' && instance.equipmentTwinRevisionId === 'v1', '11. Instance is pinned to the exact imported twin revision');
   }
 
+  // 12. Real UNKNOWN-category interfaces pass; a bare/untraceable one does not (review fix).
+  {
+    const withTraceableUnknown = baseArtifact({
+      interfaces: [{ category: 'UNKNOWN', name: 'lh-iface-0', sourceInterfaceRef: 'logichub://module/x/interfaces/0' }],
+    });
+    let threwOnValid = false;
+    try { validateEngineeringArtifactExport(withTraceableUnknown); } catch { threwOnValid = true; }
+    assert(!threwOnValid, '12. A real UNKNOWN interface with a sourceInterfaceRef is accepted');
+
+    const withUntraceableUnknown = baseArtifact({
+      interfaces: [{ category: 'UNKNOWN', name: 'lh-iface-0' } as never],
+    });
+    let threwOnInvalid = false;
+    try { validateEngineeringArtifactExport(withUntraceableUnknown); } catch { threwOnInvalid = true; }
+    assert(threwOnInvalid, '12. An UNKNOWN interface with NO sourceInterfaceRef is rejected -- untraceable unknowns are not allowed');
+
+    const withBadCategory = baseArtifact({ interfaces: [{ category: 'OPTICAL', name: 'x' } as never] });
+    let threwOnBadCategory = false;
+    try { validateEngineeringArtifactExport(withBadCategory); } catch { threwOnBadCategory = true; }
+    assert(threwOnBadCategory, '12. An interface category outside the bounded vocabulary is rejected');
+  }
+
+  // 13. Physical quantities outside the closed metric/unit vocabulary are rejected (review fix) --
+  // the old Record<string, number> shape (e.g. {ratedPowerW: 550}) let any string through.
+  {
+    const badMetric = baseArtifact({
+      operatingEnvelope: [{ metric: 'NOMINAL_FLOW', value: 35, unit: 'L_PER_MIN', basis: 'RATED', status: 'ESTIMATE' } as never],
+    });
+    let threwOnMetric = false;
+    try { validateEngineeringArtifactExport(badMetric); } catch { threwOnMetric = true; }
+    assert(threwOnMetric, '13. A quantity metric outside the closed vocabulary is rejected');
+
+    const badUnit = baseArtifact({
+      operatingEnvelope: [{ metric: 'POWER', value: 550, unit: 'WATTS', basis: 'RATED', status: 'ESTIMATE' } as never],
+    });
+    let threwOnUnit = false;
+    try { validateEngineeringArtifactExport(badUnit); } catch { threwOnUnit = true; }
+    assert(threwOnUnit, '13. A quantity unit outside the closed vocabulary is rejected');
+
+    const goodQuantity = baseArtifact({
+      operatingEnvelope: [{ metric: 'POWER', value: 550, unit: 'W', basis: 'RATED', status: 'ESTIMATE' }],
+    });
+    let threwOnGood = false;
+    try { validateEngineeringArtifactExport(goodQuantity); } catch { threwOnGood = true; }
+    assert(!threwOnGood, '13. A well-formed typed quantity is accepted');
+  }
+
   return { passed, failed, errors };
 }

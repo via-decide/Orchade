@@ -13,9 +13,15 @@
  * Numbers below are fixture data (not a real product claim), chosen in the
  * same plausible range as ORCHADE-PUMP-FIXTURE-001 so the two make sense
  * side by side.
+ *
+ * physicalParameters/operatingEnvelope/resourceRequirements use the typed
+ * PhysicalQuantity shape ({ metric, value, unit, basis, status }), not the
+ * earlier `{ weightKg: 8 }`-style bare-number record -- see
+ * docs/stack/LOGICHUB_ORCHADE_HANDOFF.md in kup-program for why the unit
+ * can no longer live inside the property name.
  */
 import type { EngineeringArtifactExport } from '../logicHubImport';
-import { sha256Hex } from '../logicHubImport';
+import { sha256Hex, canonicalJsonStringify } from '../logicHubImport';
 
 const LH_PUMP_001_PROJECT_ID = 'proj-lh-pump-001';
 const LH_PUMP_001_REVISION_ID = 'rev-001';
@@ -42,10 +48,29 @@ function unhashedExport(): Omit<EngineeringArtifactExport, 'contentHash'> {
     // adapter's "unrecognized capability" path has a real fixture to
     // exercise, not just a synthetic test-only string.
     capabilities: ['MOVE_WATER', 'REPORT_TELEMETRY', 'SUBMERSIBLE_RATED'],
-    interfaces: [],
-    physicalParameters: { weightKg: 8 },
-    operatingEnvelope: { ratedPowerW: 550, maximumContinuousRuntimeMinutes: 240 },
-    resourceRequirements: { flowLPerMin: 35 },
+    // LogicHub has no typed interface data today (Module.interfaces is an
+    // untyped bag) -- a real UNKNOWN-category entry with a traceable
+    // sourceInterfaceRef, not an empty array pretending there's nothing to
+    // report and not an invented ELECTRICAL/MECHANICAL shape LogicHub can't
+    // actually back yet.
+    interfaces: [
+      {
+        category: 'UNKNOWN',
+        name: 'lh-module-pump-001-interface-0',
+        sourceInterfaceRef: 'logichub://module/pump-001/interfaces/0',
+        note: 'LogicHub Module.interfaces is untyped (z.unknown()) as of this fixture -- not yet translatable to a known category.',
+      },
+    ],
+    physicalParameters: [
+      { metric: 'MASS', value: 8, unit: 'KG', basis: 'MEASURED', status: 'ESTIMATE' },
+    ],
+    operatingEnvelope: [
+      { metric: 'POWER', value: 550, unit: 'W', basis: 'RATED', status: 'ESTIMATE' },
+      { metric: 'RUNTIME', value: 240, unit: 'MINUTES', basis: 'RATED', status: 'ESTIMATE' },
+    ],
+    resourceRequirements: [
+      { metric: 'FLOW_RATE', value: 35, unit: 'L_PER_MIN', basis: 'RATED', status: 'ESTIMATE' },
+    ],
     modelCapabilityStatus: 'ESTIMATE_ONLY',
     evidenceRefs: [],
     limitations: [
@@ -61,10 +86,19 @@ export interface LhPump001Fixture {
   rawJson: string;
 }
 
-/** Builds the fixture with a real, internally-consistent contentHash (async: uses Web Crypto). */
+/**
+ * Builds the fixture with a real, internally-consistent contentHash (async:
+ * uses Web Crypto). Hashes the CANONICAL (key-sorted) serialization, not a
+ * plain `JSON.stringify()` -- kup-program's contracts/stack/v1/src/hash.ts
+ * freezes canonical JSON as the required contentHash computation for every
+ * structured KUP payload; a naive JSON.stringify() would still produce a
+ * technically-valid sha256:<hex> that verifies fine against itself, but
+ * would silently diverge from a hash computed by any other producer whose
+ * serializer emits keys in a different order for the same object.
+ */
 export async function buildLhPump001Fixture(): Promise<LhPump001Fixture> {
   const unhashed = unhashedExport();
-  const rawJson = JSON.stringify(unhashed);
+  const rawJson = canonicalJsonStringify(unhashed);
   const contentHash = await sha256Hex(rawJson);
   return { artifact: { ...unhashed, contentHash }, rawJson };
 }
