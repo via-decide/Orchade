@@ -1,0 +1,40 @@
+{
+  "_purpose": "Sourced data backing the waste-economy module. Covers manure rates, harvest-index/residue, bees exclusion, and compost capacity.",
+
+  "q1_residue_harvest_index": {
+    "wheat": {
+      "harvestIndex": 0.52,
+      "residueToYieldRatio": 0.48,
+      "range": [0.43, 0.67],
+      "source": "Frontiers in Plant Science 2025 field study (Xinjiang arid-region wheat)"
+    },
+    "tomato_lettuce_potato_basil": {
+      "status": "NOT_RESEARCHED",
+      "note": "Harvest index does not translate directly to fleshy-fruit or leafy crops. These need dedicated per-crop research."
+    }
+  },
+
+  "q2_sheep_pig_manure": {
+    "sheep": {
+      "lbPerDay": 4,
+      "npk": "2.5-1.75-2 (N-P-K %)",
+      "source": "Hobby Farms livestock-manure reference guide",
+      "confidence": "high"
+    },
+    "pig": {
+      "lbPerDay": 11,
+      "npk": "0.4-0.3-0.45 (N-P-K %) — lower concentration despite higher mass",
+      "source": "Two sources: general average ~11 lb/day, ASABE-standard ~1.2-1.3 gal/day, Missouri Extension 0.15 cu ft/day",
+      "confidence": "medium-high"
+    }
+  },
+
+  "q3_bees_excluded": true,
+
+  "q4_compost_capacity": {
+    "inputCapacityLbsPer16Sqft": 1000,
+    "shrinkageRate": 0.50,
+    "minimumPileLbs": 250,
+    "source": "3x3x3ft minimum (27 cu ft), hereafterfarms 4x4ft bins, finished-compost bulk density ~37 lb/cu ft"
+  }
+}

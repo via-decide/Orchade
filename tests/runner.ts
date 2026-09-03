@@ -12,6 +12,14 @@ import { runPrerequisiteContractTests } from './prerequisiteContracts.test';
 import { runProject001Tests } from './project001.test';
 import { runProgressionContractTests } from './progressionContracts.test';
 import { runSystemPerformanceTests } from './systemPerformance.test';
+import { runDirectorTests } from '../gameplay/director/tests/director.test';
+import { runSitePlannerTests } from '../gameplay/site-planner/tests/sitePlanner.test';
+import { runPropertyRealityTests } from './propertyReality.test';
+import { runPropertyFoundationTests } from './propertyFoundation.test';
+import { runEquipmentTwinTests } from './equipmentTwin.test';
+import { runEquipmentCandidateTestTests } from './equipmentCandidateTest.test';
+import { runFeatureContractTests } from './featureContract.test';
+import { runScenarioCompilerEquipmentTests } from './scenarioCompilerEquipment.test';
 
 console.log('🧪 Starting Orchade Test Runner...\n');
 
@@ -42,6 +50,30 @@ console.log(`[Physical Prerequisites] Passed: ${prerequisiteResults.passed}, Fai
 const digitalTwinResults = runDigitalTwinContractTests();
 console.log(`[True Number / Digital Twin] Passed: ${digitalTwinResults.passed}, Failed: ${digitalTwinResults.failed}`);
 
+const directorResults = runDirectorTests();
+console.log(`[New Game Director] Passed: ${directorResults.passed}, Failed: ${directorResults.failed}`);
+
+const sitePlannerResults = runSitePlannerTests();
+console.log(`[Site Planner] Passed: ${sitePlannerResults.passed}, Failed: ${sitePlannerResults.failed}`);
+
+const propertyRealityResults = runPropertyRealityTests();
+console.log(`[Property Reality] Passed: ${propertyRealityResults.passed}, Failed: ${propertyRealityResults.failed}`);
+
+const propertyFoundationResults = runPropertyFoundationTests();
+console.log(`[Property Foundation] Passed: ${propertyFoundationResults.passed}, Failed: ${propertyFoundationResults.failed}`);
+
+const equipmentTwinResults = runEquipmentTwinTests();
+console.log(`[Equipment Twin] Passed: ${equipmentTwinResults.passed}, Failed: ${equipmentTwinResults.failed}`);
+
+const equipmentCandidateTestResults = runEquipmentCandidateTestTests();
+console.log(`[Equipment Candidate Test] Passed: ${equipmentCandidateTestResults.passed}, Failed: ${equipmentCandidateTestResults.failed}`);
+
+const featureContractResults = runFeatureContractTests();
+console.log(`[Feature Contract] Passed: ${featureContractResults.passed}, Failed: ${featureContractResults.failed}`);
+
+const scenarioCompilerEquipmentResults = runScenarioCompilerEquipmentTests();
+console.log(`[Scenario Compiler Equipment] Passed: ${scenarioCompilerEquipmentResults.passed}, Failed: ${scenarioCompilerEquipmentResults.failed}`);
+
 const totalPassed = cropResults.passed
   + farmLoopResults.passed
   + determinismResults.passed
@@ -50,7 +82,15 @@ const totalPassed = cropResults.passed
   + progressionResults.passed
   + systemPerformanceResults.passed
   + prerequisiteResults.passed
-  + digitalTwinResults.passed;
+  + digitalTwinResults.passed
+  + directorResults.passed
+  + sitePlannerResults.passed
+  + propertyRealityResults.passed
+  + propertyFoundationResults.passed
+  + equipmentTwinResults.passed
+  + equipmentCandidateTestResults.passed
+  + featureContractResults.passed
+  + scenarioCompilerEquipmentResults.passed;
 const totalFailed = cropResults.failed
   + farmLoopResults.failed
   + determinismResults.failed
@@ -59,7 +99,15 @@ const totalFailed = cropResults.failed
   + progressionResults.failed
   + systemPerformanceResults.failed
   + prerequisiteResults.failed
-  + digitalTwinResults.failed;
+  + digitalTwinResults.failed
+  + directorResults.failed
+  + sitePlannerResults.failed
+  + propertyRealityResults.failed
+  + propertyFoundationResults.failed
+  + equipmentTwinResults.failed
+  + equipmentCandidateTestResults.failed
+  + featureContractResults.failed
+  + scenarioCompilerEquipmentResults.failed;
 
 console.log(`\n========================================`);
 console.log(`Total Passed: ${totalPassed} | Total Failed: ${totalFailed}`);

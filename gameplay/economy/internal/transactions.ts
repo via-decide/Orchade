@@ -26,8 +26,8 @@ export const applyShopItem = (state: GameState, item: ShopItem) => {
   return { state: { ...state, orchards, credits: state.credits - item.cost }, logs: [{ msg: `Applied ${item.name} to ${selectedPlant.type}.`, type: 'success' }] };
 };
 
-export const liquidateDataSeeds = (state: GameState, amount: 1 | 10) => {
-  if (state.dataSeeds < amount) return { state, logs: [] };
+export const liquidateResearchCredits = (state: GameState, amount: 1 | 10) => {
+  if (state.researchCredits < amount) return { state, logs: [] };
   const credits = amount * 50;
-  return { state: { ...state, dataSeeds: state.dataSeeds - amount, credits: state.credits + credits }, logs: [{ msg: `Liquidated ${amount} Data Seed${amount > 1 ? 's' : ''} for ${credits} credits.`, type: 'success' }] };
+  return { state: { ...state, researchCredits: state.researchCredits - amount, credits: state.credits + credits }, logs: [{ msg: `Liquidated ${amount} research credit${amount > 1 ? 's' : ''} for ${credits} credits.`, type: 'success' }] };
 };

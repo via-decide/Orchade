@@ -156,7 +156,7 @@ const App: React.FC = () => {
   const [state, setState] = useState<GameState & { globalStats: any }>({
     day: 1,
     credits: 100,
-    dataSeeds: 0,
+    researchCredits: 0,
     orchards: [
       {
         id: 'orchard-1',
@@ -200,7 +200,7 @@ const App: React.FC = () => {
   const [isTransferring, setIsTransferring] = useState(false);
   const [isLoginLoading, setIsLoginLoading] = useState(false);
   const [seedingPlotIndex, setSeedingPlotIndex] = useState<number | null>(null);
-  const [rankings, setRankings] = useState<{ uid: string; displayName: string; credits: number; dataSeeds: number }[]>([]);
+  const [rankings, setRankings] = useState<{ uid: string; displayName: string; credits: number; researchCredits: number }[]>([]);
   const [toolEffect, setToolEffect] = useState<string | null>(null);
 
   const addLog = useCallback((msg: string, type: string = 'info') => {
@@ -384,7 +384,8 @@ const App: React.FC = () => {
             ...prev,
             day: data.day ?? prev.day,
             credits: data.credits ?? prev.credits,
-            dataSeeds: data.dataSeeds ?? prev.dataSeeds,
+            // Legacy saves from before the dataSeeds -> researchCredits rename only have `dataSeeds`.
+            researchCredits: data.researchCredits ?? data.dataSeeds ?? prev.researchCredits,
             orchards: data.orchards ?? prev.orchards,
             upgrades: data.upgrades ?? prev.upgrades,
             weather: data.weather ?? prev.weather,
@@ -409,7 +410,8 @@ const App: React.FC = () => {
           ...prev,
           day: data.day ?? prev.day,
           credits: data.credits ?? prev.credits,
-          dataSeeds: data.dataSeeds ?? prev.dataSeeds,
+          // Legacy Firestore profiles from before the dataSeeds -> researchCredits rename only have `dataSeeds`.
+          researchCredits: data.researchCredits ?? data.dataSeeds ?? prev.researchCredits,
           orchards: data.orchards ?? prev.orchards,
           upgrades: data.upgrades ?? prev.upgrades,
           weather: data.weather ?? prev.weather,
@@ -425,7 +427,7 @@ const App: React.FC = () => {
           displayName: state.user!.displayName,
           email: state.user!.email,
           credits: 100,
-          dataSeeds: 0,
+          researchCredits: 0,
           day: 1,
           upgrades: INITIAL_UPGRADES,
           orchards: state.orchards,
@@ -453,11 +455,11 @@ const App: React.FC = () => {
     // If local guest mode or no active Firebase user token, show local leaderboard
     if (state.user?.isGuest || state.user?.uid?.startsWith('guest_') || !auth.currentUser) {
       setRankings([
-        { uid: 'top_1', displayName: 'Dr. Vance (Chief Geneticist)', credits: 14500, dataSeeds: 42 },
-        { uid: 'top_2', displayName: 'AeroBotanics Unit-7', credits: 9800, dataSeeds: 28 },
-        { uid: 'top_3', displayName: 'BioFlora Sector 4 Lead', credits: 6200, dataSeeds: 15 },
-        { uid: state.user?.uid || 'guest', displayName: state.user?.displayName || 'Guest Researcher (You)', credits: state.credits, dataSeeds: state.dataSeeds },
-      ].sort((a, b) => (b.credits + b.dataSeeds * 10) - (a.credits + a.dataSeeds * 10)));
+        { uid: 'top_1', displayName: 'Dr. Vance (Chief Geneticist)', credits: 14500, researchCredits: 42 },
+        { uid: 'top_2', displayName: 'AeroBotanics Unit-7', credits: 9800, researchCredits: 28 },
+        { uid: 'top_3', displayName: 'BioFlora Sector 4 Lead', credits: 6200, researchCredits: 15 },
+        { uid: state.user?.uid || 'guest', displayName: state.user?.displayName || 'Guest Researcher (You)', credits: state.credits, researchCredits: state.researchCredits },
+      ].sort((a, b) => (b.credits + b.researchCredits * 10) - (a.credits + a.researchCredits * 10)));
       return;
     }
 
@@ -470,20 +472,20 @@ const App: React.FC = () => {
           uid: doc.data().uid,
           displayName: doc.data().displayName || 'Anonymous Specimen',
           credits: doc.data().credits || 0,
-          dataSeeds: doc.data().dataSeeds || 0,
+          researchCredits: doc.data().researchCredits || 0,
         }))
-        .sort((a, b) => (b.credits + b.dataSeeds * 10) - (a.credits + a.dataSeeds * 10))
+        .sort((a, b) => (b.credits + b.researchCredits * 10) - (a.credits + a.researchCredits * 10))
         .slice(0, 10);
       
       setRankings(topUsers);
     }, (error) => {
       console.warn('Rankings query failed (falling back):', error);
       setRankings([
-        { uid: 'top_1', displayName: 'Dr. Vance (Chief Geneticist)', credits: 14500, dataSeeds: 42 },
-        { uid: 'top_2', displayName: 'AeroBotanics Unit-7', credits: 9800, dataSeeds: 28 },
-        { uid: 'top_3', displayName: 'BioFlora Sector 4 Lead', credits: 6200, dataSeeds: 15 },
-        { uid: state.user?.uid || 'guest', displayName: state.user?.displayName || 'Guest Researcher (You)', credits: state.credits, dataSeeds: state.dataSeeds },
-      ].sort((a, b) => (b.credits + b.dataSeeds * 10) - (a.credits + a.dataSeeds * 10)));
+        { uid: 'top_1', displayName: 'Dr. Vance (Chief Geneticist)', credits: 14500, researchCredits: 42 },
+        { uid: 'top_2', displayName: 'AeroBotanics Unit-7', credits: 9800, researchCredits: 28 },
+        { uid: 'top_3', displayName: 'BioFlora Sector 4 Lead', credits: 6200, researchCredits: 15 },
+        { uid: state.user?.uid || 'guest', displayName: state.user?.displayName || 'Guest Researcher (You)', credits: state.credits, researchCredits: state.researchCredits },
+      ].sort((a, b) => (b.credits + b.researchCredits * 10) - (a.credits + a.researchCredits * 10)));
     });
 
     const unsubStats = onSnapshot(doc(db, 'system', 'global_stats'), (snapshot) => {
@@ -498,7 +500,7 @@ const App: React.FC = () => {
       unsubRankings();
       unsubStats();
     };
-  }, [state.activeTab, state.user?.isGuest, state.credits, state.dataSeeds]);
+  }, [state.activeTab, state.user?.isGuest, state.credits, state.researchCredits]);
 
   const saveState = async (updates: Partial<GameState>) => {
     if (!state.user?.uid) return;
@@ -509,7 +511,7 @@ const App: React.FC = () => {
           const merged = {
             day: updates.day ?? current.day,
             credits: updates.credits ?? current.credits,
-            dataSeeds: updates.dataSeeds ?? current.dataSeeds,
+            researchCredits: updates.researchCredits ?? current.researchCredits,
             orchards: updates.orchards ?? current.orchards,
             upgrades: updates.upgrades ?? current.upgrades,
             weather: updates.weather ?? current.weather,
@@ -616,7 +618,7 @@ const App: React.FC = () => {
       const newPlants = [...orchard.plants];
       const plant = { ...newPlants[prev.selectedPlantIndex!]! };
       let credits = prev.credits;
-      let dataSeeds = prev.dataSeeds;
+      let researchCredits = prev.researchCredits;
 
       if (action === 'research') {
         if (plant.water < 5) {
@@ -738,12 +740,12 @@ const App: React.FC = () => {
         ...prev, 
         orchards: newOrchards, 
         credits, 
-        dataSeeds, 
+        researchCredits, 
         harvestedTypes,
         harvestInventory,
         selectedPlantIndex: isHarvestCleared ? null : prev.selectedPlantIndex 
       };
-      saveState({ orchards: newOrchards, credits, dataSeeds, harvestedTypes, harvestInventory });
+      saveState({ orchards: newOrchards, credits, researchCredits, harvestedTypes, harvestInventory });
       return nextState;
     });
   };
@@ -904,7 +906,7 @@ const App: React.FC = () => {
 
   const buyUpgrade = (id: keyof GlobalUpgrades) => {
     const cost = 10;
-    if (state.dataSeeds < cost) {
+    if (state.researchCredits < cost) {
       addLog('Insufficient genetic data for upgrade.', 'danger');
       return;
     }
@@ -917,10 +919,10 @@ const App: React.FC = () => {
       };
       const nextState = {
         ...prev,
-        dataSeeds: prev.dataSeeds - cost,
+        researchCredits: prev.researchCredits - cost,
         upgrades: nextUpgrades
       };
-      saveState({ dataSeeds: prev.dataSeeds - cost, upgrades: nextUpgrades });
+      saveState({ researchCredits: prev.researchCredits - cost, upgrades: nextUpgrades });
       return nextState;
     });
     addLog(`Upgrade acquired: ${id} enhanced.`, 'success');
@@ -1104,7 +1106,7 @@ const App: React.FC = () => {
               </div>
               <div className="flex flex-col">
                 <span className="text-[10px] font-bold text-text-secondary uppercase tracking-widest">Genetic Data</span>
-                <span className="text-lg md:text-xl font-mono font-bold text-water-blue">{state.dataSeeds} 🧬</span>
+                <span className="text-lg md:text-xl font-mono font-bold text-water-blue">{state.researchCredits} 🧬</span>
               </div>
               
               {/* Weather Indicator */}
@@ -1753,9 +1755,9 @@ const App: React.FC = () => {
                         <div className="flex gap-3">
                           <button 
                             onClick={() => {
-                              if (state.dataSeeds >= 1) {
-                                setState(p => ({ ...p, dataSeeds: p.dataSeeds - 1, credits: p.credits + 50 }));
-                                saveState({ dataSeeds: state.dataSeeds - 1, credits: state.credits + 50 });
+                              if (state.researchCredits >= 1) {
+                                setState(p => ({ ...p, researchCredits: p.researchCredits - 1, credits: p.credits + 50 }));
+                                saveState({ researchCredits: state.researchCredits - 1, credits: state.credits + 50 });
                                 addLog('Liquidated 1 Data Seed for 50 credits.', 'success');
                               }
                             }}
@@ -1765,9 +1767,9 @@ const App: React.FC = () => {
                           </button>
                           <button 
                             onClick={() => {
-                              if (state.dataSeeds >= 10) {
-                                setState(p => ({ ...p, dataSeeds: p.dataSeeds - 10, credits: p.credits + 500 }));
-                                saveState({ dataSeeds: state.dataSeeds - 10, credits: state.credits + 500 });
+                              if (state.researchCredits >= 10) {
+                                setState(p => ({ ...p, researchCredits: p.researchCredits - 10, credits: p.credits + 500 }));
+                                saveState({ researchCredits: state.researchCredits - 10, credits: state.credits + 500 });
                                 addLog('Liquidated 10 Data Seeds for 500 credits.', 'success');
                               }
                             }}
@@ -1835,7 +1837,7 @@ const App: React.FC = () => {
                                 </div>
                               </td>
                               <td className="p-4 text-right font-mono text-mineral-gold">{r.credits}</td>
-                              <td className="p-4 text-right font-mono text-water-blue">{r.dataSeeds}</td>
+                              <td className="p-4 text-right font-mono text-water-blue">{r.researchCredits}</td>
                             </tr>
                           ))}
                           {rankings.length === 0 && (
@@ -2075,9 +2077,9 @@ const App: React.FC = () => {
         )}
       </AnimatePresence>
 
-      {/* Auth Overlay */}
+      {/* Auth Overlay — skipped for Plot Planner (no account needed) */}
       <AnimatePresence>
-        {(!state.user && state.isAuthReady) && (
+        {(!state.user && state.isAuthReady && !isPlotPlannerTab) && (
           <motion.div 
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -2160,8 +2162,8 @@ const App: React.FC = () => {
         )}
       </AnimatePresence>
 
-      {/* Loading State */}
-      {!state.isAuthReady && (
+      {/* Loading State — skipped for Plot Planner (no auth dependency) */}
+      {!state.isAuthReady && !isPlotPlannerTab && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-soil-dark">
           <RefreshCw className="animate-spin text-leaf-green" size={40} />
         </div>
