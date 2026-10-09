@@ -79,7 +79,7 @@ body { background: #020604; }
 .game-root { position: fixed; inset: 0; isolation: isolate; color: #f4fff8; font-family: var(--font-sans); }
 .runtime-layer { position: absolute; inset: 0; pointer-events: none; }
 .game-viewport { z-index: 0; display: grid; place-items: center; background: radial-gradient(circle at 50% 35%, #123926 0, #07130f 48%, #020604 100%); pointer-events: auto; outline: none; }
-#render-canvas { display: block; max-width: 100vw; max-height: 100vh; image-rendering: pixelated; }
+#render-canvas { display: block; max-width: 100vw; max-height: 100vh; image-rendering: auto; image-rendering: smooth; }
 .viewport-letterbox { position: absolute; left: 0; right: 0; height: max(0px, calc((100vh - 56.25vw) / 2)); background: #000; }
 .viewport-letterbox.top { top: 0; } .viewport-letterbox.bottom { bottom: 0; }
 .loading-screen { z-index: 90; display: grid; place-items: center; background: linear-gradient(135deg, rgba(2, 6, 4, .98), rgba(7, 25, 17, .96)); transition: opacity .55s ease, visibility .55s ease; pointer-events: auto; }
